@@ -1,23 +1,14 @@
 import NextAuth from "next-auth";
-import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 
+import authConfig from "@/auth.config";
 import { prisma } from "@/lib/prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
   adapter: PrismaAdapter(prisma),
-  providers: [
-    Google({
-      allowDangerousEmailAccountLinking: true,
-    }),
-  ],
-  session: {
-    strategy: "database",
-  },
-  pages: {
-    signIn: "/login",
-  },
   callbacks: {
+    ...authConfig.callbacks,
     async signIn({ user }) {
       if (!user.email) return false;
 
@@ -44,9 +35,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       return appUser.status === "ACTIVE";
     },
-    async session({ session, user }) {
+    async jwt({ token, user }) {
+      if (user?.id) {
+        token.id = user.id;
+      }
+
+      return token;
+    },
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
+        session.user.id = String(token.id ?? token.sub ?? "");
       }
       return session;
     },
