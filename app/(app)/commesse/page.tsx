@@ -264,21 +264,106 @@ export default function CommessePage() {
   return (
     <div className="grid gap-4">
       <div className="card">
-        <h1 style={{ marginTop: 0 }}>Vedi Commesse</h1>
+        <div className="mobile-section-header">
+          <div>
+            <h1 className="mobile-section-title">Vedi commesse</h1>
+            <p className="mobile-section-subtitle">
+              Le commesse diventano schede compatte su mobile, senza perdere filtri, ordinamento e modifica rapida.
+            </p>
+          </div>
+        </div>
 
         {message ? <div style={{ color: "#166534", fontWeight: 700, marginBottom: 16 }}>{message}</div> : null}
         {error ? <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 16 }}>{error}</div> : null}
 
-        <div style={tableToolsWrapStyle}>
-          <div style={{ color: "#6b7280", fontSize: 14 }}>
+        <div className="mobile-toolbar">
+          <div className="mobile-table-meta" style={{ color: "#6b7280", fontSize: 14 }}>
             Righe visibili: <strong>{visibleRows.length}</strong> su {rows.length}
           </div>
-          <button type="button" style={secondaryButtonStyle} onClick={() => setFilters(getEmptyFilters())}>
-            Azzera filtri
-          </button>
+          <div className="mobile-toolbar-actions">
+            <button
+              type="button"
+              className="mobile-button-secondary"
+              onClick={() => setFilters(getEmptyFilters())}
+            >
+              Azzera filtri
+            </button>
+          </div>
         </div>
 
-        <div style={{ overflowX: "auto" }}>
+        <div className="card mobile-filters">
+          <label className="mobile-data-field">
+            <span className="mobile-data-label">Commessa</span>
+            <input
+              value={filters.name}
+              onChange={(e) => setFilterValue("name", e.target.value)}
+              placeholder="Filtra commessa"
+              className="mobile-data-input"
+            />
+          </label>
+
+          <label className="mobile-data-field">
+            <span className="mobile-data-label">Tipologia</span>
+            <select
+              value={filters.type}
+              onChange={(e) => setFilterValue("type", e.target.value as JobTypeValue | "")}
+              className="mobile-data-select"
+            >
+              <option value="">Tutte</option>
+              <option value="SITE">{jobTypeLabel("SITE")}</option>
+              <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
+              <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
+              <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
+              <option value="OTHER">{jobTypeLabel("OTHER")}</option>
+            </select>
+          </label>
+
+          <label className="mobile-data-field">
+            <span className="mobile-data-label">Data Inizio</span>
+            <input
+              value={filters.startDate}
+              onChange={(e) => setFilterValue("startDate", e.target.value)}
+              placeholder="AAAA-MM-GG"
+              className="mobile-data-input"
+            />
+          </label>
+
+          <label className="mobile-data-field">
+            <span className="mobile-data-label">Stato</span>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")}
+              className="mobile-data-select"
+            >
+              <option value="">Tutti</option>
+              <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
+              <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
+              <option value="ENDED">{statusLabel("ENDED")}</option>
+            </select>
+          </label>
+
+          <label className="mobile-data-field">
+            <span className="mobile-data-label">Data Fine</span>
+            <input
+              value={filters.endDate}
+              onChange={(e) => setFilterValue("endDate", e.target.value)}
+              placeholder="AAAA-MM-GG"
+              className="mobile-data-input"
+            />
+          </label>
+
+          <label className="mobile-data-field">
+            <span className="mobile-data-label">Descrizione</span>
+            <input
+              value={filters.description}
+              onChange={(e) => setFilterValue("description", e.target.value)}
+              placeholder="Filtra descrizione"
+              className="mobile-data-input"
+            />
+          </label>
+        </div>
+
+        <div className="mobile-table-shell">
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
@@ -484,19 +569,133 @@ export default function CommessePage() {
           </table>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 18,
-          }}
-        >
-          <button type="button" onClick={addRow} style={plusButtonStyle}>
+        <div className="mobile-data-cards">
+          {visibleRows.map((row, index) => (
+            <article key={row.localId} className="card mobile-data-card">
+              <div className="mobile-data-card-head">
+                <div>
+                  <div className="mobile-data-label">Commessa</div>
+                  <strong>{row.name || `Nuova commessa ${index + 1}`}</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeRow(row.localId)}
+                  className="mobile-danger-button"
+                  title={`Rimuovi riga ${index + 1}`}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mobile-data-card-grid">
+                <label className="mobile-data-field mobile-data-field-full">
+                  <span className="mobile-data-label">Nome Commessa</span>
+                  <input
+                    type="text"
+                    value={row.name}
+                    onChange={(e) => setRowValue(row.localId, { name: e.target.value })}
+                    className="mobile-data-input"
+                    placeholder="Nome commessa"
+                    disabled={loading}
+                  />
+                </label>
+
+                <label className="mobile-data-field">
+                  <span className="mobile-data-label">Tipologia</span>
+                  <select
+                    value={row.type}
+                    onChange={(e) =>
+                      setRowValue(row.localId, { type: e.target.value as JobTypeValue | "" })
+                    }
+                    className="mobile-data-select"
+                    disabled={loading}
+                  >
+                    <option value="">Seleziona tipologia</option>
+                    <option value="SITE">{jobTypeLabel("SITE")}</option>
+                    <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
+                    <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
+                    <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
+                    <option value="OTHER">{jobTypeLabel("OTHER")}</option>
+                  </select>
+                </label>
+
+                <label className="mobile-data-field">
+                  <span className="mobile-data-label">Stato</span>
+                  <select
+                    value={row.status}
+                    onChange={(e) =>
+                      setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })
+                    }
+                    className="mobile-data-select"
+                    disabled={loading}
+                  >
+                    <option value="">Seleziona stato</option>
+                    <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
+                    <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
+                    <option value="ENDED">{statusLabel("ENDED")}</option>
+                  </select>
+                </label>
+
+                <label className="mobile-data-field">
+                  <span className="mobile-data-label">Data Inizio</span>
+                  <input
+                    type="date"
+                    value={row.startDate}
+                    onChange={(e) => setRowValue(row.localId, { startDate: e.target.value })}
+                    className="mobile-data-input"
+                    disabled={loading}
+                  />
+                </label>
+
+                <label className="mobile-data-field">
+                  <span className="mobile-data-label">Data Fine</span>
+                  <input
+                    type="date"
+                    value={row.endDate}
+                    onChange={(e) => setRowValue(row.localId, { endDate: e.target.value })}
+                    className="mobile-data-input"
+                    disabled={loading}
+                  />
+                </label>
+
+                <label className="mobile-data-field mobile-data-field-full">
+                  <span className="mobile-data-label">Descrizione</span>
+                  <input
+                    type="text"
+                    value={row.description}
+                    onChange={(e) => setRowValue(row.localId, { description: e.target.value })}
+                    className="mobile-data-input"
+                    placeholder="Descrizione"
+                    disabled={loading}
+                  />
+                </label>
+              </div>
+
+              <div className="mobile-data-actions">
+                <button
+                  className="button"
+                  type="button"
+                  disabled={!row.id}
+                  onClick={() => row.id && router.push(`/commesse/${row.id}`)}
+                >
+                  Apri Scheda
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="mobile-footer-actions" style={{ marginTop: 18 }}>
+          <button
+            type="button"
+            onClick={addRow}
+            className="mobile-button-success"
+            aria-label="Aggiungi riga"
+          >
             +
           </button>
 
-          <div style={{ display: "flex", gap: 12 }}>
+          <div className="mobile-toolbar-actions">
             <button className="button" type="button" disabled>
               Modifica
             </button>
@@ -563,37 +762,6 @@ const headerButtonStyle: React.CSSProperties = {
   color: "white",
   padding: 0,
   font: "inherit",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const tableToolsWrapStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  flexWrap: "wrap",
-  marginBottom: 14,
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  border: "1px solid #f08a54",
-  background: "#fff7f2",
-  color: "#9a3f12",
-  borderRadius: 10,
-  padding: "0.55rem 0.9rem",
-  cursor: "pointer",
-  fontWeight: 600,
-};
-
-const plusButtonStyle: React.CSSProperties = {
-  width: 42,
-  height: 42,
-  borderRadius: "999px",
-  border: "none",
-  background: "#22c55e",
-  color: "white",
-  fontSize: 28,
   fontWeight: 700,
   cursor: "pointer",
 };
