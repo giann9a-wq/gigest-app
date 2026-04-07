@@ -1,0 +1,323 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  DISABLED
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ResourceStatus {
+  ACTIVE
+  SUSPENDED
+  ENDED
+}
+
+enum EquipmentType {
+  VEHICLE
+  EQUIPMENT
+}
+
+enum JobType {
+  SITE
+  TRAINING
+  LEAVE
+  SICKNESS
+  OTHER
+}
+
+enum ResourceType {
+  PERSON
+  EQUIPMENT
+}
+
+enum DeadlineOrigin {
+  MANUAL
+  MAINTENANCE
+}
+
+enum SyncSource {
+  GIGEST
+  GOOGLE_CALENDAR
+}
+
+model User {
+  id            String           @id @default(cuid())
+  googleSub     String?          @unique
+  firstName     String?
+  lastName      String?
+  email         String           @unique
+  role          UserRole         @default(OPERATOR)
+  status        UserStatus       @default(PENDING)
+  lastLoginAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  managedAccessRequests AccessRequest[] @relation("ManagedBy")
+  createdActivities     DiaryActivity[] @relation("ActivityCreatedBy")
+  updatedActivities     DiaryActivity[] @relation("ActivityUpdatedBy")
+  createdDeadlines      Deadline[]      @relation("DeadlineCreatedBy")
+  updatedDeadlines      Deadline[]      @relation("DeadlineUpdatedBy")
+  createdMaintenances   Maintenance[]   @relation("MaintenanceCreatedBy")
+  connectedCalendars    CalendarIntegration[] @relation("CalendarIntegrationConnectedBy")
+
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model AccessRequest {
+  id              String              @id @default(cuid())
+  email           String              @unique
+  firstName       String?
+  lastName        String?
+  notes           String?
+  status          AccessRequestStatus @default(PENDING)
+  requestedAt     DateTime            @default(now())
+  handledAt       DateTime?
+  handledByUserId String?
+
+  handledBy User? @relation("ManagedBy", fields: [handledByUserId], references: [id])
+}
+
+model Person {
+  id              String       @id @default(cuid())
+  fullName        String
+  roleDescription String?
+  hireDate        DateTime?
+  contacts        String?
+  status          ResourceStatus @default(ACTIVE)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  costHistory     PersonCost[]
+  diaryActivities DiaryActivity[]
+}
+
+model PersonCost {
+  id         String   @id @default(cuid())
+  personId   String
+  hourlyCost Decimal  @db.Decimal(10, 2)
+  validFrom  DateTime
+  validTo    DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId, validFrom])
+}
+
+model Equipment {
+  id              String         @id @default(cuid())
+  nameDescription String
+  type            EquipmentType
+  purchaseDate    DateTime?
+  status          ResourceStatus @default(ACTIVE)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  costHistory     EquipmentCost[]
+  maintenances    Maintenance[]
+  diaryActivities DiaryActivity[]
+}
+
+model EquipmentCost {
+  id          String   @id @default(cuid())
+  equipmentId String
+  hourlyCost  Decimal  @db.Decimal(10, 2)
+  validFrom   DateTime
+  validTo     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([equipmentId, validFrom])
+}
+
+model Maintenance {
+  id                String      @id @default(cuid())
+  equipmentId       String
+  interventionType  String
+  interventionDate  DateTime
+  nextIntervention  DateTime?
+  cost              Decimal?    @db.Decimal(10, 2)
+  notes             String?
+  createdByUserId   String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  equipment   Equipment              @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  createdBy   User?                  @relation("MaintenanceCreatedBy", fields: [createdByUserId], references: [id])
+  documents   MaintenanceDocument[]
+  deadline    Deadline?
+}
+
+model MaintenanceDocument {
+  id             String      @id @default(cuid())
+  maintenanceId  String
+  fileName       String
+  filePath       String
+  mimeType       String?
+  sizeBytes      Int?
+  createdAt      DateTime    @default(now())
+
+  maintenance Maintenance @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+}
+
+model JobOrder {
+  id          String         @id @default(cuid())
+  name        String
+  type        JobType
+  startDate   DateTime?
+  endDate     DateTime?
+  status      ResourceStatus @default(ACTIVE)
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  diaryActivities DiaryActivity[]
+}
+
+model DiaryActivity {
+  id                String       @id @default(cuid())
+  referenceDate     DateTime
+  resourceType      ResourceType
+  personId          String?
+  equipmentId       String?
+  jobOrderId        String
+  hours             Decimal      @db.Decimal(4, 1)
+  activityDescription String?
+  createdByUserId   String?
+  updatedByUserId   String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  person      Person?   @relation(fields: [personId], references: [id])
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
+  jobOrder    JobOrder  @relation(fields: [jobOrderId], references: [id])
+  createdBy   User?     @relation("ActivityCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy   User?     @relation("ActivityUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  @@index([referenceDate])
+  @@index([jobOrderId])
+  @@index([personId])
+  @@index([equipmentId])
+}
+
+model Deadline {
+  id                String         @id @default(cuid())
+  title             String
+  description       String?
+  eventDate         DateTime
+  isAllDay          Boolean        @default(true)
+  startTime         String?
+  endTime           String?
+  recurrenceRule    String?
+  origin            DeadlineOrigin @default(MANUAL)
+  maintenanceId     String?        @unique
+  createdByUserId   String?
+  updatedByUserId   String?
+  lastSource        SyncSource     @default(GIGEST)
+  lastModifiedAt    DateTime       @default(now())
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  maintenance Maintenance? @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+  createdBy   User?        @relation("DeadlineCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy   User?        @relation("DeadlineUpdatedBy", fields: [updatedByUserId], references: [id])
+  mappings    CalendarEventMapping[]
+
+  @@index([eventDate, startTime])
+}
+
+model CalendarIntegration {
+  id                  String   @id @default(cuid())
+  provider            String   @default("GOOGLE") @unique
+  externalCalendarId  String   @unique
+  calendarName        String   @default("GiGEST")
+  connectedEmail      String?
+  refreshToken        String?  @db.Text
+  accessToken         String?  @db.Text
+  accessTokenExpiresAt DateTime?
+  connectedByUserId   String?
+  lastSyncedAt        DateTime?
+  syncStatus          String   @default("ACTIVE")
+  syncError           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  connectedBy User? @relation("CalendarIntegrationConnectedBy", fields: [connectedByUserId], references: [id])
+  mappings CalendarEventMapping[]
+}
+
+model CalendarEventMapping {
+  id                     String   @id @default(cuid())
+  deadlineId             String
+  calendarIntegrationId  String
+  externalEventId        String
+  externalRecurringId    String?
+  lastSyncedAt           DateTime?
+  externalUpdatedAt      DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  deadline            Deadline            @relation(fields: [deadlineId], references: [id], onDelete: Cascade)
+  calendarIntegration CalendarIntegration @relation(fields: [calendarIntegrationId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarIntegrationId, externalEventId])
+}
+
+// Auth.js models
+model Account {
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([sessionToken])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@id([identifier, token])
+}
