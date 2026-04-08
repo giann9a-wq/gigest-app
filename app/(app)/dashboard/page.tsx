@@ -1,6 +1,5 @@
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { DeadlineOrigin } from "@prisma/client";
+import { getScheduleEvents, type ScheduleEventRow } from "@/lib/schedule-events";
 
 function getUtcDateBoundsFromIso(isoDate: string) {
   return {
@@ -18,60 +17,50 @@ function formatEventDate(value: Date) {
   });
 }
 
-function formatEventTime(event: {
-  isAllDay: boolean;
-  startTime: string | null;
-  endTime: string | null;
-}) {
+function formatEventTime(event: Pick<ScheduleEventRow, "isAllDay" | "startTime" | "endTime">) {
   if (event.isAllDay) return "Tutto il giorno";
   if (event.startTime && event.endTime) return `${event.startTime} - ${event.endTime}`;
   if (event.startTime) return `Dalle ${event.startTime}`;
   return "";
 }
 
-function EventList({
-  events,
-}: {
-  events: {
-    id: string;
-    title: string;
-    description: string | null;
-    eventDate: Date;
-    isAllDay: boolean;
-    startTime: string | null;
-    endTime: string | null;
-    origin: DeadlineOrigin;
-    maintenance: {
-      equipment: {
-        nameDescription: string;
-      };
-    } | null;
-  }[];
-}) {
+function getLinkedLabel(event: ScheduleEventRow) {
+  if (event.linkedEquipment) {
+    return event.linkedEquipment.nameDescription;
+  }
+
+  if (event.linkedJobOrder) {
+    return `Commessa: ${event.linkedJobOrder.name}`;
+  }
+
+  return "";
+}
+
+function EventList({ events }: { events: ScheduleEventRow[] }) {
   if (events.length === 0) {
     return <p className="muted">Nessun evento da mostrare.</p>;
   }
 
   return (
-    <div className="dashboard-event-list">
-      {events.map((event) => (
-        <article key={event.id} className="dashboard-event-item">
-          <div className="dashboard-event-top">
-            <strong>{event.title}</strong>
-            <span className="dashboard-pill">
-              {event.origin === "MAINTENANCE" ? "Manutenzione" : "Manuale"}
-            </span>
-          </div>
-          <div className="dashboard-event-meta">
-            <span>{formatEventDate(event.eventDate)}</span>
-            <span>{formatEventTime(event)}</span>
-            {event.maintenance?.equipment?.nameDescription ? (
-              <span>{event.maintenance.equipment.nameDescription}</span>
+    <div className="dashboard-event-list-scroll">
+      <div className="dashboard-event-list">
+        {events.map((event) => (
+          <article key={event.id} className="dashboard-event-item">
+            <div className="dashboard-event-top">
+              <strong>{event.title}</strong>
+              <span className="dashboard-pill">{event.originLabel}</span>
+            </div>
+            <div className="dashboard-event-meta">
+              <span>{formatEventDate(event.eventDate)}</span>
+              <span>{formatEventTime(event)}</span>
+              {getLinkedLabel(event) ? <span>{getLinkedLabel(event)}</span> : null}
+            </div>
+            {event.description ? (
+              <p className="dashboard-event-description">{event.description}</p>
             ) : null}
-          </div>
-          {event.description ? <p className="dashboard-event-description">{event.description}</p> : null}
-        </article>
-      ))}
+          </article>
+        ))}
+      </div>
     </div>
   );
 }
@@ -80,49 +69,24 @@ export default async function DashboardPage() {
   const session = await auth();
   const todayIso = new Date().toISOString().slice(0, 10);
   const todayBounds = getUtcDateBoundsFromIso(todayIso);
+  const nextThirtyDaysEnd = new Date(todayBounds.end);
+  nextThirtyDaysEnd.setUTCDate(nextThirtyDaysEnd.getUTCDate() + 30);
 
-  const [todayEvents, upcomingEvents] = await Promise.all([
-    prisma.deadline.findMany({
-      where: {
-        eventDate: {
-          gte: todayBounds.start,
-          lte: todayBounds.end,
-        },
-      },
-      orderBy: [{ startTime: "asc" }, { createdAt: "asc" }],
-      include: {
-        maintenance: {
-          select: {
-            equipment: {
-              select: {
-                nameDescription: true,
-              },
-            },
-          },
-        },
-      },
-    }),
-    prisma.deadline.findMany({
-      where: {
-        eventDate: {
-          gt: todayBounds.end,
-        },
-      },
-      orderBy: [{ eventDate: "asc" }, { startTime: "asc" }, { createdAt: "asc" }],
-      take: 8,
-      include: {
-        maintenance: {
-          select: {
-            equipment: {
-              select: {
-                nameDescription: true,
-              },
-            },
-          },
-        },
-      },
-    }),
-  ]);
+  const scheduleEvents = await getScheduleEvents({
+    from: todayBounds.start,
+    to: nextThirtyDaysEnd,
+  });
+
+  const todayEvents = scheduleEvents.filter((event) => {
+    const eventTime = event.eventDate.getTime();
+    return eventTime >= todayBounds.start.getTime() && eventTime <= todayBounds.end.getTime();
+  });
+
+  const upcomingEvents = scheduleEvents.filter(
+    (event) =>
+      event.eventDate.getTime() > todayBounds.end.getTime() &&
+      event.eventDate.getTime() <= nextThirtyDaysEnd.getTime()
+  );
 
   return (
     <div className="dashboard-page">
@@ -142,7 +106,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="dashboard-grid">
-        <div className="card dashboard-card">
+        <div className="card dashboard-card dashboard-card-fixed">
           <div className="dashboard-card-head">
             <strong>Eventi di oggi</strong>
             <span className="dashboard-pill">Scadenziario</span>
@@ -150,10 +114,10 @@ export default async function DashboardPage() {
           <EventList events={todayEvents} />
         </div>
 
-        <div className="card dashboard-card">
+        <div className="card dashboard-card dashboard-card-fixed">
           <div className="dashboard-card-head">
             <strong>Prossimi eventi</strong>
-            <span className="dashboard-pill">Planning</span>
+            <span className="dashboard-pill">Prossimi 30 giorni</span>
           </div>
           <EventList events={upcomingEvents} />
         </div>

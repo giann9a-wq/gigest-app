@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getScheduleEvents } from "@/lib/schedule-events";
 import { DeadlineOrigin, SyncSource, UserStatus } from "@prisma/client";
 
 function toInputDate(value: Date | null | undefined) {
@@ -27,7 +28,7 @@ function isValidTime(value: string | null) {
   return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 }
 
-function buildRow(row: {
+function buildResponseRow(row: {
   id: string;
   title: string;
   description: string | null;
@@ -38,11 +39,18 @@ function buildRow(row: {
   origin: DeadlineOrigin;
   lastSource: SyncSource;
   maintenanceId: string | null;
-  maintenance?: {
-    equipment: {
-      id: string;
-      nameDescription: string;
-    } | null;
+  linkedEquipment: {
+    id: string;
+    nameDescription: string;
+  } | null;
+  originLabel: string;
+  canEdit: boolean;
+  canDelete: boolean;
+  eventKind: "DEADLINE" | "JOB_ORDER_END";
+  linkedJobOrder: {
+    id: string;
+    name: string;
+    type: string;
   } | null;
 }) {
   return {
@@ -54,17 +62,62 @@ function buildRow(row: {
     endTime: row.endTime ?? "",
     isAllDay: row.isAllDay,
     origin: row.origin,
+    originLabel: row.originLabel,
+    lastSource: row.lastSource,
+    maintenanceId: row.maintenanceId,
+    canEdit: row.canEdit,
+    canDelete: row.canDelete,
+    eventKind: row.eventKind,
+    linkedEquipment: row.linkedEquipment,
+    linkedJobOrder: row.linkedJobOrder,
+  };
+}
+
+function buildRow(row: Awaited<ReturnType<typeof getScheduleEvents>>[number]) {
+  return buildResponseRow(row);
+}
+
+function buildDeadlineRow(row: {
+  id: string;
+  title: string;
+  description: string | null;
+  eventDate: Date;
+  startTime: string | null;
+  endTime: string | null;
+  isAllDay: boolean;
+  origin: DeadlineOrigin;
+  lastSource: SyncSource;
+  maintenanceId: string | null;
+  maintenance: {
+    equipment: {
+      id: string;
+      nameDescription: string;
+    };
+  } | null;
+}) {
+  return buildResponseRow({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    eventDate: row.eventDate,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    isAllDay: row.isAllDay,
+    origin: row.origin,
+    originLabel: row.origin === DeadlineOrigin.MAINTENANCE ? "Manutenzione" : "Manuale",
     lastSource: row.lastSource,
     maintenanceId: row.maintenanceId,
     canEdit: row.origin === DeadlineOrigin.MANUAL,
     canDelete: row.origin === DeadlineOrigin.MANUAL,
+    eventKind: "DEADLINE",
     linkedEquipment: row.maintenance?.equipment
       ? {
           id: row.maintenance.equipment.id,
           nameDescription: row.maintenance.equipment.nameDescription,
         }
       : null,
-  };
+    linkedJobOrder: null,
+  });
 }
 
 async function getAuthorizedUser() {
@@ -90,21 +143,7 @@ export async function GET() {
   const authResult = await getAuthorizedUser();
   if (authResult.error) return authResult.error;
 
-  const rows = await prisma.deadline.findMany({
-    orderBy: [{ eventDate: "asc" }, { startTime: "asc" }, { createdAt: "asc" }],
-    include: {
-      maintenance: {
-        include: {
-          equipment: {
-            select: {
-              id: true,
-              nameDescription: true,
-            },
-          },
-        },
-      },
-    },
-  });
+  const rows = await getScheduleEvents();
 
   return NextResponse.json({
     rows: rows.map(buildRow),
@@ -190,6 +229,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    row: buildRow(created),
+    row: buildDeadlineRow(created),
   });
 }

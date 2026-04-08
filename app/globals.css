@@ -818,9 +818,21 @@ a {
   gap: 0.9rem;
 }
 
+.dashboard-card-fixed {
+  min-height: 420px;
+  max-height: 420px;
+}
+
 .dashboard-event-list {
   display: grid;
   gap: 0.75rem;
+}
+
+.dashboard-event-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.2rem;
 }
 
 .dashboard-event-item {
@@ -1153,6 +1165,11 @@ a {
 .scad-calendar-event-maintenance {
   background: #dce9f8;
   color: #184e8a;
+}
+
+.scad-calendar-event-joborder {
+  background: #e4f7ea;
+  color: #166534;
 }
 
 .scad-calendar-more {
@@ -1902,6 +1919,11 @@ a {
   .dashboard-hero {
     padding: 1.25rem;
     flex-direction: column;
+  }
+
+  .dashboard-card-fixed {
+    min-height: 340px;
+    max-height: 340px;
   }
 
   .dashboard-hero-badge {

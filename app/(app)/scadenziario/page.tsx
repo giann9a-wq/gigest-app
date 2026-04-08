@@ -11,13 +11,20 @@ type DeadlineRow = {
   endTime: string;
   isAllDay: boolean;
   origin: "MANUAL" | "MAINTENANCE";
+  originLabel: string;
   lastSource: "GIGEST" | "GOOGLE_CALENDAR";
   maintenanceId: string | null;
   canEdit: boolean;
   canDelete: boolean;
+  eventKind: "DEADLINE" | "JOB_ORDER_END";
   linkedEquipment: {
     id: string;
     nameDescription: string;
+  } | null;
+  linkedJobOrder: {
+    id: string;
+    name: string;
+    type: string;
   } | null;
 };
 
@@ -89,6 +96,31 @@ function formatTimeRange(row: DeadlineRow) {
   if (row.startTime && row.endTime) return `${row.startTime} - ${row.endTime}`;
   if (row.startTime) return `Dalle ${row.startTime}`;
   return "";
+}
+
+function formatEventOriginMeta(row: DeadlineRow) {
+  const timeLabel = formatTimeRange(row);
+  return timeLabel ? `${timeLabel} · ${row.originLabel}` : row.originLabel;
+}
+
+function getLinkedLabel(row: DeadlineRow) {
+  if (row.linkedEquipment) {
+    return `Mezzo: ${row.linkedEquipment.nameDescription}`;
+  }
+
+  if (row.linkedJobOrder) {
+    return `Commessa: ${row.linkedJobOrder.name}`;
+  }
+
+  return "";
+}
+
+function getReadonlyBadgeLabel(row: DeadlineRow) {
+  if (row.eventKind === "JOB_ORDER_END") {
+    return "Fine commessa";
+  }
+
+  return "Da manutenzione";
 }
 
 function compareDeadlineRows(a: DeadlineRow, b: DeadlineRow) {
@@ -476,7 +508,6 @@ export default function ScadenziarioPage() {
   const filteredTableRows = useMemo(() => {
     const filtered = rows.filter((row) => {
       const combinedOrigin = `${row.origin} ${row.lastSource}`.toLowerCase();
-      const equipmentName = row.linkedEquipment?.nameDescription ?? "";
 
       return (
         row.title.toLowerCase().includes(tableFilters.title.trim().toLowerCase()) &&
@@ -484,7 +515,7 @@ export default function ScadenziarioPage() {
         row.eventDate.includes(tableFilters.eventDate.trim()) &&
         (tableFilters.origin ? row.origin === tableFilters.origin : true) &&
         (tableFilters.lastSource ? row.lastSource === tableFilters.lastSource : true) &&
-        equipmentName.toLowerCase().includes(tableFilters.linkedEquipment.trim().toLowerCase()) &&
+        getLinkedLabel(row).toLowerCase().includes(tableFilters.linkedEquipment.trim().toLowerCase()) &&
         combinedOrigin.includes(
           `${tableFilters.origin} ${tableFilters.lastSource}`.trim().toLowerCase()
         )
@@ -510,16 +541,18 @@ export default function ScadenziarioPage() {
           });
           break;
         case "origin":
-          result = `${a.origin} ${a.lastSource}`.localeCompare(`${b.origin} ${b.lastSource}`, "it", {
-            sensitivity: "base",
-          });
+          result = `${a.originLabel} ${a.lastSource}`.localeCompare(
+            `${b.originLabel} ${b.lastSource}`,
+            "it",
+            {
+              sensitivity: "base",
+            }
+          );
           break;
         case "linkedEquipment":
-          result = (a.linkedEquipment?.nameDescription ?? "").localeCompare(
-            b.linkedEquipment?.nameDescription ?? "",
-            "it",
-            { sensitivity: "base" }
-          );
+          result = getLinkedLabel(a).localeCompare(getLinkedLabel(b), "it", {
+            sensitivity: "base",
+          });
           break;
       }
 
@@ -635,7 +668,9 @@ export default function ScadenziarioPage() {
                       key={row.id}
                       className={[
                         "scad-calendar-event",
-                        row.origin === "MAINTENANCE"
+                        row.eventKind === "JOB_ORDER_END"
+                          ? "scad-calendar-event-joborder"
+                          : row.origin === "MAINTENANCE"
                           ? "scad-calendar-event-maintenance"
                           : "scad-calendar-event-manual",
                       ].join(" ")}
@@ -671,16 +706,12 @@ export default function ScadenziarioPage() {
                     <div className="scad-card-top">
                       <div className="scad-card-body">
                         <div className="scad-card-title">{row.title}</div>
-                        <div className="scad-card-meta">
-                          {formatTimeRange(row)} · {row.origin}
-                        </div>
+                        <div className="scad-card-meta">{formatEventOriginMeta(row)}</div>
                         {row.description ? (
                           <div className="scad-card-description">{row.description}</div>
                         ) : null}
-                        {row.linkedEquipment ? (
-                          <div className="scad-card-meta">
-                            Mezzo: {row.linkedEquipment.nameDescription}
-                          </div>
+                        {getLinkedLabel(row) ? (
+                          <div className="scad-card-meta">{getLinkedLabel(row)}</div>
                         ) : null}
                       </div>
 
@@ -694,7 +725,7 @@ export default function ScadenziarioPage() {
                             Modifica
                           </button>
                         ) : (
-                          <span className="scad-tag">Da manutenzione</span>
+                          <span className="scad-tag">{getReadonlyBadgeLabel(row)}</span>
                         )}
                       </div>
                     </div>
@@ -867,11 +898,12 @@ export default function ScadenziarioPage() {
               {todayRows.map((row) => (
                 <div key={row.id} className="scad-card">
                   <div className="scad-card-title">{row.title}</div>
-                  <div className="scad-card-meta">
-                    {formatTimeRange(row)} · {row.origin}
-                  </div>
+                  <div className="scad-card-meta">{formatEventOriginMeta(row)}</div>
                   {row.description ? (
                     <div className="scad-card-description">{row.description}</div>
+                  ) : null}
+                  {getLinkedLabel(row) ? (
+                    <div className="scad-card-meta">{getLinkedLabel(row)}</div>
                   ) : null}
                 </div>
               ))}
@@ -896,13 +928,9 @@ export default function ScadenziarioPage() {
                       <div className="scad-card-meta">
                         {formatDisplayDate(row.eventDate)} · {formatTimeRange(row)}
                       </div>
-                      <div className="scad-card-meta">
-                        {row.origin} · {row.lastSource}
-                      </div>
-                      {row.linkedEquipment ? (
-                        <div className="scad-card-meta">
-                          Mezzo: {row.linkedEquipment.nameDescription}
-                        </div>
+                      <div className="scad-card-meta">{row.originLabel} · {row.lastSource}</div>
+                      {getLinkedLabel(row) ? (
+                        <div className="scad-card-meta">{getLinkedLabel(row)}</div>
                       ) : null}
                     </div>
 
@@ -915,7 +943,7 @@ export default function ScadenziarioPage() {
                         Modifica
                       </button>
                     ) : (
-                      <span className="scad-tag">Da manutenzione</span>
+                      <span className="scad-tag">{getReadonlyBadgeLabel(row)}</span>
                     )}
                   </div>
                 </div>
@@ -1057,14 +1085,8 @@ export default function ScadenziarioPage() {
                     <td>{row.description || "-"}</td>
                     <td>{formatDisplayDate(row.eventDate)}</td>
                     <td>{formatTimeRange(row) || "-"}</td>
-                    <td>
-                      {row.origin} · {row.lastSource}
-                    </td>
-                    <td>
-                      {row.linkedEquipment
-                        ? `Mezzo: ${row.linkedEquipment.nameDescription}`
-                        : "-"}
-                    </td>
+                    <td>{row.originLabel} · {row.lastSource}</td>
+                    <td>{getLinkedLabel(row) || "-"}</td>
                     <td>
                       {row.canEdit ? (
                         <div className="scad-table-actions">
@@ -1084,7 +1106,7 @@ export default function ScadenziarioPage() {
                           </button>
                         </div>
                       ) : (
-                        <span className="scad-tag">Gestita da manutenzione</span>
+                        <span className="scad-tag">{getReadonlyBadgeLabel(row)}</span>
                       )}
                     </td>
                   </tr>
