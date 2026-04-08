@@ -45,12 +45,8 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
     { href: "/scadenziario" as Route, label: "Scadenziario" },
     { href: "/stampa-risorse-mese" as Route, label: "Stampa Risorse" },
     { href: "/statistiche-risorse-commesse" as Route, label: "Statistiche" },
+    { href: "/dashboard-commessa" as Route, label: "Dashboard Commessa" },
     ...(showAdminLink ? [{ href: "/admin/accessi" as Route, label: "Admin" }] : []),
-    {
-      label: "Dashboard Commessa",
-      disabled: true,
-      title: "Pagina in preparazione",
-    },
   ];
 
   return (

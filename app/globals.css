@@ -915,6 +915,69 @@ a {
   gap: 1.2rem;
 }
 
+.job-sheet-page,
+.job-sheet-shell,
+.job-sheet-panel,
+.job-sheet-form-grid,
+.job-sheet-budget-list,
+.job-sheet-actions,
+.job-dashboard-selector-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.job-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.job-sheet-panel {
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(240, 176, 137, 0.45);
+}
+
+.job-sheet-panel-title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.job-sheet-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.job-sheet-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.job-sheet-field span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.job-sheet-field-wide {
+  grid-column: span 2;
+}
+
+.job-sheet-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.job-sheet-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-content: flex-start;
+ }
+
 .job-dashboard-topbar,
 .job-dashboard-head-grid,
 .job-dashboard-panels,
@@ -2146,6 +2209,7 @@ a {
   .dashboard-grid,
   .dashboard-actions-grid,
   .job-dashboard-panels,
+  .job-sheet-grid,
   .scad-main-grid,
   .scad-bottom-grid,
   .admin-grid,
@@ -2203,7 +2267,15 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .job-sheet-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .job-dashboard-head-item-wide {
+    grid-column: span 1;
+  }
+
+  .job-sheet-field-wide {
     grid-column: span 1;
   }
 
@@ -2212,6 +2284,8 @@ a {
   }
 
   .job-dashboard-topbar,
+  .job-sheet-topbar,
+  .job-sheet-actions,
   .job-dashboard-meta-strip,
   .job-dashboard-actions,
   .job-dashboard-panel-head,

@@ -8,16 +8,6 @@ type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
 type JobSortKey = "name" | "type" | "startDate" | "status" | "endDate" | "description";
 type SortDirection = "asc" | "desc";
 
-type BudgetForm = {
-  personnel: string;
-  equipment: string;
-  materials: string;
-  professionalServices: string;
-  thirdPartyServices: string;
-  misc: string;
-  revenue: string;
-};
-
 type EditableJobOrderRow = {
   localId: string;
   id?: string;
@@ -27,7 +17,6 @@ type EditableJobOrderRow = {
   status: ResourceStatusValue | "";
   endDate: string;
   description: string;
-  budget: BudgetForm;
 };
 
 type JobFilters = {
@@ -39,28 +28,6 @@ type JobFilters = {
   description: string;
 };
 
-const budgetFieldLabels: { key: keyof BudgetForm; label: string }[] = [
-  { key: "personnel", label: "Budget personale" },
-  { key: "equipment", label: "Budget mezzi" },
-  { key: "materials", label: "Materie prime" },
-  { key: "professionalServices", label: "Prestazioni professionali" },
-  { key: "thirdPartyServices", label: "Prestazioni terzi" },
-  { key: "misc", label: "Spese varie" },
-  { key: "revenue", label: "Fatturato previsto" },
-];
-
-function makeEmptyBudget(): BudgetForm {
-  return {
-    personnel: "",
-    equipment: "",
-    materials: "",
-    professionalServices: "",
-    thirdPartyServices: "",
-    misc: "",
-    revenue: "",
-  };
-}
-
 function makeEmptyRow(): EditableJobOrderRow {
   return {
     localId: crypto.randomUUID(),
@@ -70,7 +37,6 @@ function makeEmptyRow(): EditableJobOrderRow {
     status: "",
     endDate: "",
     description: "",
-    budget: makeEmptyBudget(),
   };
 }
 
@@ -137,37 +103,6 @@ function compareText(a: string, b: string) {
   return a.localeCompare(b, "it", { sensitivity: "base" });
 }
 
-function toBudgetInputValue(value: unknown) {
-  if (value == null) return "";
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric === 0) return "";
-  return numeric.toFixed(2);
-}
-
-function parseAmount(value: string) {
-  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-  }).format(value);
-}
-
-function getBudgetTotal(budget: BudgetForm) {
-  return (
-    parseAmount(budget.personnel) +
-    parseAmount(budget.equipment) +
-    parseAmount(budget.materials) +
-    parseAmount(budget.professionalServices) +
-    parseAmount(budget.thirdPartyServices) +
-    parseAmount(budget.misc)
-  );
-}
-
 export default function CommessePage() {
   const router = useRouter();
   const [rows, setRows] = useState<EditableJobOrderRow[]>([
@@ -186,22 +121,6 @@ export default function CommessePage() {
   function setRowValue(localId: string, patch: Partial<EditableJobOrderRow>) {
     setRows((current) =>
       current.map((row) => (row.localId === localId ? { ...row, ...patch } : row))
-    );
-  }
-
-  function setBudgetValue(localId: string, key: keyof BudgetForm, value: string) {
-    setRows((current) =>
-      current.map((row) =>
-        row.localId === localId
-          ? {
-              ...row,
-              budget: {
-                ...row.budget,
-                [key]: value,
-              },
-            }
-          : row
-      )
     );
   }
 
@@ -250,15 +169,6 @@ export default function CommessePage() {
             status: row.status ?? "",
             endDate: row.endDate ?? "",
             description: row.description ?? "",
-            budget: {
-              personnel: toBudgetInputValue(row.budget?.personnel),
-              equipment: toBudgetInputValue(row.budget?.equipment),
-              materials: toBudgetInputValue(row.budget?.materials),
-              professionalServices: toBudgetInputValue(row.budget?.professionalServices),
-              thirdPartyServices: toBudgetInputValue(row.budget?.thirdPartyServices),
-              misc: toBudgetInputValue(row.budget?.misc),
-              revenue: toBudgetInputValue(row.budget?.revenue),
-            },
           }))
         );
       }
@@ -287,7 +197,6 @@ export default function CommessePage() {
         status: row.status,
         endDate: row.endDate,
         description: row.description,
-        budget: row.budget,
       }));
 
       const data = await safeJsonFetch("/api/commesse", {
@@ -359,7 +268,7 @@ export default function CommessePage() {
           <div>
             <h1 className="mobile-section-title">Commesse</h1>
             <p className="mobile-section-subtitle">
-              Puoi inserire da subito i valori di budget in fase di creazione e poi aprire la dashboard della commessa per il confronto con gli actual.
+              Qui gestisci l’anagrafica delle commesse. I dati economici restano dentro la scheda commessa e nella sezione dedicata Dashboard Commessa.
             </p>
           </div>
         </div>
@@ -488,30 +397,15 @@ export default function CommessePage() {
                     {renderSortLabel("Descrizione", "description")}
                   </button>
                 </th>
-                {budgetFieldLabels.map((field) => (
-                  <th key={field.key} style={headerCell}>
-                    {field.label}
-                  </th>
-                ))}
-                <th style={headerCell}>Totale budget costi</th>
-                <th style={headerCell}>Apri Dashboard</th>
+                <th style={headerCell}>Apri Scheda</th>
                 <th style={headerCellTiny}></th>
               </tr>
               <tr>
                 <th style={filterHeaderCell}>
-                  <input
-                    value={filters.name}
-                    onChange={(e) => setFilterValue("name", e.target.value)}
-                    placeholder="Filtra commessa"
-                    style={filterInputStyle}
-                  />
+                  <input value={filters.name} onChange={(e) => setFilterValue("name", e.target.value)} placeholder="Filtra commessa" style={filterInputStyle} />
                 </th>
                 <th style={filterHeaderCell}>
-                  <select
-                    value={filters.type}
-                    onChange={(e) => setFilterValue("type", e.target.value as JobTypeValue | "")}
-                    style={filterInputStyle}
-                  >
+                  <select value={filters.type} onChange={(e) => setFilterValue("type", e.target.value as JobTypeValue | "")} style={filterInputStyle}>
                     <option value="">Tutte</option>
                     <option value="SITE">{jobTypeLabel("SITE")}</option>
                     <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
@@ -521,19 +415,10 @@ export default function CommessePage() {
                   </select>
                 </th>
                 <th style={filterHeaderCell}>
-                  <input
-                    value={filters.startDate}
-                    onChange={(e) => setFilterValue("startDate", e.target.value)}
-                    placeholder="AAAA-MM-GG"
-                    style={filterInputStyle}
-                  />
+                  <input value={filters.startDate} onChange={(e) => setFilterValue("startDate", e.target.value)} placeholder="AAAA-MM-GG" style={filterInputStyle} />
                 </th>
                 <th style={filterHeaderCell}>
-                  <select
-                    value={filters.status}
-                    onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")}
-                    style={filterInputStyle}
-                  >
+                  <select value={filters.status} onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")} style={filterInputStyle}>
                     <option value="">Tutti</option>
                     <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                     <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
@@ -541,25 +426,11 @@ export default function CommessePage() {
                   </select>
                 </th>
                 <th style={filterHeaderCell}>
-                  <input
-                    value={filters.endDate}
-                    onChange={(e) => setFilterValue("endDate", e.target.value)}
-                    placeholder="AAAA-MM-GG"
-                    style={filterInputStyle}
-                  />
+                  <input value={filters.endDate} onChange={(e) => setFilterValue("endDate", e.target.value)} placeholder="AAAA-MM-GG" style={filterInputStyle} />
                 </th>
                 <th style={filterHeaderCell}>
-                  <input
-                    value={filters.description}
-                    onChange={(e) => setFilterValue("description", e.target.value)}
-                    placeholder="Filtra descrizione"
-                    style={filterInputStyle}
-                  />
+                  <input value={filters.description} onChange={(e) => setFilterValue("description", e.target.value)} placeholder="Filtra descrizione" style={filterInputStyle} />
                 </th>
-                {budgetFieldLabels.map((field) => (
-                  <th key={field.key} style={filterHeaderCell}></th>
-                ))}
-                <th style={filterHeaderCell}></th>
                 <th style={filterHeaderCell}></th>
                 <th style={filterHeaderCell}></th>
               </tr>
@@ -567,25 +438,9 @@ export default function CommessePage() {
             <tbody>
               {visibleRows.map((row, index) => (
                 <tr key={row.localId}>
+                  <td style={bodyCell}><input type="text" value={row.name} onChange={(e) => setRowValue(row.localId, { name: e.target.value })} style={inputStyle} placeholder="Nome commessa" disabled={loading} /></td>
                   <td style={bodyCell}>
-                    <input
-                      type="text"
-                      value={row.name}
-                      onChange={(e) => setRowValue(row.localId, { name: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Nome commessa"
-                      disabled={loading}
-                    />
-                  </td>
-                  <td style={bodyCell}>
-                    <select
-                      value={row.type}
-                      onChange={(e) =>
-                        setRowValue(row.localId, { type: e.target.value as JobTypeValue | "" })
-                      }
-                      style={inputStyle}
-                      disabled={loading}
-                    >
+                    <select value={row.type} onChange={(e) => setRowValue(row.localId, { type: e.target.value as JobTypeValue | "" })} style={inputStyle} disabled={loading}>
                       <option value="">Seleziona tipologia</option>
                       <option value="SITE">{jobTypeLabel("SITE")}</option>
                       <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
@@ -594,83 +449,24 @@ export default function CommessePage() {
                       <option value="OTHER">{jobTypeLabel("OTHER")}</option>
                     </select>
                   </td>
+                  <td style={bodyCell}><input type="date" value={row.startDate} onChange={(e) => setRowValue(row.localId, { startDate: e.target.value })} style={inputStyle} disabled={loading} /></td>
                   <td style={bodyCell}>
-                    <input
-                      type="date"
-                      value={row.startDate}
-                      onChange={(e) => setRowValue(row.localId, { startDate: e.target.value })}
-                      style={inputStyle}
-                      disabled={loading}
-                    />
-                  </td>
-                  <td style={bodyCell}>
-                    <select
-                      value={row.status}
-                      onChange={(e) =>
-                        setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })
-                      }
-                      style={inputStyle}
-                      disabled={loading}
-                    >
+                    <select value={row.status} onChange={(e) => setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })} style={inputStyle} disabled={loading}>
                       <option value="">Seleziona stato</option>
                       <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                       <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
                       <option value="ENDED">{statusLabel("ENDED")}</option>
                     </select>
                   </td>
+                  <td style={bodyCell}><input type="date" value={row.endDate} onChange={(e) => setRowValue(row.localId, { endDate: e.target.value })} style={inputStyle} disabled={loading} /></td>
+                  <td style={bodyCell}><input type="text" value={row.description} onChange={(e) => setRowValue(row.localId, { description: e.target.value })} style={inputStyle} placeholder="Descrizione" disabled={loading} /></td>
                   <td style={bodyCell}>
-                    <input
-                      type="date"
-                      value={row.endDate}
-                      onChange={(e) => setRowValue(row.localId, { endDate: e.target.value })}
-                      style={inputStyle}
-                      disabled={loading}
-                    />
-                  </td>
-                  <td style={bodyCell}>
-                    <input
-                      type="text"
-                      value={row.description}
-                      onChange={(e) => setRowValue(row.localId, { description: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Descrizione"
-                      disabled={loading}
-                    />
-                  </td>
-                  {budgetFieldLabels.map((field) => (
-                    <td key={field.key} style={bodyCell}>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={row.budget[field.key]}
-                        onChange={(e) => setBudgetValue(row.localId, field.key, e.target.value)}
-                        style={inputStyle}
-                        placeholder="0,00"
-                        disabled={loading}
-                      />
-                    </td>
-                  ))}
-                  <td style={bodyCell}>
-                    <strong>{formatCurrency(getBudgetTotal(row.budget))}</strong>
-                  </td>
-                  <td style={bodyCell}>
-                    <button
-                      className="button"
-                      type="button"
-                      disabled={!row.id}
-                      onClick={() => row.id && router.push(`/commesse/${row.id}`)}
-                    >
-                      Apri
+                    <button className="button" type="button" disabled={!row.id} onClick={() => row.id && router.push(`/commesse/${row.id}`)}>
+                      Apri Scheda
                     </button>
                   </td>
                   <td style={bodyCellTiny}>
-                    <button
-                      type="button"
-                      onClick={() => removeRow(row.localId)}
-                      style={removeButtonStyle}
-                      title={`Rimuovi riga ${index + 1}`}
-                    >
+                    <button type="button" onClick={() => removeRow(row.localId)} style={removeButtonStyle} title={`Rimuovi riga ${index + 1}`}>
                       ×
                     </button>
                   </td>
@@ -688,38 +484,18 @@ export default function CommessePage() {
                   <div className="mobile-data-label">Commessa</div>
                   <strong>{row.name || `Nuova commessa ${index + 1}`}</strong>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeRow(row.localId)}
-                  className="mobile-danger-button"
-                  title={`Rimuovi riga ${index + 1}`}
-                >
+                <button type="button" onClick={() => removeRow(row.localId)} className="mobile-danger-button" title={`Rimuovi riga ${index + 1}`}>
                   ×
                 </button>
               </div>
-
               <div className="mobile-data-card-grid">
                 <label className="mobile-data-field mobile-data-field-full">
                   <span className="mobile-data-label">Nome Commessa</span>
-                  <input
-                    type="text"
-                    value={row.name}
-                    onChange={(e) => setRowValue(row.localId, { name: e.target.value })}
-                    className="mobile-data-input"
-                    placeholder="Nome commessa"
-                    disabled={loading}
-                  />
+                  <input type="text" value={row.name} onChange={(e) => setRowValue(row.localId, { name: e.target.value })} className="mobile-data-input" placeholder="Nome commessa" disabled={loading} />
                 </label>
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Tipologia</span>
-                  <select
-                    value={row.type}
-                    onChange={(e) =>
-                      setRowValue(row.localId, { type: e.target.value as JobTypeValue | "" })
-                    }
-                    className="mobile-data-select"
-                    disabled={loading}
-                  >
+                  <select value={row.type} onChange={(e) => setRowValue(row.localId, { type: e.target.value as JobTypeValue | "" })} className="mobile-data-select" disabled={loading}>
                     <option value="">Seleziona tipologia</option>
                     <option value="SITE">{jobTypeLabel("SITE")}</option>
                     <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
@@ -730,14 +506,7 @@ export default function CommessePage() {
                 </label>
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Stato</span>
-                  <select
-                    value={row.status}
-                    onChange={(e) =>
-                      setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })
-                    }
-                    className="mobile-data-select"
-                    disabled={loading}
-                  >
+                  <select value={row.status} onChange={(e) => setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })} className="mobile-data-select" disabled={loading}>
                     <option value="">Seleziona stato</option>
                     <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                     <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
@@ -746,64 +515,20 @@ export default function CommessePage() {
                 </label>
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Data Inizio</span>
-                  <input
-                    type="date"
-                    value={row.startDate}
-                    onChange={(e) => setRowValue(row.localId, { startDate: e.target.value })}
-                    className="mobile-data-input"
-                    disabled={loading}
-                  />
+                  <input type="date" value={row.startDate} onChange={(e) => setRowValue(row.localId, { startDate: e.target.value })} className="mobile-data-input" disabled={loading} />
                 </label>
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Data Fine</span>
-                  <input
-                    type="date"
-                    value={row.endDate}
-                    onChange={(e) => setRowValue(row.localId, { endDate: e.target.value })}
-                    className="mobile-data-input"
-                    disabled={loading}
-                  />
+                  <input type="date" value={row.endDate} onChange={(e) => setRowValue(row.localId, { endDate: e.target.value })} className="mobile-data-input" disabled={loading} />
                 </label>
                 <label className="mobile-data-field mobile-data-field-full">
                   <span className="mobile-data-label">Descrizione</span>
-                  <input
-                    type="text"
-                    value={row.description}
-                    onChange={(e) => setRowValue(row.localId, { description: e.target.value })}
-                    className="mobile-data-input"
-                    placeholder="Descrizione"
-                    disabled={loading}
-                  />
+                  <input type="text" value={row.description} onChange={(e) => setRowValue(row.localId, { description: e.target.value })} className="mobile-data-input" placeholder="Descrizione" disabled={loading} />
                 </label>
-                {budgetFieldLabels.map((field) => (
-                  <label key={field.key} className="mobile-data-field">
-                    <span className="mobile-data-label">{field.label}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.budget[field.key]}
-                      onChange={(e) => setBudgetValue(row.localId, field.key, e.target.value)}
-                      className="mobile-data-input"
-                      placeholder="0,00"
-                      disabled={loading}
-                    />
-                  </label>
-                ))}
-                <div className="mobile-data-field mobile-data-field-full">
-                  <span className="mobile-data-label">Totale budget costi</span>
-                  <strong>{formatCurrency(getBudgetTotal(row.budget))}</strong>
-                </div>
               </div>
-
               <div className="mobile-data-actions">
-                <button
-                  className="button"
-                  type="button"
-                  disabled={!row.id}
-                  onClick={() => row.id && router.push(`/commesse/${row.id}`)}
-                >
-                  Apri dashboard
+                <button className="button" type="button" disabled={!row.id} onClick={() => row.id && router.push(`/commesse/${row.id}`)}>
+                  Apri scheda
                 </button>
               </div>
             </article>
@@ -811,15 +536,9 @@ export default function CommessePage() {
         </div>
 
         <div className="mobile-footer-actions" style={{ marginTop: 18 }}>
-          <button
-            type="button"
-            onClick={addRow}
-            className="mobile-button-success"
-            aria-label="Aggiungi riga"
-          >
+          <button type="button" onClick={addRow} className="mobile-button-success" aria-label="Aggiungi riga">
             +
           </button>
-
           <div className="mobile-toolbar-actions">
             <button className="button" type="button" onClick={handleSave} disabled={saving || loading}>
               {saving ? "Salvataggio..." : "Salva"}

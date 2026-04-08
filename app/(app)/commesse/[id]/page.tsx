@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Route } from "next";
 import { useParams, useRouter } from "next/navigation";
 
 type JobTypeValue = "SITE" | "TRAINING" | "LEAVE" | "SICKNESS" | "OTHER";
@@ -14,23 +15,6 @@ type BudgetForm = {
   thirdPartyServices: string;
   misc: string;
   revenue: string;
-};
-
-type ActualDetailEntry = {
-  id: string;
-  referenceDate: string;
-  hours: number;
-  hourlyCost: number;
-  totalCost: number;
-  description: string;
-};
-
-type ActualDetailGroup = {
-  resourceId: string;
-  resourceLabel: string;
-  totalHours: number;
-  totalCost: number;
-  entries: ActualDetailEntry[];
 };
 
 type JobOrderDashboardResponse = {
@@ -69,8 +53,6 @@ type JobOrderDashboardResponse = {
     totalCosts: number;
     grossMargin: number;
     grossMarginPct: number;
-    personnelDetails: ActualDetailGroup[];
-    equipmentDetails: ActualDetailGroup[];
     importSources: {
       materials: string;
       professionalServices: string;
@@ -136,12 +118,22 @@ function jobTypeLabel(type: JobTypeValue) {
 function statusLabel(status: ResourceStatusValue) {
   switch (status) {
     case "ACTIVE":
-      return "Attiva";
+      return "Attivo";
     case "SUSPENDED":
-      return "Sospesa";
+      return "Sospeso";
     case "ENDED":
-      return "Chiusa";
+      return "Estinto";
   }
+}
+
+function formatInputValue(value: number) {
+  return value ? value.toFixed(2) : "";
+}
+
+function parseAmount(value: string) {
+  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function formatCurrency(value: number) {
@@ -156,23 +148,6 @@ function formatPercent(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value || 0)} %`;
-}
-
-function formatInputValue(value: number) {
-  return value ? value.toFixed(2) : "";
-}
-
-function parseAmount(value: string) {
-  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatDate(value: string) {
-  if (!value) return "-";
-  const [year, month, day] = value.split("-");
-  if (!year || !month || !day) return value;
-  return `${day}/${month}/${year}`;
 }
 
 function formatDateTime(value: string) {
@@ -240,7 +215,6 @@ export default function SchedaCommessaPage() {
   }, [params.id]);
 
   async function handleSave() {
-    if (!dashboard) return;
     if (!jobOrderForm) return;
 
     setSaving(true);
@@ -265,24 +239,8 @@ export default function SchedaCommessaPage() {
       })) as JobOrderDashboardResponse & { success: boolean };
 
       setDashboard(data);
-      setJobOrderForm({
-        name: data.jobOrder.name,
-        type: data.jobOrder.type,
-        startDate: data.jobOrder.startDate,
-        endDate: data.jobOrder.endDate,
-        status: data.jobOrder.status,
-        description: data.jobOrder.description,
-      });
-      setBudget({
-        personnel: formatInputValue(data.budget.personnel),
-        equipment: formatInputValue(data.budget.equipment),
-        materials: formatInputValue(data.budget.materials),
-        professionalServices: formatInputValue(data.budget.professionalServices),
-        thirdPartyServices: formatInputValue(data.budget.thirdPartyServices),
-        misc: formatInputValue(data.budget.misc),
-        revenue: formatInputValue(data.budget.revenue),
-      });
-      setMessage("Budget commessa salvato correttamente.");
+      setMessage("Scheda commessa salvata correttamente.");
+      await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nel salvataggio");
     } finally {
@@ -290,20 +248,12 @@ export default function SchedaCommessaPage() {
     }
   }
 
-  function setBudgetValue(key: keyof BudgetForm, value: string) {
-    setBudget((current) => ({ ...current, [key]: value }));
-  }
-
   if (loading && !dashboard) {
-    return <div className="card">Caricamento dashboard commessa...</div>;
+    return <div className="card">Caricamento scheda commessa...</div>;
   }
 
-  if (!dashboard) {
+  if (!dashboard || !jobOrderForm) {
     return <div className="card">{error || "Commessa non trovata"}</div>;
-  }
-
-  if (!jobOrderForm) {
-    return <div className="card">Caricamento dati commessa...</div>;
   }
 
   const budgetPreview = {
@@ -315,306 +265,135 @@ export default function SchedaCommessaPage() {
     misc: parseAmount(budget.misc),
     revenue: parseAmount(budget.revenue),
   };
-  const budgetPreviewTotalCosts =
+  const budgetTotalCosts =
     budgetPreview.personnel +
     budgetPreview.equipment +
     budgetPreview.materials +
     budgetPreview.professionalServices +
     budgetPreview.thirdPartyServices +
     budgetPreview.misc;
-  const budgetPreviewMargin = budgetPreview.revenue - budgetPreviewTotalCosts;
-  const budgetPreviewMarginPct = budgetPreview.revenue
-    ? ((budgetPreview.revenue - budgetPreviewTotalCosts) / budgetPreview.revenue) * 100
+  const budgetMargin = budgetPreview.revenue - budgetTotalCosts;
+  const budgetMarginPct = budgetPreview.revenue
+    ? ((budgetPreview.revenue - budgetTotalCosts) / budgetPreview.revenue) * 100
     : 0;
 
   return (
-    <div className="job-dashboard-page">
-      <section className="card job-dashboard-shell">
-        <div className="job-dashboard-topbar">
+    <div className="job-sheet-page">
+      <section className="card job-sheet-shell">
+        <div className="job-sheet-topbar">
           <div>
             <p className="job-dashboard-kicker">GiGEST</p>
-            <h1 className="job-dashboard-title">Dashboard Commessa</h1>
+            <h1 className="job-dashboard-title">Scheda Commessa</h1>
           </div>
-          <button className="button" type="button" onClick={() => router.push("/commesse")}>
-            Chiudi
-          </button>
+          <div className="job-sheet-actions">
+            <button className="mobile-button-secondary" type="button" onClick={() => router.push("/dashboard-commessa" as Route)}>
+              Vai a Dashboard Commessa
+            </button>
+            <button className="button" type="button" onClick={() => router.push("/commesse")}>
+              Chiudi
+            </button>
+          </div>
         </div>
 
         {message ? <div className="job-dashboard-success">{message}</div> : null}
         {error ? <div className="job-dashboard-error">{error}</div> : null}
 
-        <div className="job-dashboard-head-grid">
-          <div className="job-dashboard-head-item job-dashboard-head-item-wide">
-            <span>Commessa</span>
-            <input
-              className="job-dashboard-head-input"
-              value={jobOrderForm.name}
-              onChange={(e) =>
-                setJobOrderForm((current) => (current ? { ...current, name: e.target.value } : current))
-              }
-            />
-          </div>
-          <div className="job-dashboard-head-item">
-            <span>Stato Commessa</span>
-            <select
-              className="job-dashboard-head-input"
-              value={jobOrderForm.status}
-              onChange={(e) =>
-                setJobOrderForm((current) =>
-                  current ? { ...current, status: e.target.value as ResourceStatusValue } : current
-                )
-              }
-            >
-              <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
-              <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
-              <option value="ENDED">{statusLabel("ENDED")}</option>
-            </select>
-          </div>
-          <div className="job-dashboard-head-item">
-            <span>Tipologia</span>
-            <select
-              className="job-dashboard-head-input"
-              value={jobOrderForm.type}
-              onChange={(e) =>
-                setJobOrderForm((current) =>
-                  current ? { ...current, type: e.target.value as JobTypeValue } : current
-                )
-              }
-            >
-              <option value="SITE">{jobTypeLabel("SITE")}</option>
-              <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
-              <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
-              <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
-              <option value="OTHER">{jobTypeLabel("OTHER")}</option>
-            </select>
-          </div>
-          <div className="job-dashboard-head-item">
-            <span>Data Inizio</span>
-            <input
-              type="date"
-              className="job-dashboard-head-input"
-              value={jobOrderForm.startDate}
-              onChange={(e) =>
-                setJobOrderForm((current) => (current ? { ...current, startDate: e.target.value } : current))
-              }
-            />
-          </div>
-          <div className="job-dashboard-head-item">
-            <span>Data Fine</span>
-            <input
-              type="date"
-              className="job-dashboard-head-input"
-              value={jobOrderForm.endDate}
-              onChange={(e) =>
-                setJobOrderForm((current) => (current ? { ...current, endDate: e.target.value } : current))
-              }
-            />
-          </div>
-          <div className="job-dashboard-head-item job-dashboard-head-item-wide">
-            <span>Descrizione</span>
-            <textarea
-              className="job-dashboard-head-input job-dashboard-head-textarea"
-              value={jobOrderForm.description}
-              onChange={(e) =>
-                setJobOrderForm((current) => (current ? { ...current, description: e.target.value } : current))
-              }
-            />
-          </div>
-        </div>
-
-        <div className="job-dashboard-panels">
-          <section className="job-dashboard-panel job-dashboard-panel-budget">
-            <div className="job-dashboard-panel-head">
-              <h2>Budget</h2>
-              <strong>{formatCurrency(budgetPreview.revenue)}</strong>
+        <div className="job-sheet-grid">
+          <div className="job-sheet-panel">
+            <h2 className="job-sheet-panel-title">Dati Commessa</h2>
+            <div className="job-sheet-form-grid">
+              <label className="job-sheet-field job-sheet-field-wide">
+                <span>Commessa</span>
+                <input className="job-dashboard-head-input" value={jobOrderForm.name} onChange={(e) => setJobOrderForm((current) => current ? { ...current, name: e.target.value } : current)} />
+              </label>
+              <label className="job-sheet-field">
+                <span>Tipologia</span>
+                <select className="job-dashboard-head-input" value={jobOrderForm.type} onChange={(e) => setJobOrderForm((current) => current ? { ...current, type: e.target.value as JobTypeValue } : current)}>
+                  <option value="SITE">{jobTypeLabel("SITE")}</option>
+                  <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
+                  <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
+                  <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
+                  <option value="OTHER">{jobTypeLabel("OTHER")}</option>
+                </select>
+              </label>
+              <label className="job-sheet-field">
+                <span>Stato</span>
+                <select className="job-dashboard-head-input" value={jobOrderForm.status} onChange={(e) => setJobOrderForm((current) => current ? { ...current, status: e.target.value as ResourceStatusValue } : current)}>
+                  <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
+                  <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
+                  <option value="ENDED">{statusLabel("ENDED")}</option>
+                </select>
+              </label>
+              <label className="job-sheet-field">
+                <span>Data Inizio</span>
+                <input type="date" className="job-dashboard-head-input" value={jobOrderForm.startDate} onChange={(e) => setJobOrderForm((current) => current ? { ...current, startDate: e.target.value } : current)} />
+              </label>
+              <label className="job-sheet-field">
+                <span>Data Fine</span>
+                <input type="date" className="job-dashboard-head-input" value={jobOrderForm.endDate} onChange={(e) => setJobOrderForm((current) => current ? { ...current, endDate: e.target.value } : current)} />
+              </label>
+              <label className="job-sheet-field job-sheet-field-wide">
+                <span>Descrizione</span>
+                <textarea className="job-dashboard-head-input job-dashboard-head-textarea" value={jobOrderForm.description} onChange={(e) => setJobOrderForm((current) => current ? { ...current, description: e.target.value } : current)} />
+              </label>
             </div>
+          </div>
 
-            <div className="job-dashboard-line-list">
-              {budgetFields.slice(0, 6).map((field) => (
+          <div className="job-sheet-panel">
+            <h2 className="job-sheet-panel-title">Budget Commessa</h2>
+            <div className="job-sheet-budget-list">
+              {budgetFields.map((field) => (
                 <label key={field.key} className="job-dashboard-line">
                   <span>{field.label}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={budget[field.key]}
-                    onChange={(e) => setBudgetValue(field.key, e.target.value)}
-                    className="job-dashboard-amount-input"
-                  />
+                  <input type="number" min="0" step="0.01" value={budget[field.key]} onChange={(e) => setBudget((current) => ({ ...current, [field.key]: e.target.value }))} className="job-dashboard-amount-input" />
                 </label>
               ))}
             </div>
-
             <div className="job-dashboard-divider" />
-
             <div className="job-dashboard-summary-list">
               <div className="job-dashboard-summary-row">
                 <span>Totale Budget costi</span>
-                <strong>{formatCurrency(budgetPreviewTotalCosts)}</strong>
+                <strong>{formatCurrency(budgetTotalCosts)}</strong>
               </div>
-              <label className="job-dashboard-summary-row">
-                <span>Fatturato Previsto</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={budget.revenue}
-                  onChange={(e) => setBudgetValue("revenue", e.target.value)}
-                  className="job-dashboard-amount-input"
-                />
-              </label>
               <div className="job-dashboard-summary-row">
                 <span>Primo Margine Previsto</span>
                 <div className="job-dashboard-summary-values">
-                  <strong>{formatCurrency(budgetPreviewMargin)}</strong>
-                  <span>{formatPercent(budgetPreviewMarginPct)}</span>
+                  <strong>{formatCurrency(budgetMargin)}</strong>
+                  <span>{formatPercent(budgetMarginPct)}</span>
                 </div>
               </div>
             </div>
-          </section>
+          </div>
+        </div>
 
-          <section className="job-dashboard-panel job-dashboard-panel-actual">
-            <div className="job-dashboard-panel-head">
-              <h2>Actual</h2>
-              <strong>{formatCurrency(dashboard.actual.revenue)}</strong>
-            </div>
-
-            <details className="job-dashboard-accordion">
-              <summary>
-                <span className="job-dashboard-plus">+</span>
-                <span>Utilizzo Personale</span>
-                <strong>{formatCurrency(dashboard.actual.personnel)}</strong>
-              </summary>
-              <div className="job-dashboard-detail-list">
-                {dashboard.actual.personnelDetails.length === 0 ? (
-                  <p className="job-dashboard-muted">Nessun caricamento personale associato.</p>
-                ) : (
-                  dashboard.actual.personnelDetails.map((detail) => (
-                    <details key={detail.resourceId} className="job-dashboard-subdetail">
-                      <summary>
-                        <span>{detail.resourceLabel}</span>
-                        <span>
-                          {detail.totalHours.toFixed(1)} h · {formatCurrency(detail.totalCost)}
-                        </span>
-                      </summary>
-                      <div className="job-dashboard-entry-list">
-                        {detail.entries.map((entry) => (
-                          <div key={entry.id} className="job-dashboard-entry-row">
-                            <div>
-                              <strong>{formatDate(entry.referenceDate)}</strong>
-                              <div>{entry.description || "Caricamento diario"}</div>
-                            </div>
-                            <div>
-                              {entry.hours.toFixed(1)} h · {formatCurrency(entry.totalCost)}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  ))
-                )}
-              </div>
-            </details>
-
-            <details className="job-dashboard-accordion">
-              <summary>
-                <span className="job-dashboard-plus">+</span>
-                <span>Utilizzo Mezzi e Attrezzature</span>
-                <strong>{formatCurrency(dashboard.actual.equipment)}</strong>
-              </summary>
-              <div className="job-dashboard-detail-list">
-                {dashboard.actual.equipmentDetails.length === 0 ? (
-                  <p className="job-dashboard-muted">Nessun caricamento mezzi associato.</p>
-                ) : (
-                  dashboard.actual.equipmentDetails.map((detail) => (
-                    <details key={detail.resourceId} className="job-dashboard-subdetail">
-                      <summary>
-                        <span>{detail.resourceLabel}</span>
-                        <span>
-                          {detail.totalHours.toFixed(1)} h · {formatCurrency(detail.totalCost)}
-                        </span>
-                      </summary>
-                      <div className="job-dashboard-entry-list">
-                        {detail.entries.map((entry) => (
-                          <div key={entry.id} className="job-dashboard-entry-row">
-                            <div>
-                              <strong>{formatDate(entry.referenceDate)}</strong>
-                              <div>{entry.description || "Caricamento diario"}</div>
-                            </div>
-                            <div>
-                              {entry.hours.toFixed(1)} h · {formatCurrency(entry.totalCost)}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  ))
-                )}
-              </div>
-            </details>
-
-            <div className="job-dashboard-static-line">
-              <span>Materie Prime</span>
-              <div className="job-dashboard-summary-values">
-                <strong>{formatCurrency(dashboard.actual.materials)}</strong>
-                <small>{dashboard.actual.importSources.materials}</small>
-              </div>
-            </div>
-            <div className="job-dashboard-static-line">
-              <span>Prestazioni Professionali</span>
-              <div className="job-dashboard-summary-values">
-                <strong>{formatCurrency(dashboard.actual.professionalServices)}</strong>
-                <small>{dashboard.actual.importSources.professionalServices}</small>
-              </div>
-            </div>
-            <div className="job-dashboard-static-line">
-              <span>Prestazioni Terzi</span>
-              <div className="job-dashboard-summary-values">
-                <strong>{formatCurrency(dashboard.actual.thirdPartyServices)}</strong>
-                <small>{dashboard.actual.importSources.thirdPartyServices}</small>
-              </div>
-            </div>
-            <div className="job-dashboard-static-line">
-              <span>Spese Varie</span>
-              <div className="job-dashboard-summary-values">
-                <strong>{formatCurrency(dashboard.actual.misc)}</strong>
-                <small>{dashboard.actual.importSources.misc}</small>
-              </div>
-            </div>
-
-            <div className="job-dashboard-divider" />
-
+        <div className="job-sheet-grid">
+          <div className="job-sheet-panel">
+            <h2 className="job-sheet-panel-title">Situazione Actual</h2>
             <div className="job-dashboard-summary-list">
-              <div className="job-dashboard-summary-row">
-                <span>Totale costi</span>
-                <strong>{formatCurrency(dashboard.actual.totalCosts)}</strong>
-              </div>
-              <div className="job-dashboard-summary-row">
-                <span>Fatturato Actual</span>
-                <div className="job-dashboard-summary-values">
-                  <strong>{formatCurrency(dashboard.actual.revenue)}</strong>
-                  <small>{dashboard.actual.importSources.revenue}</small>
-                </div>
-              </div>
-              <div className="job-dashboard-summary-row">
-                <span>Primo Margine</span>
-                <div className="job-dashboard-summary-values">
-                  <strong>{formatCurrency(dashboard.actual.grossMargin)}</strong>
-                  <span>{formatPercent(dashboard.actual.grossMarginPct)}</span>
-                </div>
-              </div>
+              <div className="job-dashboard-summary-row"><span>Utilizzo Personale</span><strong>{formatCurrency(dashboard.actual.personnel)}</strong></div>
+              <div className="job-dashboard-summary-row"><span>Utilizzo Mezzi e Attrezzature</span><strong>{formatCurrency(dashboard.actual.equipment)}</strong></div>
+              <div className="job-dashboard-summary-row"><span>Materie Prime</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.materials)}</strong><small>{dashboard.actual.importSources.materials}</small></div></div>
+              <div className="job-dashboard-summary-row"><span>Prestazioni Professionali</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.professionalServices)}</strong><small>{dashboard.actual.importSources.professionalServices}</small></div></div>
+              <div className="job-dashboard-summary-row"><span>Prestazioni Terzi</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.thirdPartyServices)}</strong><small>{dashboard.actual.importSources.thirdPartyServices}</small></div></div>
+              <div className="job-dashboard-summary-row"><span>Spese Varie</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.misc)}</strong><small>{dashboard.actual.importSources.misc}</small></div></div>
+              <div className="job-dashboard-summary-row"><span>Fatturato Actual</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.revenue)}</strong><small>{dashboard.actual.importSources.revenue}</small></div></div>
             </div>
-          </section>
+          </div>
+
+          <div className="job-sheet-panel">
+            <h2 className="job-sheet-panel-title">Riepilogo</h2>
+            <div className="job-dashboard-summary-list">
+              <div className="job-dashboard-summary-row"><span>Caricamenti collegati</span><strong>{dashboard.jobOrder.activityCount}</strong></div>
+              <div className="job-dashboard-summary-row"><span>Totale costi actual</span><strong>{formatCurrency(dashboard.actual.totalCosts)}</strong></div>
+              <div className="job-dashboard-summary-row"><span>Primo margine actual</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.grossMargin)}</strong><span>{formatPercent(dashboard.actual.grossMarginPct)}</span></div></div>
+              <div className="job-dashboard-summary-row"><span>Creata il</span><strong>{formatDateTime(dashboard.jobOrder.createdAt)}</strong></div>
+              <div className="job-dashboard-summary-row"><span>Ultimo aggiornamento</span><strong>{formatDateTime(dashboard.jobOrder.updatedAt)}</strong></div>
+            </div>
+          </div>
         </div>
 
         <div className="job-dashboard-import-note">
-          <strong>Sezione import in preparazione.</strong> Le voci actual di materie prime, prestazioni professionali, prestazioni terzi, spese varie e fatturato saranno alimentate da import file dedicato; per ora la dashboard le mostra come sezioni già predisposte.
-        </div>
-
-        <div className="job-dashboard-meta-strip">
-          <span>Caricamenti collegati: {dashboard.jobOrder.activityCount}</span>
-          <span>Creata il: {formatDateTime(dashboard.jobOrder.createdAt)}</span>
-          <span>Aggiornata il: {formatDateTime(dashboard.jobOrder.updatedAt)}</span>
+          Le voci actual alimentate da import resteranno compilabili dai futuri flussi di import; qui le vedi nel dettaglio della commessa, mentre l’analisi comparativa e il breakdown per risorsa sono nella sezione `Dashboard Commessa`.
         </div>
 
         <div className="job-dashboard-actions">
@@ -622,7 +401,7 @@ export default function SchedaCommessaPage() {
             Torna a Commesse
           </button>
           <button className="button" type="button" onClick={handleSave} disabled={saving}>
-            {saving ? "Salvataggio..." : "Salva Budget"}
+            {saving ? "Salvataggio..." : "Salva Scheda"}
           </button>
         </div>
       </section>
