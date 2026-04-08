@@ -8,6 +8,16 @@ type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
 type JobSortKey = "name" | "type" | "startDate" | "status" | "endDate" | "description";
 type SortDirection = "asc" | "desc";
 
+type BudgetForm = {
+  personnel: string;
+  equipment: string;
+  materials: string;
+  professionalServices: string;
+  thirdPartyServices: string;
+  misc: string;
+  revenue: string;
+};
+
 type EditableJobOrderRow = {
   localId: string;
   id?: string;
@@ -17,6 +27,7 @@ type EditableJobOrderRow = {
   status: ResourceStatusValue | "";
   endDate: string;
   description: string;
+  budget: BudgetForm;
 };
 
 type JobFilters = {
@@ -28,6 +39,28 @@ type JobFilters = {
   description: string;
 };
 
+const budgetFieldLabels: { key: keyof BudgetForm; label: string }[] = [
+  { key: "personnel", label: "Budget personale" },
+  { key: "equipment", label: "Budget mezzi" },
+  { key: "materials", label: "Materie prime" },
+  { key: "professionalServices", label: "Prestazioni professionali" },
+  { key: "thirdPartyServices", label: "Prestazioni terzi" },
+  { key: "misc", label: "Spese varie" },
+  { key: "revenue", label: "Fatturato previsto" },
+];
+
+function makeEmptyBudget(): BudgetForm {
+  return {
+    personnel: "",
+    equipment: "",
+    materials: "",
+    professionalServices: "",
+    thirdPartyServices: "",
+    misc: "",
+    revenue: "",
+  };
+}
+
 function makeEmptyRow(): EditableJobOrderRow {
   return {
     localId: crypto.randomUUID(),
@@ -37,6 +70,7 @@ function makeEmptyRow(): EditableJobOrderRow {
     status: "",
     endDate: "",
     description: "",
+    budget: makeEmptyBudget(),
   };
 }
 
@@ -103,6 +137,37 @@ function compareText(a: string, b: string) {
   return a.localeCompare(b, "it", { sensitivity: "base" });
 }
 
+function toBudgetInputValue(value: unknown) {
+  if (value == null) return "";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric === 0) return "";
+  return numeric.toFixed(2);
+}
+
+function parseAmount(value: string) {
+  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+  }).format(value);
+}
+
+function getBudgetTotal(budget: BudgetForm) {
+  return (
+    parseAmount(budget.personnel) +
+    parseAmount(budget.equipment) +
+    parseAmount(budget.materials) +
+    parseAmount(budget.professionalServices) +
+    parseAmount(budget.thirdPartyServices) +
+    parseAmount(budget.misc)
+  );
+}
+
 export default function CommessePage() {
   const router = useRouter();
   const [rows, setRows] = useState<EditableJobOrderRow[]>([
@@ -121,6 +186,22 @@ export default function CommessePage() {
   function setRowValue(localId: string, patch: Partial<EditableJobOrderRow>) {
     setRows((current) =>
       current.map((row) => (row.localId === localId ? { ...row, ...patch } : row))
+    );
+  }
+
+  function setBudgetValue(localId: string, key: keyof BudgetForm, value: string) {
+    setRows((current) =>
+      current.map((row) =>
+        row.localId === localId
+          ? {
+              ...row,
+              budget: {
+                ...row.budget,
+                [key]: value,
+              },
+            }
+          : row
+      )
     );
   }
 
@@ -169,6 +250,15 @@ export default function CommessePage() {
             status: row.status ?? "",
             endDate: row.endDate ?? "",
             description: row.description ?? "",
+            budget: {
+              personnel: toBudgetInputValue(row.budget?.personnel),
+              equipment: toBudgetInputValue(row.budget?.equipment),
+              materials: toBudgetInputValue(row.budget?.materials),
+              professionalServices: toBudgetInputValue(row.budget?.professionalServices),
+              thirdPartyServices: toBudgetInputValue(row.budget?.thirdPartyServices),
+              misc: toBudgetInputValue(row.budget?.misc),
+              revenue: toBudgetInputValue(row.budget?.revenue),
+            },
           }))
         );
       }
@@ -197,6 +287,7 @@ export default function CommessePage() {
         status: row.status,
         endDate: row.endDate,
         description: row.description,
+        budget: row.budget,
       }));
 
       const data = await safeJsonFetch("/api/commesse", {
@@ -266,9 +357,9 @@ export default function CommessePage() {
       <div className="card">
         <div className="mobile-section-header">
           <div>
-            <h1 className="mobile-section-title">Vedi commesse</h1>
+            <h1 className="mobile-section-title">Commesse</h1>
             <p className="mobile-section-subtitle">
-              Le commesse diventano schede compatte su mobile, senza perdere filtri, ordinamento e modifica rapida.
+              Puoi inserire da subito i valori di budget in fase di creazione e poi aprire la dashboard della commessa per il confronto con gli actual.
             </p>
           </div>
         </div>
@@ -397,7 +488,13 @@ export default function CommessePage() {
                     {renderSortLabel("Descrizione", "description")}
                   </button>
                 </th>
-                <th style={headerCell}>Apri Scheda</th>
+                {budgetFieldLabels.map((field) => (
+                  <th key={field.key} style={headerCell}>
+                    {field.label}
+                  </th>
+                ))}
+                <th style={headerCell}>Totale budget costi</th>
+                <th style={headerCell}>Apri Dashboard</th>
                 <th style={headerCellTiny}></th>
               </tr>
               <tr>
@@ -459,6 +556,10 @@ export default function CommessePage() {
                     style={filterInputStyle}
                   />
                 </th>
+                {budgetFieldLabels.map((field) => (
+                  <th key={field.key} style={filterHeaderCell}></th>
+                ))}
+                <th style={filterHeaderCell}></th>
                 <th style={filterHeaderCell}></th>
                 <th style={filterHeaderCell}></th>
               </tr>
@@ -476,7 +577,6 @@ export default function CommessePage() {
                       disabled={loading}
                     />
                   </td>
-
                   <td style={bodyCell}>
                     <select
                       value={row.type}
@@ -494,7 +594,6 @@ export default function CommessePage() {
                       <option value="OTHER">{jobTypeLabel("OTHER")}</option>
                     </select>
                   </td>
-
                   <td style={bodyCell}>
                     <input
                       type="date"
@@ -504,7 +603,6 @@ export default function CommessePage() {
                       disabled={loading}
                     />
                   </td>
-
                   <td style={bodyCell}>
                     <select
                       value={row.status}
@@ -520,7 +618,6 @@ export default function CommessePage() {
                       <option value="ENDED">{statusLabel("ENDED")}</option>
                     </select>
                   </td>
-
                   <td style={bodyCell}>
                     <input
                       type="date"
@@ -530,7 +627,6 @@ export default function CommessePage() {
                       disabled={loading}
                     />
                   </td>
-
                   <td style={bodyCell}>
                     <input
                       type="text"
@@ -541,7 +637,23 @@ export default function CommessePage() {
                       disabled={loading}
                     />
                   </td>
-
+                  {budgetFieldLabels.map((field) => (
+                    <td key={field.key} style={bodyCell}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.budget[field.key]}
+                        onChange={(e) => setBudgetValue(row.localId, field.key, e.target.value)}
+                        style={inputStyle}
+                        placeholder="0,00"
+                        disabled={loading}
+                      />
+                    </td>
+                  ))}
+                  <td style={bodyCell}>
+                    <strong>{formatCurrency(getBudgetTotal(row.budget))}</strong>
+                  </td>
                   <td style={bodyCell}>
                     <button
                       className="button"
@@ -549,10 +661,9 @@ export default function CommessePage() {
                       disabled={!row.id}
                       onClick={() => row.id && router.push(`/commesse/${row.id}`)}
                     >
-                      Apri Scheda
+                      Apri
                     </button>
                   </td>
-
                   <td style={bodyCellTiny}>
                     <button
                       type="button"
@@ -599,7 +710,6 @@ export default function CommessePage() {
                     disabled={loading}
                   />
                 </label>
-
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Tipologia</span>
                   <select
@@ -618,7 +728,6 @@ export default function CommessePage() {
                     <option value="OTHER">{jobTypeLabel("OTHER")}</option>
                   </select>
                 </label>
-
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Stato</span>
                   <select
@@ -635,7 +744,6 @@ export default function CommessePage() {
                     <option value="ENDED">{statusLabel("ENDED")}</option>
                   </select>
                 </label>
-
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Data Inizio</span>
                   <input
@@ -646,7 +754,6 @@ export default function CommessePage() {
                     disabled={loading}
                   />
                 </label>
-
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Data Fine</span>
                   <input
@@ -657,7 +764,6 @@ export default function CommessePage() {
                     disabled={loading}
                   />
                 </label>
-
                 <label className="mobile-data-field mobile-data-field-full">
                   <span className="mobile-data-label">Descrizione</span>
                   <input
@@ -669,6 +775,25 @@ export default function CommessePage() {
                     disabled={loading}
                   />
                 </label>
+                {budgetFieldLabels.map((field) => (
+                  <label key={field.key} className="mobile-data-field">
+                    <span className="mobile-data-label">{field.label}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={row.budget[field.key]}
+                      onChange={(e) => setBudgetValue(row.localId, field.key, e.target.value)}
+                      className="mobile-data-input"
+                      placeholder="0,00"
+                      disabled={loading}
+                    />
+                  </label>
+                ))}
+                <div className="mobile-data-field mobile-data-field-full">
+                  <span className="mobile-data-label">Totale budget costi</span>
+                  <strong>{formatCurrency(getBudgetTotal(row.budget))}</strong>
+                </div>
               </div>
 
               <div className="mobile-data-actions">
@@ -678,7 +803,7 @@ export default function CommessePage() {
                   disabled={!row.id}
                   onClick={() => row.id && router.push(`/commesse/${row.id}`)}
                 >
-                  Apri Scheda
+                  Apri dashboard
                 </button>
               </div>
             </article>
@@ -696,9 +821,6 @@ export default function CommessePage() {
           </button>
 
           <div className="mobile-toolbar-actions">
-            <button className="button" type="button" disabled>
-              Modifica
-            </button>
             <button className="button" type="button" onClick={handleSave} disabled={saving || loading}>
               {saving ? "Salvataggio..." : "Salva"}
             </button>
@@ -733,6 +855,7 @@ const bodyCell: React.CSSProperties = {
   background: "#fdf2f2",
   border: "2px solid white",
   padding: 6,
+  verticalAlign: "top",
 };
 
 const bodyCellTiny: React.CSSProperties = {
@@ -746,6 +869,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   border: "1px solid #d1d5db",
   background: "white",
+  font: "inherit",
 };
 
 const filterInputStyle: React.CSSProperties = {
@@ -754,6 +878,7 @@ const filterInputStyle: React.CSSProperties = {
   borderRadius: 8,
   border: "1px solid #f08a54",
   background: "white",
+  font: "inherit",
 };
 
 const headerButtonStyle: React.CSSProperties = {

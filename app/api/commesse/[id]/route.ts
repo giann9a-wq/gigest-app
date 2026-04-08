@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { getJobOrderDashboard } from "@/lib/job-order-dashboard";
 import { prisma } from "@/lib/prisma";
-import { JobType, ResourceStatus, UserStatus } from "@prisma/client";
+import { JobType, Prisma, ResourceStatus, UserStatus } from "@prisma/client";
 
 const allowedTypes: JobType[] = ["SITE", "TRAINING", "LEAVE", "SICKNESS", "OTHER"];
 const allowedStatuses: ResourceStatus[] = ["ACTIVE", "SUSPENDED", "ENDED"];
@@ -11,9 +12,20 @@ function parseOptionalDate(value?: string | null) {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
-function toInputDate(value: Date | null | undefined) {
-  if (!value) return "";
-  return value.toISOString().slice(0, 10);
+function parseOptionalDecimal(value: string | number | null | undefined) {
+  if (value == null) return null;
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    return new Prisma.Decimal(value.toFixed(2));
+  }
+
+  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+  if (!normalized) return null;
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return null;
+  return new Prisma.Decimal(parsed.toFixed(2));
 }
 
 async function getAuthorizedUser() {
@@ -43,36 +55,13 @@ export async function GET(
   if (authResult.error) return authResult.error;
 
   const { id } = await context.params;
+  const dashboard = await getJobOrderDashboard(id);
 
-  const jobOrder = await prisma.jobOrder.findUnique({
-    where: { id },
-    include: {
-      _count: {
-        select: {
-          diaryActivities: true,
-        },
-      },
-    },
-  });
-
-  if (!jobOrder) {
+  if (!dashboard) {
     return NextResponse.json({ error: "Commessa non trovata" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    jobOrder: {
-      id: jobOrder.id,
-      name: jobOrder.name,
-      type: jobOrder.type,
-      startDate: toInputDate(jobOrder.startDate),
-      status: jobOrder.status,
-      endDate: toInputDate(jobOrder.endDate),
-      description: jobOrder.description ?? "",
-      activityCount: jobOrder._count.diaryActivities,
-      createdAt: jobOrder.createdAt.toISOString(),
-      updatedAt: jobOrder.updatedAt.toISOString(),
-    },
-  });
+  return NextResponse.json(dashboard);
 }
 
 export async function POST(
@@ -91,6 +80,15 @@ export async function POST(
   const status = String(body.status ?? "") as ResourceStatus;
   const endDate = String(body.endDate ?? "").trim();
   const description = String(body.description ?? "").trim();
+  const budget = {
+    personnel: body.budget?.personnel ?? "",
+    equipment: body.budget?.equipment ?? "",
+    materials: body.budget?.materials ?? "",
+    professionalServices: body.budget?.professionalServices ?? "",
+    thirdPartyServices: body.budget?.thirdPartyServices ?? "",
+    misc: body.budget?.misc ?? "",
+    revenue: body.budget?.revenue ?? "",
+  };
 
   if (!name) {
     return NextResponse.json({ error: "Il nome commessa è obbligatorio" }, { status: 400 });
@@ -115,6 +113,16 @@ export async function POST(
     return NextResponse.json({ error: "Data fine non valida" }, { status: 400 });
   }
 
+  for (const value of Object.values(budget)) {
+    if (value === "") continue;
+    if (parseOptionalDecimal(value) === null) {
+      return NextResponse.json(
+        { error: "I campi budget devono contenere importi validi" },
+        { status: 400 }
+      );
+    }
+  }
+
   const existing = await prisma.jobOrder.findUnique({
     where: { id },
     select: { id: true },
@@ -124,7 +132,7 @@ export async function POST(
     return NextResponse.json({ error: "Commessa non trovata" }, { status: 404 });
   }
 
-  const updated = await prisma.jobOrder.update({
+  await prisma.jobOrder.update({
     where: { id },
     data: {
       name,
@@ -133,19 +141,20 @@ export async function POST(
       status,
       endDate: parsedEndDate,
       description: description || null,
+      budgetPersonnelCost: parseOptionalDecimal(budget.personnel),
+      budgetEquipmentCost: parseOptionalDecimal(budget.equipment),
+      budgetMaterialsCost: parseOptionalDecimal(budget.materials),
+      budgetProfessionalServicesCost: parseOptionalDecimal(budget.professionalServices),
+      budgetThirdPartyServicesCost: parseOptionalDecimal(budget.thirdPartyServices),
+      budgetMiscCost: parseOptionalDecimal(budget.misc),
+      budgetExpectedRevenue: parseOptionalDecimal(budget.revenue),
     },
   });
 
+  const dashboard = await getJobOrderDashboard(id);
+
   return NextResponse.json({
     success: true,
-    jobOrder: {
-      id: updated.id,
-      name: updated.name,
-      type: updated.type,
-      startDate: toInputDate(updated.startDate),
-      status: updated.status,
-      endDate: toInputDate(updated.endDate),
-      description: updated.description ?? "",
-    },
+    ...dashboard,
   });
 }

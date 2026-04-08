@@ -3,6 +3,16 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { JobType, Prisma, ResourceStatus, UserStatus } from "@prisma/client";
 
+type JobOrderBudgetInput = {
+  personnel?: string | number | null;
+  equipment?: string | number | null;
+  materials?: string | number | null;
+  professionalServices?: string | number | null;
+  thirdPartyServices?: string | number | null;
+  misc?: string | number | null;
+  revenue?: string | number | null;
+};
+
 type JobOrderRowInput = {
   id?: string;
   name?: string;
@@ -11,6 +21,7 @@ type JobOrderRowInput = {
   status?: ResourceStatus | string;
   endDate?: string;
   description?: string;
+  budget?: JobOrderBudgetInput;
 };
 
 const allowedTypes: JobType[] = ["SITE", "TRAINING", "LEAVE", "SICKNESS", "OTHER"];
@@ -24,6 +35,50 @@ function parseOptionalDate(value?: string | null) {
 function toInputDate(value: Date | null | undefined) {
   if (!value) return "";
   return value.toISOString().slice(0, 10);
+}
+
+function parseOptionalDecimal(value: string | number | null | undefined) {
+  if (value == null) return null;
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    return new Prisma.Decimal(value.toFixed(2));
+  }
+
+  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+  if (!normalized) return null;
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  return new Prisma.Decimal(parsed.toFixed(2));
+}
+
+function toNumber(value: Prisma.Decimal | null | undefined) {
+  if (value == null) return 0;
+  return Number(value);
+}
+
+function serializeBudget(row: {
+  budgetPersonnelCost: Prisma.Decimal | null;
+  budgetEquipmentCost: Prisma.Decimal | null;
+  budgetMaterialsCost: Prisma.Decimal | null;
+  budgetProfessionalServicesCost: Prisma.Decimal | null;
+  budgetThirdPartyServicesCost: Prisma.Decimal | null;
+  budgetMiscCost: Prisma.Decimal | null;
+  budgetExpectedRevenue: Prisma.Decimal | null;
+}) {
+  return {
+    personnel: toNumber(row.budgetPersonnelCost),
+    equipment: toNumber(row.budgetEquipmentCost),
+    materials: toNumber(row.budgetMaterialsCost),
+    professionalServices: toNumber(row.budgetProfessionalServicesCost),
+    thirdPartyServices: toNumber(row.budgetThirdPartyServicesCost),
+    misc: toNumber(row.budgetMiscCost),
+    revenue: toNumber(row.budgetExpectedRevenue),
+  };
 }
 
 export async function GET() {
@@ -46,6 +101,7 @@ export async function GET() {
       status: row.status,
       endDate: toInputDate(row.endDate),
       description: row.description ?? "",
+      budget: serializeBudget(row),
     })),
   });
 }
@@ -82,9 +138,32 @@ export async function POST(request: NextRequest) {
       status: (row.status || "") as ResourceStatus | "",
       endDate: row.endDate || "",
       description: row.description?.trim() || "",
+      budget: {
+        personnel: row.budget?.personnel ?? "",
+        equipment: row.budget?.equipment ?? "",
+        materials: row.budget?.materials ?? "",
+        professionalServices: row.budget?.professionalServices ?? "",
+        thirdPartyServices: row.budget?.thirdPartyServices ?? "",
+        misc: row.budget?.misc ?? "",
+        revenue: row.budget?.revenue ?? "",
+      },
     }))
     .filter((row) => {
-      return row.name || row.type || row.startDate || row.status || row.endDate || row.description;
+      return (
+        row.name ||
+        row.type ||
+        row.startDate ||
+        row.status ||
+        row.endDate ||
+        row.description ||
+        row.budget.personnel ||
+        row.budget.equipment ||
+        row.budget.materials ||
+        row.budget.professionalServices ||
+        row.budget.thirdPartyServices ||
+        row.budget.misc ||
+        row.budget.revenue
+      );
     });
 
   for (const row of cleanedRows) {
@@ -106,6 +185,16 @@ export async function POST(request: NextRequest) {
 
     if (row.endDate && Number.isNaN(new Date(`${row.endDate}T00:00:00.000Z`).getTime())) {
       return NextResponse.json({ error: "Data fine non valida" }, { status: 400 });
+    }
+
+    for (const value of Object.values(row.budget)) {
+      if (value === "") continue;
+      if (parseOptionalDecimal(value) === null) {
+        return NextResponse.json(
+          { error: "I campi budget devono contenere importi validi" },
+          { status: 400 }
+        );
+      }
     }
   }
 
@@ -134,14 +223,21 @@ export async function POST(request: NextRequest) {
     }
 
     for (const row of cleanedRows) {
-      const data: Prisma.JobOrderUncheckedCreateInput = {
+      const data = {
         name: row.name,
         type: row.type as JobType,
         startDate: parseOptionalDate(row.startDate),
         status: row.status as ResourceStatus,
         endDate: parseOptionalDate(row.endDate),
         description: row.description || null,
-      };
+        budgetPersonnelCost: parseOptionalDecimal(row.budget.personnel),
+        budgetEquipmentCost: parseOptionalDecimal(row.budget.equipment),
+        budgetMaterialsCost: parseOptionalDecimal(row.budget.materials),
+        budgetProfessionalServicesCost: parseOptionalDecimal(row.budget.professionalServices),
+        budgetThirdPartyServicesCost: parseOptionalDecimal(row.budget.thirdPartyServices),
+        budgetMiscCost: parseOptionalDecimal(row.budget.misc),
+        budgetExpectedRevenue: parseOptionalDecimal(row.budget.revenue),
+      } satisfies Prisma.JobOrderUncheckedCreateInput;
 
       if (row.id) {
         await tx.jobOrder.update({

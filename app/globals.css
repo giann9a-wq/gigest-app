@@ -905,6 +905,283 @@ a {
   color: #111827;
 }
 
+.job-dashboard-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.job-dashboard-shell {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.job-dashboard-topbar,
+.job-dashboard-head-grid,
+.job-dashboard-panels,
+.job-dashboard-actions,
+.job-dashboard-meta-strip,
+.job-dashboard-panel-head,
+.job-dashboard-summary-row,
+.job-dashboard-static-line,
+.job-dashboard-entry-row,
+.job-dashboard-accordion summary,
+.job-dashboard-subdetail summary {
+  display: flex;
+  gap: 0.9rem;
+}
+
+.job-dashboard-topbar,
+.job-dashboard-actions,
+.job-dashboard-meta-strip,
+.job-dashboard-panel-head,
+.job-dashboard-summary-row,
+.job-dashboard-static-line,
+.job-dashboard-entry-row,
+.job-dashboard-accordion summary,
+.job-dashboard-subdetail summary {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.job-dashboard-kicker {
+  margin: 0 0 0.35rem;
+  color: var(--brand);
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.job-dashboard-title {
+  margin: 0;
+  font-size: clamp(1.9rem, 4vw, 2.5rem);
+}
+
+.job-dashboard-head-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.job-dashboard-head-item {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(240, 176, 137, 0.45);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.job-dashboard-head-item span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.job-dashboard-head-item strong {
+  font-size: 1rem;
+  color: #111827;
+}
+
+.job-dashboard-head-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: white;
+  font: inherit;
+  color: #111827;
+}
+
+.job-dashboard-head-textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.job-dashboard-head-item-wide {
+  grid-column: span 2;
+}
+
+.job-dashboard-status-active {
+  color: #16a34a !important;
+}
+
+.job-dashboard-panels {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 1.1rem;
+  align-items: start;
+}
+
+.job-dashboard-panel {
+  display: grid;
+  gap: 0.85rem;
+  min-height: 100%;
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.job-dashboard-panel-budget {
+  border: 2px solid #2f7b95;
+}
+
+.job-dashboard-panel-actual {
+  border: 2px solid #d87c2d;
+}
+
+.job-dashboard-panel-head h2 {
+  margin: 0;
+  font-size: 1.55rem;
+}
+
+.job-dashboard-line-list,
+.job-dashboard-summary-list,
+.job-dashboard-detail-list,
+.job-dashboard-entry-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.job-dashboard-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 0.8rem;
+  align-items: center;
+  font-weight: 800;
+}
+
+.job-dashboard-amount-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: white;
+  font: inherit;
+  text-align: right;
+}
+
+.job-dashboard-divider {
+  height: 1px;
+  background: rgba(107, 114, 128, 0.25);
+}
+
+.job-dashboard-summary-row {
+  align-items: flex-start;
+  font-weight: 800;
+}
+
+.job-dashboard-summary-values {
+  display: grid;
+  justify-items: end;
+  gap: 0.2rem;
+  text-align: right;
+}
+
+.job-dashboard-summary-values small {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.job-dashboard-accordion,
+.job-dashboard-subdetail {
+  border-radius: 14px;
+  border: 1px solid rgba(240, 176, 137, 0.4);
+  background: #fffaf6;
+  overflow: hidden;
+}
+
+.job-dashboard-accordion summary,
+.job-dashboard-subdetail summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.85rem 0.95rem;
+  font-weight: 800;
+}
+
+.job-dashboard-accordion summary::-webkit-details-marker,
+.job-dashboard-subdetail summary::-webkit-details-marker {
+  display: none;
+}
+
+.job-dashboard-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 0.6rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #6b7280;
+  font-weight: 900;
+}
+
+.job-dashboard-detail-list,
+.job-dashboard-entry-list {
+  padding: 0 0.95rem 0.95rem;
+}
+
+.job-dashboard-subdetail summary {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.job-dashboard-entry-row {
+  padding: 0.7rem 0.75rem;
+  border-radius: 10px;
+  background: white;
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  font-size: 0.92rem;
+  align-items: flex-start;
+}
+
+.job-dashboard-static-line {
+  padding: 0.2rem 0;
+  font-weight: 800;
+  align-items: flex-start;
+}
+
+.job-dashboard-import-note,
+.job-dashboard-error,
+.job-dashboard-success {
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+}
+
+.job-dashboard-import-note {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+}
+
+.job-dashboard-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.job-dashboard-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.job-dashboard-meta-strip {
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.job-dashboard-muted {
+  margin: 0;
+  color: var(--text-muted);
+}
+
 .scad-page {
   display: flex;
   flex-direction: column;
@@ -1868,6 +2145,7 @@ a {
 @media (max-width: 1100px) {
   .dashboard-grid,
   .dashboard-actions-grid,
+  .job-dashboard-panels,
   .scad-main-grid,
   .scad-bottom-grid,
   .admin-grid,
@@ -1919,6 +2197,31 @@ a {
   .dashboard-hero {
     padding: 1.25rem;
     flex-direction: column;
+  }
+
+  .job-dashboard-head-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .job-dashboard-head-item-wide {
+    grid-column: span 1;
+  }
+
+  .job-dashboard-line {
+    grid-template-columns: 1fr;
+  }
+
+  .job-dashboard-topbar,
+  .job-dashboard-meta-strip,
+  .job-dashboard-actions,
+  .job-dashboard-panel-head,
+  .job-dashboard-summary-row,
+  .job-dashboard-static-line,
+  .job-dashboard-accordion summary,
+  .job-dashboard-subdetail summary,
+  .job-dashboard-entry-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .dashboard-card-fixed {
