@@ -266,16 +266,16 @@ export default function DashboardCommessaPage() {
                   <strong>{formatCurrency(dashboard.budget.revenue)}</strong>
                 </div>
                 <div className="job-dashboard-summary-list">
-                  <div className="job-dashboard-summary-row"><span>Utilizzo Personale</span><strong>{formatCurrency(dashboard.budget.personnel)}</strong></div>
-                  <div className="job-dashboard-summary-row"><span>Utilizzo Mezzi e Attrezzature</span><strong>{formatCurrency(dashboard.budget.equipment)}</strong></div>
-                  <div className="job-dashboard-summary-row"><span>Materie Prime</span><strong>{formatCurrency(dashboard.budget.materials)}</strong></div>
-                  <div className="job-dashboard-summary-row"><span>Prestazioni Professionali</span><strong>{formatCurrency(dashboard.budget.professionalServices)}</strong></div>
-                  <div className="job-dashboard-summary-row"><span>Prestazioni Terzi</span><strong>{formatCurrency(dashboard.budget.thirdPartyServices)}</strong></div>
-                  <div className="job-dashboard-summary-row"><span>Spese Varie</span><strong>{formatCurrency(dashboard.budget.misc)}</strong></div>
+                  <div className="job-dashboard-summary-row"><span>Utilizzo Personale</span><span className="job-dashboard-value">{formatCurrency(dashboard.budget.personnel)}</span></div>
+                  <div className="job-dashboard-summary-row"><span>Utilizzo Mezzi e Attrezzature</span><span className="job-dashboard-value">{formatCurrency(dashboard.budget.equipment)}</span></div>
+                  <div className="job-dashboard-summary-row"><span>Materie Prime</span><span className="job-dashboard-value">{formatCurrency(dashboard.budget.materials)}</span></div>
+                  <div className="job-dashboard-summary-row"><span>Prestazioni Professionali</span><span className="job-dashboard-value">{formatCurrency(dashboard.budget.professionalServices)}</span></div>
+                  <div className="job-dashboard-summary-row"><span>Prestazioni Terzi</span><span className="job-dashboard-value">{formatCurrency(dashboard.budget.thirdPartyServices)}</span></div>
+                  <div className="job-dashboard-summary-row"><span>Spese Varie</span><span className="job-dashboard-value">{formatCurrency(dashboard.budget.misc)}</span></div>
                   <div className="job-dashboard-divider" />
-                  <div className="job-dashboard-summary-row"><span>Totale Budget costi</span><strong>{formatCurrency(dashboard.budget.totalCosts)}</strong></div>
-                  <div className="job-dashboard-summary-row"><span>Fatturato Previsto</span><strong>{formatCurrency(dashboard.budget.revenue)}</strong></div>
-                  <div className="job-dashboard-summary-row"><span>Primo Margine Previsto</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.budget.grossMargin)}</strong><span>{formatPercent(dashboard.budget.grossMarginPct)}</span></div></div>
+                  <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Totale Budget costi</span><strong>{formatCurrency(dashboard.budget.totalCosts)}</strong></div>
+                  <div className="job-dashboard-summary-row"><span>Fatturato Previsto</span><span className="job-dashboard-value">{formatCurrency(dashboard.budget.revenue)}</span></div>
+                  <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Primo Margine Previsto</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.budget.grossMargin)}</strong><span>{formatPercent(dashboard.budget.grossMarginPct)}</span></div></div>
                 </div>
               </section>
 
@@ -351,14 +351,14 @@ export default function DashboardCommessaPage() {
                   </div>
                 </details>
 
-                <div className="job-dashboard-static-line"><span>Materie Prime</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.materials)}</strong><small>{dashboard.actual.importSources.materials}</small></div></div>
-                <div className="job-dashboard-static-line"><span>Prestazioni Professionali</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.professionalServices)}</strong><small>{dashboard.actual.importSources.professionalServices}</small></div></div>
-                <div className="job-dashboard-static-line"><span>Prestazioni Terzi</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.thirdPartyServices)}</strong><small>{dashboard.actual.importSources.thirdPartyServices}</small></div></div>
-                <div className="job-dashboard-static-line"><span>Spese Varie</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.misc)}</strong><small>{dashboard.actual.importSources.misc}</small></div></div>
+                <div className="job-dashboard-static-line"><span>Materie Prime</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.materials)}</span><small>{dashboard.actual.importSources.materials}</small></div></div>
+                <div className="job-dashboard-static-line"><span>Prestazioni Professionali</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.professionalServices)}</span><small>{dashboard.actual.importSources.professionalServices}</small></div></div>
+                <div className="job-dashboard-static-line"><span>Prestazioni Terzi</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.thirdPartyServices)}</span><small>{dashboard.actual.importSources.thirdPartyServices}</small></div></div>
+                <div className="job-dashboard-static-line"><span>Spese Varie</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.misc)}</span><small>{dashboard.actual.importSources.misc}</small></div></div>
                 <div className="job-dashboard-divider" />
-                <div className="job-dashboard-summary-row"><span>Totale costi</span><strong>{formatCurrency(dashboard.actual.totalCosts)}</strong></div>
-                <div className="job-dashboard-summary-row"><span>Fatturato Actual</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.revenue)}</strong><small>{dashboard.actual.importSources.revenue}</small></div></div>
-                <div className="job-dashboard-summary-row"><span>Primo Margine</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.grossMargin)}</strong><span>{formatPercent(dashboard.actual.grossMarginPct)}</span></div></div>
+                <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Totale costi</span><strong>{formatCurrency(dashboard.actual.totalCosts)}</strong></div>
+                <div className="job-dashboard-summary-row"><span>Fatturato Actual</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.revenue)}</span><small>{dashboard.actual.importSources.revenue}</small></div></div>
+                <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Primo Margine</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.grossMargin)}</strong><span>{formatPercent(dashboard.actual.grossMarginPct)}</span></div></div>
               </section>
             </div>
           </>

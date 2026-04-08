@@ -1135,7 +1135,7 @@ a {
 
 .job-dashboard-summary-row {
   align-items: flex-start;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .job-dashboard-summary-values {
@@ -1143,6 +1143,15 @@ a {
   justify-items: end;
   gap: 0.2rem;
   text-align: right;
+}
+
+.job-dashboard-value {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.job-dashboard-total-row {
+  font-weight: 800;
 }
 
 .job-dashboard-summary-values small {
@@ -1205,7 +1214,7 @@ a {
 
 .job-dashboard-static-line {
   padding: 0.2rem 0;
-  font-weight: 800;
+  font-weight: 600;
   align-items: flex-start;
 }
 

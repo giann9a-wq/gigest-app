@@ -131,7 +131,22 @@ function formatInputValue(value: number) {
 }
 
 function parseAmount(value: string) {
-  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+
+  const lastComma = trimmed.lastIndexOf(",");
+  const lastDot = trimmed.lastIndexOf(".");
+  let normalized = trimmed;
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    normalized =
+      lastComma > lastDot
+        ? trimmed.replace(/\./g, "").replace(",", ".")
+        : trimmed.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    normalized = trimmed.replace(",", ".");
+  }
+
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }
@@ -370,24 +385,24 @@ export default function SchedaCommessaPage() {
           <div className="job-sheet-panel">
             <h2 className="job-sheet-panel-title">Situazione Actual</h2>
             <div className="job-dashboard-summary-list">
-              <div className="job-dashboard-summary-row"><span>Utilizzo Personale</span><strong>{formatCurrency(dashboard.actual.personnel)}</strong></div>
-              <div className="job-dashboard-summary-row"><span>Utilizzo Mezzi e Attrezzature</span><strong>{formatCurrency(dashboard.actual.equipment)}</strong></div>
-              <div className="job-dashboard-summary-row"><span>Materie Prime</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.materials)}</strong><small>{dashboard.actual.importSources.materials}</small></div></div>
-              <div className="job-dashboard-summary-row"><span>Prestazioni Professionali</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.professionalServices)}</strong><small>{dashboard.actual.importSources.professionalServices}</small></div></div>
-              <div className="job-dashboard-summary-row"><span>Prestazioni Terzi</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.thirdPartyServices)}</strong><small>{dashboard.actual.importSources.thirdPartyServices}</small></div></div>
-              <div className="job-dashboard-summary-row"><span>Spese Varie</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.misc)}</strong><small>{dashboard.actual.importSources.misc}</small></div></div>
-              <div className="job-dashboard-summary-row"><span>Fatturato Actual</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.revenue)}</strong><small>{dashboard.actual.importSources.revenue}</small></div></div>
+              <div className="job-dashboard-summary-row"><span>Utilizzo Personale</span><span className="job-dashboard-value">{formatCurrency(dashboard.actual.personnel)}</span></div>
+              <div className="job-dashboard-summary-row"><span>Utilizzo Mezzi e Attrezzature</span><span className="job-dashboard-value">{formatCurrency(dashboard.actual.equipment)}</span></div>
+              <div className="job-dashboard-summary-row"><span>Materie Prime</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.materials)}</span><small>{dashboard.actual.importSources.materials}</small></div></div>
+              <div className="job-dashboard-summary-row"><span>Prestazioni Professionali</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.professionalServices)}</span><small>{dashboard.actual.importSources.professionalServices}</small></div></div>
+              <div className="job-dashboard-summary-row"><span>Prestazioni Terzi</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.thirdPartyServices)}</span><small>{dashboard.actual.importSources.thirdPartyServices}</small></div></div>
+              <div className="job-dashboard-summary-row"><span>Spese Varie</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.misc)}</span><small>{dashboard.actual.importSources.misc}</small></div></div>
+              <div className="job-dashboard-summary-row"><span>Fatturato Actual</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.revenue)}</span><small>{dashboard.actual.importSources.revenue}</small></div></div>
             </div>
           </div>
 
           <div className="job-sheet-panel">
             <h2 className="job-sheet-panel-title">Riepilogo</h2>
             <div className="job-dashboard-summary-list">
-              <div className="job-dashboard-summary-row"><span>Caricamenti collegati</span><strong>{dashboard.jobOrder.activityCount}</strong></div>
-              <div className="job-dashboard-summary-row"><span>Totale costi actual</span><strong>{formatCurrency(dashboard.actual.totalCosts)}</strong></div>
-              <div className="job-dashboard-summary-row"><span>Primo margine actual</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.grossMargin)}</strong><span>{formatPercent(dashboard.actual.grossMarginPct)}</span></div></div>
-              <div className="job-dashboard-summary-row"><span>Creata il</span><strong>{formatDateTime(dashboard.jobOrder.createdAt)}</strong></div>
-              <div className="job-dashboard-summary-row"><span>Ultimo aggiornamento</span><strong>{formatDateTime(dashboard.jobOrder.updatedAt)}</strong></div>
+              <div className="job-dashboard-summary-row"><span>Caricamenti collegati</span><span className="job-dashboard-value">{dashboard.jobOrder.activityCount}</span></div>
+              <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Totale costi actual</span><strong>{formatCurrency(dashboard.actual.totalCosts)}</strong></div>
+              <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Primo margine actual</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.grossMargin)}</strong><span>{formatPercent(dashboard.actual.grossMarginPct)}</span></div></div>
+              <div className="job-dashboard-summary-row"><span>Creata il</span><span className="job-dashboard-value">{formatDateTime(dashboard.jobOrder.createdAt)}</span></div>
+              <div className="job-dashboard-summary-row"><span>Ultimo aggiornamento</span><span className="job-dashboard-value">{formatDateTime(dashboard.jobOrder.updatedAt)}</span></div>
             </div>
           </div>
         </div>

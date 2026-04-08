@@ -20,7 +20,20 @@ function parseOptionalDecimal(value: string | number | null | undefined) {
     return new Prisma.Decimal(value.toFixed(2));
   }
 
-  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
+  const trimmed = value.trim();
+  const lastComma = trimmed.lastIndexOf(",");
+  const lastDot = trimmed.lastIndexOf(".");
+  let normalized = trimmed;
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    normalized =
+      lastComma > lastDot
+        ? trimmed.replace(/\./g, "").replace(",", ".")
+        : trimmed.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    normalized = trimmed.replace(",", ".");
+  }
+
   if (!normalized) return null;
 
   const parsed = Number(normalized);

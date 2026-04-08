@@ -1,7 +1,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 
-type AdminSection = "accessi" | "import-massivo";
+type AdminSection = "accessi" | "import-diario-manuale" | "import-costi" | "import-fatture";
 
 const ADMIN_FUNCTIONS: Array<{
   key: AdminSection;
@@ -16,14 +16,26 @@ const ADMIN_FUNCTIONS: Array<{
     description: "Approva o rifiuta le richieste di accesso degli utenti.",
   },
   {
-    key: "import-massivo",
-    href: "/admin/import-massivo" as Route,
-    title: "Import massivo",
-    description: "Scarica il template Excel e importa righe validate.",
+    key: "import-diario-manuale",
+    href: "/admin/import-diario-manuale" as Route,
+    title: "Import diario cantiere manuale",
+    description: "Importa righe diario da file validando risorse e commesse.",
+  },
+  {
+    key: "import-costi",
+    href: "/admin/import-costi" as Route,
+    title: "Importa costi",
+    description: "Seleziona una commessa e prepara l'import dei costi actual.",
+  },
+  {
+    key: "import-fatture",
+    href: "/admin/import-fatture" as Route,
+    title: "Importa fatture",
+    description: "Seleziona una commessa e prepara l'import del fatturato.",
   },
 ];
 
-export function AdminFunctionsNav({ current }: { current: AdminSection }) {
+export function AdminFunctionsNav({ current }: { current?: AdminSection }) {
   return (
     <section className="card admin-functions-card">
       <div className="mobile-section-header" style={{ marginBottom: "0.75rem" }}>
