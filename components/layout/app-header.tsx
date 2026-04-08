@@ -26,6 +26,16 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
     setIsMenuOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    document.body.classList.toggle("app-mobile-menu-open", isMenuOpen);
+
+    return () => {
+      document.body.classList.remove("app-mobile-menu-open");
+    };
+  }, [isMenuOpen]);
+
   const navItems: NavItem[] = [
     { href: "/dashboard" as Route, label: "Dashboard" },
     { href: "/diario" as Route, label: "Diario" },
@@ -102,6 +112,7 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
           className="app-mobile-drawer-backdrop"
           onClick={() => setIsMenuOpen(false)}
           aria-label="Chiudi menu"
+          tabIndex={isMenuOpen ? 0 : -1}
         />
         <div
           id="app-mobile-drawer"
