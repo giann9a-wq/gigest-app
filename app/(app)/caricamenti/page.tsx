@@ -183,6 +183,17 @@ export default function CaricamentiPage() {
     [resources, selectedResourceValue]
   );
 
+  function handleExportExcel() {
+    if (!selectedResourceValue) return;
+
+    const params = new URLSearchParams({ resourceValue: selectedResourceValue });
+    if (selectedJobOrderId) params.set("jobOrderId", selectedJobOrderId);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
+
+    window.location.href = `/api/caricamenti/export?${params.toString()}`;
+  }
+
   return (
     <div className="grid gap-4">
       <div className="card">
@@ -284,6 +295,14 @@ export default function CaricamentiPage() {
           <div className="muted">
             Righe visibili: <strong>{rows.length}</strong>
           </div>
+          <button
+            type="button"
+            className="report-print-btn"
+            onClick={handleExportExcel}
+            disabled={!selectedResourceValue || loadingRows}
+          >
+            Export Excel
+          </button>
         </div>
 
         <div className="scad-table-wrap">

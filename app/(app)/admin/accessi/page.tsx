@@ -1,4 +1,6 @@
 import { AccessRequestStatus } from "@prisma/client";
+import type { Route } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   ensureAdminPanelCredential,
@@ -144,6 +146,12 @@ export default async function AdminAccessPage({
                 <span className="admin-stat-label">Admin Attivo</span>
                 <strong className="admin-stat-value">{adminUser.email}</strong>
               </article>
+            </div>
+
+            <div className="admin-request-actions">
+              <Link href={"/admin/import-massivo" as Route} className="button">
+                Vai a import massivo
+              </Link>
             </div>
 
             <div className="admin-grid">
