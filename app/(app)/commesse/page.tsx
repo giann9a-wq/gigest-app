@@ -103,6 +103,10 @@ function compareText(a: string, b: string) {
   return a.localeCompare(b, "it", { sensitivity: "base" });
 }
 
+function sortArrow(direction: SortDirection) {
+  return direction === "asc" ? "\u2191" : "\u2193";
+}
+
 export default function CommessePage() {
   const router = useRouter();
   const [rows, setRows] = useState<EditableJobOrderRow[]>([
@@ -258,7 +262,7 @@ export default function CommessePage() {
 
   function renderSortLabel(label: string, key: JobSortKey) {
     if (sortKey !== key) return label;
-    return `${label} ${sortDirection === "asc" ? "↑" : "↓"}`;
+    return `${label} ${sortArrow(sortDirection)}`;
   }
 
   return (
@@ -268,7 +272,8 @@ export default function CommessePage() {
           <div>
             <h1 className="mobile-section-title">Commesse</h1>
             <p className="mobile-section-subtitle">
-              Qui gestisci l’anagrafica delle commesse. I dati economici restano dentro la scheda commessa e nella sezione dedicata Dashboard Commessa.
+              Qui gestisci l'anagrafica delle commesse. I dati economici restano dentro la
+              scheda commessa e nella sezione dedicata Dashboard Commessa.
             </p>
           </div>
         </div>
@@ -277,7 +282,7 @@ export default function CommessePage() {
         {error ? <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 16 }}>{error}</div> : null}
 
         <div className="mobile-toolbar">
-          <div className="mobile-table-meta" style={{ color: "#6b7280", fontSize: 14 }}>
+          <div className="mobile-table-meta commesse-table-meta">
             Righe visibili: <strong>{visibleRows.length}</strong> su {rows.length}
           </div>
           <div className="mobile-toolbar-actions">
@@ -363,49 +368,66 @@ export default function CommessePage() {
           </label>
         </div>
 
-        <div className="mobile-table-shell">
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="mobile-table-shell commesse-table-shell">
+          <table className="commesse-table">
             <thead>
               <tr>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("name")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("name")} className="commesse-sort-button">
                     {renderSortLabel("Commessa", "name")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("type")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("type")} className="commesse-sort-button">
                     {renderSortLabel("Tipologia", "type")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("startDate")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort("startDate")}
+                    className="commesse-sort-button"
+                  >
                     {renderSortLabel("Data Inizio", "startDate")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("status")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("status")} className="commesse-sort-button">
                     {renderSortLabel("Stato", "status")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("endDate")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("endDate")} className="commesse-sort-button">
                     {renderSortLabel("Data Fine", "endDate")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("description")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort("description")}
+                    className="commesse-sort-button"
+                  >
                     {renderSortLabel("Descrizione", "description")}
                   </button>
                 </th>
-                <th style={headerCell}>Apri Scheda</th>
-                <th style={headerCellTiny}></th>
+                <th className="commesse-header-cell commesse-actions-header">Apri Scheda</th>
+                <th className="commesse-header-cell commesse-tiny-cell"></th>
               </tr>
               <tr>
-                <th style={filterHeaderCell}>
-                  <input value={filters.name} onChange={(e) => setFilterValue("name", e.target.value)} placeholder="Filtra commessa" style={filterInputStyle} />
+                <th className="commesse-filter-cell">
+                  <input
+                    value={filters.name}
+                    onChange={(e) => setFilterValue("name", e.target.value)}
+                    placeholder="Filtra commessa"
+                    className="commesse-filter-input"
+                  />
                 </th>
-                <th style={filterHeaderCell}>
-                  <select value={filters.type} onChange={(e) => setFilterValue("type", e.target.value as JobTypeValue | "")} style={filterInputStyle}>
+                <th className="commesse-filter-cell">
+                  <select
+                    value={filters.type}
+                    onChange={(e) => setFilterValue("type", e.target.value as JobTypeValue | "")}
+                    className="commesse-filter-input"
+                  >
                     <option value="">Tutte</option>
                     <option value="SITE">{jobTypeLabel("SITE")}</option>
                     <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
@@ -414,33 +436,66 @@ export default function CommessePage() {
                     <option value="OTHER">{jobTypeLabel("OTHER")}</option>
                   </select>
                 </th>
-                <th style={filterHeaderCell}>
-                  <input value={filters.startDate} onChange={(e) => setFilterValue("startDate", e.target.value)} placeholder="AAAA-MM-GG" style={filterInputStyle} />
+                <th className="commesse-filter-cell">
+                  <input
+                    value={filters.startDate}
+                    onChange={(e) => setFilterValue("startDate", e.target.value)}
+                    placeholder="AAAA-MM-GG"
+                    className="commesse-filter-input"
+                  />
                 </th>
-                <th style={filterHeaderCell}>
-                  <select value={filters.status} onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")} style={filterInputStyle}>
+                <th className="commesse-filter-cell">
+                  <select
+                    value={filters.status}
+                    onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")}
+                    className="commesse-filter-input"
+                  >
                     <option value="">Tutti</option>
                     <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                     <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
                     <option value="ENDED">{statusLabel("ENDED")}</option>
                   </select>
                 </th>
-                <th style={filterHeaderCell}>
-                  <input value={filters.endDate} onChange={(e) => setFilterValue("endDate", e.target.value)} placeholder="AAAA-MM-GG" style={filterInputStyle} />
+                <th className="commesse-filter-cell">
+                  <input
+                    value={filters.endDate}
+                    onChange={(e) => setFilterValue("endDate", e.target.value)}
+                    placeholder="AAAA-MM-GG"
+                    className="commesse-filter-input"
+                  />
                 </th>
-                <th style={filterHeaderCell}>
-                  <input value={filters.description} onChange={(e) => setFilterValue("description", e.target.value)} placeholder="Filtra descrizione" style={filterInputStyle} />
+                <th className="commesse-filter-cell">
+                  <input
+                    value={filters.description}
+                    onChange={(e) => setFilterValue("description", e.target.value)}
+                    placeholder="Filtra descrizione"
+                    className="commesse-filter-input"
+                  />
                 </th>
-                <th style={filterHeaderCell}></th>
-                <th style={filterHeaderCell}></th>
+                <th className="commesse-filter-cell"></th>
+                <th className="commesse-filter-cell"></th>
               </tr>
             </thead>
             <tbody>
               {visibleRows.map((row, index) => (
                 <tr key={row.localId}>
-                  <td style={bodyCell}><input type="text" value={row.name} onChange={(e) => setRowValue(row.localId, { name: e.target.value })} style={inputStyle} placeholder="Nome commessa" disabled={loading} /></td>
-                  <td style={bodyCell}>
-                    <select value={row.type} onChange={(e) => setRowValue(row.localId, { type: e.target.value as JobTypeValue | "" })} style={inputStyle} disabled={loading}>
+                  <td className="commesse-body-cell">
+                    <input
+                      type="text"
+                      value={row.name}
+                      onChange={(e) => setRowValue(row.localId, { name: e.target.value })}
+                      className="commesse-table-input"
+                      placeholder="Nome commessa"
+                      disabled={loading}
+                    />
+                  </td>
+                  <td className="commesse-body-cell">
+                    <select
+                      value={row.type}
+                      onChange={(e) => setRowValue(row.localId, { type: e.target.value as JobTypeValue | "" })}
+                      className="commesse-table-input"
+                      disabled={loading}
+                    >
                       <option value="">Seleziona tipologia</option>
                       <option value="SITE">{jobTypeLabel("SITE")}</option>
                       <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
@@ -449,25 +504,67 @@ export default function CommessePage() {
                       <option value="OTHER">{jobTypeLabel("OTHER")}</option>
                     </select>
                   </td>
-                  <td style={bodyCell}><input type="date" value={row.startDate} onChange={(e) => setRowValue(row.localId, { startDate: e.target.value })} style={inputStyle} disabled={loading} /></td>
-                  <td style={bodyCell}>
-                    <select value={row.status} onChange={(e) => setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })} style={inputStyle} disabled={loading}>
+                  <td className="commesse-body-cell">
+                    <input
+                      type="date"
+                      value={row.startDate}
+                      onChange={(e) => setRowValue(row.localId, { startDate: e.target.value })}
+                      className="commesse-table-input"
+                      disabled={loading}
+                    />
+                  </td>
+                  <td className="commesse-body-cell">
+                    <select
+                      value={row.status}
+                      onChange={(e) =>
+                        setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })
+                      }
+                      className="commesse-table-input"
+                      disabled={loading}
+                    >
                       <option value="">Seleziona stato</option>
                       <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                       <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
                       <option value="ENDED">{statusLabel("ENDED")}</option>
                     </select>
                   </td>
-                  <td style={bodyCell}><input type="date" value={row.endDate} onChange={(e) => setRowValue(row.localId, { endDate: e.target.value })} style={inputStyle} disabled={loading} /></td>
-                  <td style={bodyCell}><input type="text" value={row.description} onChange={(e) => setRowValue(row.localId, { description: e.target.value })} style={inputStyle} placeholder="Descrizione" disabled={loading} /></td>
-                  <td style={bodyCell}>
-                    <button className="button" type="button" disabled={!row.id} onClick={() => row.id && router.push(`/commesse/${row.id}`)}>
+                  <td className="commesse-body-cell">
+                    <input
+                      type="date"
+                      value={row.endDate}
+                      onChange={(e) => setRowValue(row.localId, { endDate: e.target.value })}
+                      className="commesse-table-input"
+                      disabled={loading}
+                    />
+                  </td>
+                  <td className="commesse-body-cell">
+                    <input
+                      type="text"
+                      value={row.description}
+                      onChange={(e) => setRowValue(row.localId, { description: e.target.value })}
+                      className="commesse-table-input"
+                      placeholder="Descrizione"
+                      disabled={loading}
+                    />
+                  </td>
+                  <td className="commesse-body-cell commesse-actions-cell">
+                    <button
+                      className="button commesse-open-button"
+                      type="button"
+                      disabled={!row.id}
+                      onClick={() => row.id && router.push(`/commesse/${row.id}`)}
+                    >
                       Apri Scheda
                     </button>
                   </td>
-                  <td style={bodyCellTiny}>
-                    <button type="button" onClick={() => removeRow(row.localId)} style={removeButtonStyle} title={`Rimuovi riga ${index + 1}`}>
-                      ×
+                  <td className="commesse-body-cell commesse-tiny-cell">
+                    <button
+                      type="button"
+                      onClick={() => removeRow(row.localId)}
+                      className="commesse-remove-button"
+                      title={`Rimuovi riga ${index + 1}`}
+                    >
+                      &times;
                     </button>
                   </td>
                 </tr>
@@ -484,18 +581,35 @@ export default function CommessePage() {
                   <div className="mobile-data-label">Commessa</div>
                   <strong>{row.name || `Nuova commessa ${index + 1}`}</strong>
                 </div>
-                <button type="button" onClick={() => removeRow(row.localId)} className="mobile-danger-button" title={`Rimuovi riga ${index + 1}`}>
-                  ×
+                <button
+                  type="button"
+                  onClick={() => removeRow(row.localId)}
+                  className="mobile-danger-button"
+                  title={`Rimuovi riga ${index + 1}`}
+                >
+                  &times;
                 </button>
               </div>
               <div className="mobile-data-card-grid">
                 <label className="mobile-data-field mobile-data-field-full">
                   <span className="mobile-data-label">Nome Commessa</span>
-                  <input type="text" value={row.name} onChange={(e) => setRowValue(row.localId, { name: e.target.value })} className="mobile-data-input" placeholder="Nome commessa" disabled={loading} />
+                  <input
+                    type="text"
+                    value={row.name}
+                    onChange={(e) => setRowValue(row.localId, { name: e.target.value })}
+                    className="mobile-data-input"
+                    placeholder="Nome commessa"
+                    disabled={loading}
+                  />
                 </label>
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Tipologia</span>
-                  <select value={row.type} onChange={(e) => setRowValue(row.localId, { type: e.target.value as JobTypeValue | "" })} className="mobile-data-select" disabled={loading}>
+                  <select
+                    value={row.type}
+                    onChange={(e) => setRowValue(row.localId, { type: e.target.value as JobTypeValue | "" })}
+                    className="mobile-data-select"
+                    disabled={loading}
+                  >
                     <option value="">Seleziona tipologia</option>
                     <option value="SITE">{jobTypeLabel("SITE")}</option>
                     <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
@@ -506,7 +620,14 @@ export default function CommessePage() {
                 </label>
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Stato</span>
-                  <select value={row.status} onChange={(e) => setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })} className="mobile-data-select" disabled={loading}>
+                  <select
+                    value={row.status}
+                    onChange={(e) =>
+                      setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })
+                    }
+                    className="mobile-data-select"
+                    disabled={loading}
+                  >
                     <option value="">Seleziona stato</option>
                     <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                     <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
@@ -515,19 +636,43 @@ export default function CommessePage() {
                 </label>
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Data Inizio</span>
-                  <input type="date" value={row.startDate} onChange={(e) => setRowValue(row.localId, { startDate: e.target.value })} className="mobile-data-input" disabled={loading} />
+                  <input
+                    type="date"
+                    value={row.startDate}
+                    onChange={(e) => setRowValue(row.localId, { startDate: e.target.value })}
+                    className="mobile-data-input"
+                    disabled={loading}
+                  />
                 </label>
                 <label className="mobile-data-field">
                   <span className="mobile-data-label">Data Fine</span>
-                  <input type="date" value={row.endDate} onChange={(e) => setRowValue(row.localId, { endDate: e.target.value })} className="mobile-data-input" disabled={loading} />
+                  <input
+                    type="date"
+                    value={row.endDate}
+                    onChange={(e) => setRowValue(row.localId, { endDate: e.target.value })}
+                    className="mobile-data-input"
+                    disabled={loading}
+                  />
                 </label>
                 <label className="mobile-data-field mobile-data-field-full">
                   <span className="mobile-data-label">Descrizione</span>
-                  <input type="text" value={row.description} onChange={(e) => setRowValue(row.localId, { description: e.target.value })} className="mobile-data-input" placeholder="Descrizione" disabled={loading} />
+                  <input
+                    type="text"
+                    value={row.description}
+                    onChange={(e) => setRowValue(row.localId, { description: e.target.value })}
+                    className="mobile-data-input"
+                    placeholder="Descrizione"
+                    disabled={loading}
+                  />
                 </label>
               </div>
               <div className="mobile-data-actions">
-                <button className="button" type="button" disabled={!row.id} onClick={() => row.id && router.push(`/commesse/${row.id}`)}>
+                <button
+                  className="button"
+                  type="button"
+                  disabled={!row.id}
+                  onClick={() => row.id && router.push(`/commesse/${row.id}`)}
+                >
                   Apri scheda
                 </button>
               </div>
@@ -549,75 +694,3 @@ export default function CommessePage() {
     </div>
   );
 }
-
-const headerCell: React.CSSProperties = {
-  background: "#f97316",
-  color: "white",
-  textAlign: "left",
-  padding: "12px 10px",
-  fontWeight: 700,
-  border: "2px solid white",
-};
-
-const filterHeaderCell: React.CSSProperties = {
-  background: "#ffd9c2",
-  padding: "8px 10px",
-  border: "2px solid white",
-};
-
-const headerCellTiny: React.CSSProperties = {
-  ...headerCell,
-  width: 56,
-};
-
-const bodyCell: React.CSSProperties = {
-  background: "#fdf2f2",
-  border: "2px solid white",
-  padding: 6,
-  verticalAlign: "top",
-};
-
-const bodyCellTiny: React.CSSProperties = {
-  ...bodyCell,
-  width: 56,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 8px",
-  borderRadius: 8,
-  border: "1px solid #d1d5db",
-  background: "white",
-  font: "inherit",
-};
-
-const filterInputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 8px",
-  borderRadius: 8,
-  border: "1px solid #f08a54",
-  background: "white",
-  font: "inherit",
-};
-
-const headerButtonStyle: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "white",
-  padding: 0,
-  font: "inherit",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const removeButtonStyle: React.CSSProperties = {
-  width: 34,
-  height: 34,
-  borderRadius: 8,
-  border: "none",
-  background: "#ef4444",
-  color: "white",
-  fontSize: 22,
-  lineHeight: 1,
-  cursor: "pointer",
-};

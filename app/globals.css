@@ -532,6 +532,133 @@ a {
   border-radius: 16px;
 }
 
+.commesse-table-meta {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+.commesse-table-shell {
+  border: 1px solid rgba(240, 176, 137, 0.32);
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.commesse-table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 0.92rem;
+}
+
+.commesse-header-cell,
+.commesse-filter-cell,
+.commesse-body-cell {
+  border-right: 2px solid rgba(255, 255, 255, 0.95);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.95);
+}
+
+.commesse-header-cell {
+  padding: 0.85rem 0.8rem;
+  background: linear-gradient(180deg, #ff7a18 0%, #eb5b19 100%);
+  color: white;
+  text-align: left;
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.commesse-sort-button {
+  width: 100%;
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.commesse-filter-cell {
+  padding: 0.65rem;
+  background: #ffe1cf;
+}
+
+.commesse-body-cell {
+  padding: 0.45rem;
+  background: rgba(255, 246, 242, 0.96);
+  vertical-align: top;
+}
+
+.commesse-filter-input,
+.commesse-table-input {
+  width: 100%;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid #d8dce3;
+  background: #fff;
+  color: var(--text-main);
+  font: inherit;
+  line-height: 1.25;
+}
+
+.commesse-filter-input {
+  padding: 0.55rem 0.7rem;
+  border-color: rgba(240, 138, 84, 0.75);
+  font-size: 0.88rem;
+}
+
+.commesse-table-input {
+  padding: 0.62rem 0.72rem;
+  font-size: 0.94rem;
+  box-shadow: inset 0 1px 1px rgba(15, 23, 42, 0.03);
+}
+
+.commesse-filter-input:focus,
+.commesse-table-input:focus,
+.commesse-sort-button:focus-visible,
+.commesse-remove-button:focus-visible,
+.commesse-open-button:focus-visible {
+  outline: 2px solid rgba(235, 91, 25, 0.3);
+  outline-offset: 1px;
+}
+
+.commesse-actions-header,
+.commesse-actions-cell {
+  text-align: center;
+}
+
+.commesse-tiny-cell {
+  width: 56px;
+}
+
+.commesse-open-button {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.62rem 0.8rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  line-height: 1.15;
+}
+
+.commesse-remove-button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: #ef4444;
+  color: white;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.2);
+}
+
+.commesse-remove-button:hover {
+  background: #dc2626;
+}
+
 .mobile-data-cards {
   display: none;
 }
