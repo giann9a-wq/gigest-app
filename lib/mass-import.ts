@@ -54,13 +54,68 @@ function normalizeValue(value: string) {
   return value.trim().toLowerCase();
 }
 
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function normalizeExcelDateValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${value.getUTCFullYear()}-${padDatePart(value.getUTCMonth() + 1)}-${padDatePart(value.getUTCDate())}`;
+  }
+
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+
+    if (parsed && parsed.y && parsed.m && parsed.d) {
+      return `${parsed.y}-${padDatePart(parsed.m)}-${padDatePart(parsed.d)}`;
+    }
+  }
+
+  const text = String(value).trim();
+
+  if (!text) return "";
+
+  const isoMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${year}-${padDatePart(Number(month))}-${padDatePart(Number(day))}`;
+  }
+
+  const slashMatch = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch;
+    return `${year}-${padDatePart(Number(month))}-${padDatePart(Number(day))}`;
+  }
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return `${parsed.getUTCFullYear()}-${padDatePart(parsed.getUTCMonth() + 1)}-${padDatePart(parsed.getUTCDate())}`;
+  }
+
+  return text;
+}
+
 export function buildTemplateWorkbook(domain: ImportDomain) {
   const workbook = XLSX.utils.book_new();
 
   const importSheet = XLSX.utils.aoa_to_sheet([
     [...IMPORT_HEADERS],
-    ["2026-04-08", domain.resources[0]?.label ?? "", domain.jobOrders[0]?.name ?? "", "8", "Descrizione attivita"],
+    [new Date("2026-04-08T00:00:00.000Z"), domain.resources[0]?.label ?? "", domain.jobOrders[0]?.name ?? "", 8, "Descrizione attivita"],
   ]);
+  if (importSheet.A2) {
+    importSheet.A2.z = "yyyy-mm-dd";
+  }
+  importSheet["!cols"] = [
+    { wch: 14 },
+    { wch: 28 },
+    { wch: 34 },
+    { wch: 10 },
+    { wch: 40 },
+  ];
   const resourcesSheet = XLSX.utils.json_to_sheet(
     domain.resources.map((resource) => ({
       Risorsa: resource.label,
@@ -84,7 +139,10 @@ export function buildTemplateWorkbook(domain: ImportDomain) {
 }
 
 export function parseWorkbookRows(fileBuffer: ArrayBuffer): ParsedImportRow[] {
-  const workbook = XLSX.read(Buffer.from(fileBuffer), { type: "buffer" });
+  const workbook = XLSX.read(Buffer.from(fileBuffer), {
+    type: "buffer",
+    cellDates: true,
+  });
   const importSheet = workbook.Sheets["Import"];
 
   if (!importSheet) {
@@ -97,7 +155,7 @@ export function parseWorkbookRows(fileBuffer: ArrayBuffer): ParsedImportRow[] {
 
   return rows.map((row, index) => ({
     rowNumber: index + 2,
-    referenceDate: String(row.Data ?? "").trim(),
+    referenceDate: normalizeExcelDateValue(row.Data),
     resourceLabel: String(row.Risorsa ?? "").trim(),
     jobOrderName: String(row.Commessa ?? "").trim(),
     hours: String(row.Ore ?? "").trim(),

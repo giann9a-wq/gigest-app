@@ -405,6 +405,47 @@ a {
   color: #9a3412;
 }
 
+.admin-functions-card {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.admin-functions-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-function-item {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(240, 176, 137, 0.45);
+  background: rgba(255, 255, 255, 0.82);
+  transition: 0.18s ease;
+}
+
+.admin-function-item strong {
+  color: #1f2937;
+  font-size: 1rem;
+}
+
+.admin-function-item span {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.admin-function-item:hover {
+  border-color: var(--border-strong);
+  background: #fff7f2;
+}
+
+.admin-function-item-active {
+  border-color: #eb5b19;
+  background: linear-gradient(180deg, #fff3ea 0%, #fffaf6 100%);
+  box-shadow: 0 10px 24px rgba(235, 91, 25, 0.12);
+}
+
 .app-main {
   padding: 30px 0 42px;
 }

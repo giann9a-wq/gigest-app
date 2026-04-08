@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type ImportErrorRow = {
   rowNumber: number;
@@ -8,6 +8,7 @@ type ImportErrorRow = {
 };
 
 export function ImportPanel() {
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -53,8 +54,7 @@ export function ImportPanel() {
       );
       setErrors(Array.isArray(data.errors) ? data.errors : []);
       setFile(null);
-      const form = event.currentTarget;
-      form.reset();
+      formRef.current?.reset();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import non riuscito.");
     } finally {
@@ -73,7 +73,7 @@ export function ImportPanel() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="admin-password-form">
+      <form ref={formRef} onSubmit={handleSubmit} className="admin-password-form">
         <input
           type="file"
           accept=".xlsx,.xls"

@@ -6,6 +6,7 @@ import {
   hasElevatedAdminPanelAccess,
   requireAdminUser,
 } from "@/lib/admin-panel";
+import { AdminFunctionsNav } from "@/components/layout/admin-functions-nav";
 import { getImportDomain } from "@/lib/import-domain";
 import { lockAdminPanelAction, unlockAdminPanelAction } from "../accessi/actions";
 import { ImportPanel } from "./import-panel";
@@ -99,6 +100,8 @@ export default async function AdminImportMassivoPage() {
                 </a>
               </article>
             </div>
+
+            <AdminFunctionsNav current="import-massivo" />
 
             <div className="admin-grid">
               <ImportPanel />

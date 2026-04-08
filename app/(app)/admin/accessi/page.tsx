@@ -1,12 +1,11 @@
 import { AccessRequestStatus } from "@prisma/client";
-import type { Route } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   ensureAdminPanelCredential,
   hasElevatedAdminPanelAccess,
   requireAdminUser,
 } from "@/lib/admin-panel";
+import { AdminFunctionsNav } from "@/components/layout/admin-functions-nav";
 import { prisma } from "@/lib/prisma";
 import {
   approveAccessRequestAction,
@@ -148,11 +147,7 @@ export default async function AdminAccessPage({
               </article>
             </div>
 
-            <div className="admin-request-actions">
-              <Link href={"/admin/import-massivo" as Route} className="button">
-                Vai a import massivo
-              </Link>
-            </div>
+            <AdminFunctionsNav current="accessi" />
 
             <div className="admin-grid">
               <section className="card">
