@@ -7,6 +7,7 @@ import {
   UserRole,
   UserStatus,
 } from "@prisma/client";
+import { createAdminPasswordHash } from "../lib/admin-password";
 
 const prisma = new PrismaClient();
 
@@ -40,6 +41,32 @@ async function seedAdminUser() {
   });
 
   console.log(`Admin inizializzato: ${adminEmail}`);
+}
+
+async function seedAdminPanelCredential() {
+  const adminPanelPassword = process.env.SEED_ADMIN_PANEL_PASSWORD?.trim();
+
+  if (!adminPanelPassword) {
+    console.log("Password pannello admin saltata: SEED_ADMIN_PANEL_PASSWORD non impostata.");
+    return;
+  }
+
+  const { passwordHash, passwordSalt } = createAdminPasswordHash(adminPanelPassword);
+
+  await prisma.adminPanelCredential.upsert({
+    where: { key: "default" },
+    update: {
+      passwordHash,
+      passwordSalt,
+    },
+    create: {
+      key: "default",
+      passwordHash,
+      passwordSalt,
+    },
+  });
+
+  console.log("Password aggiuntiva admin inizializzata.");
 }
 
 async function seedDemoData() {
@@ -149,6 +176,7 @@ async function seedDemoData() {
 
 async function main() {
   await seedAdminUser();
+  await seedAdminPanelCredential();
 
   if (isTruthy(process.env.SEED_DEMO_DATA)) {
     await seedDemoData();

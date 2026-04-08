@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { auth } from "@/auth";
+import { LogoutButton } from "@/components/layout/logout-button";
+import { getActiveAppUser } from "@/lib/app-user";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,7 +10,10 @@ export const metadata: Metadata = {
   description: "Gestionale tecnico per diario cantiere, risorse, mezzi, commesse e scadenze.",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const session = await auth();
+  const activeAppUser = session?.user?.email ? await getActiveAppUser() : null;
+
   return (
     <html lang="it">
       <body>
@@ -27,10 +33,21 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 <Link href="/scadenziario" className="app-nav-link">Scadenziario</Link>
                 <Link href="/stampa-risorse-mese" className="app-nav-link">Stampa Risorse</Link>
                 <Link href="/statistiche-risorse-commesse" className="app-nav-link">Statistiche</Link>
+                {activeAppUser?.role === "ADMIN" ? (
+                  <Link href="/admin/accessi" className="app-nav-link">Admin</Link>
+                ) : null}
                 <span className="app-nav-link app-nav-link-disabled" aria-disabled="true" title="Pagina in preparazione">
                   Dashboard Commessa
                 </span>
               </nav>
+              {session?.user ? (
+                <div className="app-user-actions">
+                  <span className="app-user-chip">
+                    {session.user.name ?? session.user.email ?? "Utente"}
+                  </span>
+                  <LogoutButton />
+                </div>
+              ) : null}
             </div>
           </header>
           <main className="app-main">

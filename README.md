@@ -43,14 +43,15 @@ Scaffold iniziale per il gestionale tecnico **GiGEST**.
 - Vai su `http://localhost:3000/login`
 - Accedi con Google
 - Per test locale, crea nel database un utente con email autorizzata e `status = ACTIVE`
+- Per sbloccare l'area admin delle richieste accesso, imposta anche `SEED_ADMIN_PANEL_PASSWORD` e riesegui `npm run seed`
 
 ## Nota importante sulla login
 Il file `auth.ts` blocca l’accesso se l’email non è presente nella tabella `User` con stato `ACTIVE`.
 Gli account non autorizzati vengono registrati in `AccessRequest`.
 
 ## Passi successivi consigliati
-1. CRUD utenti / approvazione accessi
-2. CRUD personale
+1. CRUD personale
+2. CRUD utenti avanzato / reset password admin pannello
 3. CRUD mezzi e attrezzature
 4. CRUD commesse
 5. Diario cantiere

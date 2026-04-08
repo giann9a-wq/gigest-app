@@ -14,5 +14,6 @@ export const config = {
     "/stampa-risorse-mese/:path*",
     "/statistiche-risorse-commesse/:path*",
     "/caricamenti/:path*",
+    "/admin/:path*",
   ],
 };
