@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { auth } from "@/auth";
+import { AppHeader } from "@/components/layout/app-header";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { getActiveAppUser } from "@/lib/app-user";
 import "./globals.css";
@@ -18,38 +18,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="it">
       <body>
         <div className="app-shell">
-          <header className="app-header">
-            <div className="app-header-inner">
-              <Link href="/dashboard" className="app-brand">
-                <span className="app-brand-mark">Gi</span>
-                <span className="app-brand-text">GEST</span>
-              </Link>
-              <nav className="app-nav" aria-label="Navigazione principale">
-                <Link href="/dashboard" className="app-nav-link">Dashboard</Link>
-                <Link href="/diario" className="app-nav-link">Diario</Link>
-                <Link href="/risorse" className="app-nav-link">Risorse</Link>
-                <Link href="/mezzi" className="app-nav-link">Mezzi</Link>
-                <Link href="/commesse" className="app-nav-link">Commesse</Link>
-                <Link href="/scadenziario" className="app-nav-link">Scadenziario</Link>
-                <Link href="/stampa-risorse-mese" className="app-nav-link">Stampa Risorse</Link>
-                <Link href="/statistiche-risorse-commesse" className="app-nav-link">Statistiche</Link>
-                {activeAppUser?.role === "ADMIN" ? (
-                  <Link href="/admin/accessi" className="app-nav-link">Admin</Link>
-                ) : null}
-                <span className="app-nav-link app-nav-link-disabled" aria-disabled="true" title="Pagina in preparazione">
-                  Dashboard Commessa
-                </span>
-              </nav>
-              {session?.user ? (
-                <div className="app-user-actions">
-                  <span className="app-user-chip">
-                    {session.user.name ?? session.user.email ?? "Utente"}
-                  </span>
-                  <LogoutButton />
-                </div>
-              ) : null}
-            </div>
-          </header>
+          <AppHeader
+            userLabel={session?.user?.name ?? session?.user?.email ?? null}
+            showAdminLink={activeAppUser?.role === "ADMIN"}
+            logoutAction={<LogoutButton />}
+          />
           <main className="app-main">
             <div className="app-main-inner">{children}</div>
           </main>

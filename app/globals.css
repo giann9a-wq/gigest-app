@@ -54,6 +54,18 @@ a {
   width: min(1200px, calc(100% - 32px));
   margin: 0 auto;
   padding: 18px 0;
+  display: grid;
+  gap: 14px;
+}
+
+.app-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.app-header-desktop {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -126,6 +138,111 @@ a {
   border-color: #d1d5db;
   color: #9ca3af;
   transform: none;
+}
+
+.app-mobile-menu-button,
+.app-mobile-drawer-close {
+  border: 1px solid rgba(240, 176, 137, 0.65);
+  background: rgba(255, 255, 255, 0.92);
+  color: #7c2d12;
+  cursor: pointer;
+  font: inherit;
+}
+
+.app-mobile-menu-button {
+  display: none;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 44px;
+  padding: 0.7rem 0.95rem;
+  border-radius: 999px;
+  font-weight: 800;
+  box-shadow: 0 8px 22px rgba(126, 77, 40, 0.08);
+}
+
+.app-mobile-menu-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.app-mobile-drawer-shell {
+  display: none;
+}
+
+.app-mobile-drawer-backdrop {
+  border: none;
+  background: rgba(17, 24, 39, 0.42);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.app-mobile-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(88vw, 340px);
+  height: 100vh;
+  padding: 1rem;
+  background: linear-gradient(180deg, #fffaf6 0%, #fff3ea 100%);
+  box-shadow: -18px 0 40px rgba(17, 24, 39, 0.18);
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1rem;
+}
+
+.app-mobile-drawer-shell-open .app-mobile-drawer-backdrop {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.app-mobile-drawer-open {
+  transform: translateX(0);
+}
+
+.app-mobile-drawer-header,
+.app-mobile-drawer-footer {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.app-mobile-drawer-header {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.app-mobile-drawer-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.app-mobile-nav {
+  display: grid;
+  gap: 0.65rem;
+  align-content: start;
+}
+
+.app-mobile-nav-link {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(240, 176, 137, 0.55);
+  color: #7c2d12;
+  font-weight: 800;
+}
+
+.app-mobile-nav-link-disabled {
+  color: #9ca3af;
+  background: rgba(243, 244, 246, 0.95);
+  border-color: #d1d5db;
 }
 
 .app-user-actions {
@@ -420,6 +537,85 @@ a {
   font-size: 1.35rem;
   line-height: 1;
   cursor: pointer;
+}
+
+.diary-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.diary-topbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: end;
+}
+
+.diary-date-card,
+.diary-summary-card,
+.diary-row-card {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.diary-date-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.82rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  background: white;
+  font: inherit;
+}
+
+.diary-quick-actions,
+.diary-summary-grid,
+.diary-row-actions,
+.diary-footer-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.diary-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.diary-summary-item {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.diary-summary-value {
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+
+.diary-table-shell {
+  overflow-x: auto;
+}
+
+.diary-mobile-list {
+  display: none;
+}
+
+.diary-row-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.diary-row-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.diary-row-textarea {
+  min-height: 92px;
+  resize: vertical;
 }
 
 .card {
@@ -1712,6 +1908,30 @@ a {
     text-align: center;
   }
 
+  .app-header-desktop {
+    display: none;
+  }
+
+  .app-mobile-menu-button,
+  .app-mobile-drawer-shell {
+    display: flex;
+  }
+
+  .app-mobile-drawer-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    pointer-events: none;
+  }
+
+  .app-mobile-drawer-shell-open {
+    pointer-events: auto;
+  }
+
+  .app-mobile-drawer-backdrop {
+    flex: 1;
+  }
+
   .mobile-toolbar,
   .mobile-toolbar-actions,
   .mobile-footer-actions,
@@ -1767,5 +1987,35 @@ a {
 
   .app-main {
     padding: 22px 0 34px;
+  }
+
+  .diary-topbar,
+  .diary-summary-grid,
+  .diary-row-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .diary-quick-actions,
+  .diary-row-actions,
+  .diary-footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .diary-quick-actions .button,
+  .diary-row-actions .button,
+  .diary-row-actions .mobile-button-secondary,
+  .diary-footer-actions .button,
+  .diary-footer-actions .mobile-button-secondary {
+    width: 100%;
+  }
+
+  .diary-table-shell {
+    display: none;
+  }
+
+  .diary-mobile-list {
+    display: grid;
+    gap: 0.9rem;
   }
 }

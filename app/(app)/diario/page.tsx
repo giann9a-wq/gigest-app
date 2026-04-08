@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type ResourceOption = {
@@ -59,6 +59,13 @@ async function safeJsonFetch(url: string, options?: RequestInit) {
   return data;
 }
 
+function formatDisplayDate(value: string) {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
 export default function DiarioPage() {
   const router = useRouter();
   const [referenceDate, setReferenceDate] = useState(todayAsInputValue());
@@ -80,6 +87,21 @@ export default function DiarioPage() {
 
   function addRow() {
     setRows((current) => [...current, makeEmptyRow()]);
+  }
+
+  function duplicateRow(localId: string) {
+    setRows((current) => {
+      const sourceRow = current.find((row) => row.localId === localId);
+      if (!sourceRow) return current;
+
+      return [
+        ...current,
+        {
+          ...sourceRow,
+          localId: crypto.randomUUID(),
+        },
+      ];
+    });
   }
 
   function removeRow(localId: string) {
@@ -133,7 +155,7 @@ export default function DiarioPage() {
       }
     }
 
-    init();
+    void init();
   }, []);
 
   useEffect(() => {
@@ -143,11 +165,11 @@ export default function DiarioPage() {
       try {
         await loadRows(referenceDate);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Errore nel caricamento attività");
+        setError(err instanceof Error ? err.message : "Errore nel caricamento attivita");
       }
     }
 
-    refreshRows();
+    void refreshRows();
   }, [referenceDate]);
 
   async function handleSave() {
@@ -183,59 +205,92 @@ export default function DiarioPage() {
     }
   }
 
+  const totalHours = useMemo(
+    () =>
+      rows.reduce((sum, row) => {
+        const numericHours = Number(row.hours);
+        return Number.isFinite(numericHours) ? sum + numericHours : sum;
+      }, 0),
+    [rows]
+  );
+
+  const completedRows = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          row.resourceValue.trim() &&
+          row.jobOrderId.trim() &&
+          row.hours.trim() &&
+          row.activityDescription.trim()
+      ).length,
+    [rows]
+  );
+
   return (
-    <div className="grid gap-4">
-      <div className="card">
-        <h1 style={{ marginTop: 0 }}>Diario del cantiere</h1>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "240px 1fr 1fr",
-            gap: 16,
-            alignItems: "end",
-            marginBottom: 24,
-          }}
-        >
-          <label>
-            <div style={{ marginBottom: 8, fontWeight: 700 }}>Seleziona Giorno</div>
-            <input
-              type="date"
-              value={referenceDate}
-              onChange={(e) => setReferenceDate(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-              }}
-            />
-          </label>
-
-          <div style={{ display: "flex", gap: 12 }}>
-            <button className="button" type="button" onClick={() => router.push("/risorse")}>
-              Vedi risorse
-            </button>
-            <button className="button" type="button" onClick={() => router.push("/commesse")}>
-              Vedi commesse
-            </button>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              className="button"
-              type="button"
-              onClick={() => router.push("/statistiche-risorse-commesse")}
-            >
-              Statistiche per Risorsa / Commessa
-            </button>
+    <div className="diary-page">
+      <section className="card">
+        <div className="mobile-section-header">
+          <div>
+            <p className="dashboard-kicker">Inserimento Operativo</p>
+            <h1 className="mobile-section-title">Diario del cantiere</h1>
+            <p className="mobile-section-subtitle">
+              Vista ottimizzata per mobile: scegli il giorno, compila le attivita come schede e salva senza scorrimenti orizzontali.
+            </p>
           </div>
         </div>
 
-        {message ? <div style={{ color: "#166534", fontWeight: 700, marginBottom: 16 }}>{message}</div> : null}
-        {error ? <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 16 }}>{error}</div> : null}
+        <div className="diary-topbar">
+          <article className="card diary-date-card">
+            <label className="mobile-data-field">
+              <span className="mobile-data-label">Giorno operativo</span>
+              <input
+                type="date"
+                value={referenceDate}
+                onChange={(e) => setReferenceDate(e.target.value)}
+                className="diary-date-input"
+              />
+            </label>
+            <div className="muted">Stai compilando il diario del {formatDisplayDate(referenceDate)}.</div>
+          </article>
 
-        <div style={{ overflowX: "auto" }}>
+          <article className="card diary-summary-card">
+            <div className="diary-summary-grid">
+              <div className="diary-summary-item">
+                <span className="mobile-data-label">Righe</span>
+                <strong className="diary-summary-value">{rows.length}</strong>
+              </div>
+              <div className="diary-summary-item">
+                <span className="mobile-data-label">Compilate</span>
+                <strong className="diary-summary-value">{completedRows}</strong>
+              </div>
+              <div className="diary-summary-item">
+                <span className="mobile-data-label">Ore Totali</span>
+                <strong className="diary-summary-value">{totalHours.toFixed(1)}</strong>
+              </div>
+            </div>
+
+            <div className="diary-quick-actions">
+              <button className="button" type="button" onClick={() => router.push("/risorse")}>
+                Vedi risorse
+              </button>
+              <button className="button" type="button" onClick={() => router.push("/commesse")}>
+                Vedi commesse
+              </button>
+              <button
+                className="mobile-button-secondary"
+                type="button"
+                onClick={() => router.push("/statistiche-risorse-commesse")}
+              >
+                Statistiche
+              </button>
+            </div>
+          </article>
+        </div>
+
+        {message ? <div className="scad-success">{message}</div> : null}
+        {error ? <div className="scad-error">{error}</div> : null}
+
+        <div className="diary-table-shell">
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
@@ -323,28 +378,118 @@ export default function DiarioPage() {
           </table>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 18,
-          }}
-        >
-          <button type="button" onClick={addRow} style={plusButtonStyle}>
+        <div className="diary-mobile-list">
+          {rows.map((row, index) => (
+            <article key={row.localId} className="card diary-row-card">
+              <div className="diary-row-card-head">
+                <div>
+                  <div className="mobile-data-label">Attivita</div>
+                  <strong>Riga {index + 1}</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeRow(row.localId)}
+                  className="mobile-danger-button"
+                  title={`Rimuovi riga ${index + 1}`}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="diary-row-grid">
+                <label className="mobile-data-field mobile-data-field-full">
+                  <span className="mobile-data-label">Risorsa</span>
+                  <select
+                    value={row.resourceValue}
+                    onChange={(e) => setRowValue(row.localId, { resourceValue: e.target.value })}
+                    className="mobile-data-select"
+                    disabled={loading || loadingRows}
+                  >
+                    <option value="">Seleziona risorsa</option>
+                    {resources.map((resource) => (
+                      <option key={resource.value} value={resource.value}>
+                        {resource.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="mobile-data-field mobile-data-field-full">
+                  <span className="mobile-data-label">Commessa</span>
+                  <select
+                    value={row.jobOrderId}
+                    onChange={(e) => setRowValue(row.localId, { jobOrderId: e.target.value })}
+                    className="mobile-data-select"
+                    disabled={loading || loadingRows}
+                  >
+                    <option value="">Seleziona commessa</option>
+                    {jobOrders.map((job) => (
+                      <option key={job.id} value={job.id}>
+                        {job.name} ({job.type})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="mobile-data-field">
+                  <span className="mobile-data-label">Ore</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    value={row.hours}
+                    onChange={(e) => setRowValue(row.localId, { hours: e.target.value })}
+                    className="mobile-data-input"
+                    placeholder="0.0"
+                    disabled={loadingRows}
+                  />
+                </label>
+
+                <label className="mobile-data-field mobile-data-field-full">
+                  <span className="mobile-data-label">Descrizione Lavoro</span>
+                  <textarea
+                    value={row.activityDescription}
+                    onChange={(e) =>
+                      setRowValue(row.localId, { activityDescription: e.target.value })
+                    }
+                    className="mobile-data-input diary-row-textarea"
+                    placeholder="Descrivi l'attivita svolta"
+                    disabled={loadingRows}
+                  />
+                </label>
+              </div>
+
+              <div className="diary-row-actions">
+                <button
+                  type="button"
+                  className="mobile-button-secondary"
+                  onClick={() => duplicateRow(row.localId)}
+                  disabled={loadingRows}
+                >
+                  Duplica riga
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="diary-footer-actions" style={{ marginTop: 18 }}>
+          <button
+            type="button"
+            onClick={addRow}
+            className="mobile-button-success"
+            aria-label="Aggiungi riga"
+          >
             +
           </button>
 
-          <div style={{ display: "flex", gap: 12 }}>
-            <button className="button" type="button" disabled>
-              Modifica
-            </button>
+          <div className="mobile-toolbar-actions">
             <button className="button" type="button" onClick={handleSave} disabled={saving || loading}>
-              {saving ? "Salvataggio..." : "Salva"}
+              {saving ? "Salvataggio..." : "Salva diario"}
             </button>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
@@ -385,18 +530,6 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   border: "1px solid #d1d5db",
   background: "white",
-};
-
-const plusButtonStyle: React.CSSProperties = {
-  width: 42,
-  height: 42,
-  borderRadius: "999px",
-  border: "none",
-  background: "#22c55e",
-  color: "white",
-  fontSize: 28,
-  fontWeight: 700,
-  cursor: "pointer",
 };
 
 const removeButtonStyle: React.CSSProperties = {
