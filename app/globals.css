@@ -524,20 +524,22 @@ a {
 }
 
 .admin-functions-card {
-  display: grid;
-  gap: 0.8rem;
+  margin-bottom: 1rem;
 }
 
 .admin-functions-list {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
 .admin-function-item {
-  display: grid;
-  gap: 0.25rem;
-  padding: 0.95rem 1rem;
-  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0.8rem 1rem;
+  border-radius: 999px;
   border: 1px solid rgba(240, 176, 137, 0.45);
   background: rgba(255, 255, 255, 0.82);
   transition: 0.18s ease;
@@ -545,12 +547,8 @@ a {
 
 .admin-function-item strong {
   color: #1f2937;
-  font-size: 1rem;
-}
-
-.admin-function-item span {
-  color: var(--text-muted);
-  line-height: 1.45;
+  font-size: 0.95rem;
+  white-space: nowrap;
 }
 
 .admin-function-item:hover {

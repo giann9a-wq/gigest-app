@@ -132,6 +132,8 @@ export default async function AdminAccessPage({
           </div>
         ) : (
           <>
+            <AdminFunctionsNav current="accessi" />
+
             <div className="admin-stat-grid">
               <article className="card admin-stat-card">
                 <span className="admin-stat-label">In Attesa</span>
@@ -146,8 +148,6 @@ export default async function AdminAccessPage({
                 <strong className="admin-stat-value">{adminUser.email}</strong>
               </article>
             </div>
-
-            <AdminFunctionsNav current="accessi" />
 
             <div className="admin-grid">
               <section className="card">
