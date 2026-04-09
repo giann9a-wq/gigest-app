@@ -58,6 +58,37 @@ enum SyncSource {
   GOOGLE_CALENDAR
 }
 
+enum CostImportSourceType {
+  PARTITARIO_XLS
+}
+
+enum CostImportSessionStatus {
+  PARSED
+  VALIDATED
+  APPLIED
+  FAILED
+}
+
+enum CostImportMatchStatus {
+  NEW
+  ALREADY_IMPORTED
+  POSSIBLE_DUPLICATE
+  INVALID
+}
+
+enum CostImportValidationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CostActualCategory {
+  MATERIE_PRIME
+  PRESTAZIONI_PROFESSIONALI
+  PRESTAZIONI_TERZI
+  SPESE_VARIE
+}
+
 model User {
   id            String           @id @default(cuid())
   googleSub     String?          @unique
@@ -80,6 +111,7 @@ model User {
   createdMaintenances   Maintenance[]   @relation("MaintenanceCreatedBy")
   connectedCalendars    CalendarIntegration[] @relation("CalendarIntegrationConnectedBy")
   adminPanelSessions    AdminPanelSession[]
+  uploadedCostImportSessions CostImportSession[] @relation("CostImportSessionUploadedBy")
 
   accounts      Account[]
   sessions      Session[]
@@ -231,6 +263,95 @@ model JobOrder {
 
   diaryActivities DiaryActivity[]
   externalDiaryActivities ExternalDiaryActivity[]
+  costImportSessions CostImportSession[]
+  costImportRows CostImportRowStaging[]
+  costActualEntries CostActualEntry[]
+}
+
+model CostImportSession {
+  id             String                  @id @default(cuid())
+  jobOrderId     String
+  fileName       String
+  sourceType     CostImportSourceType
+  uploadedById   String?
+  uploadedAt     DateTime                @default(now())
+  status         CostImportSessionStatus @default(PARSED)
+  parseSummary   Json?
+  appliedAt      DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  jobOrder       JobOrder                @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  uploadedBy     User?                   @relation("CostImportSessionUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  rows           CostImportRowStaging[]
+  costActualEntries CostActualEntry[]
+
+  @@index([jobOrderId, uploadedAt])
+  @@index([status, uploadedAt])
+}
+
+model CostImportRowStaging {
+  id                       String                     @id @default(cuid())
+  importSessionId          String
+  jobOrderId               String
+  rowIndex                 Int
+  rawData                  Json
+  sourceAccountCode        String?
+  sourceAccountDescription String?
+  supplierCode             String?
+  supplierName             String?
+  documentDate             DateTime?
+  registrationDate         DateTime?
+  documentNumber           String?
+  descriptionOriginal      String?
+  descriptionNormalized    String?
+  amount                   Decimal?                   @db.Decimal(12, 2)
+  quantity                 Decimal?                   @db.Decimal(12, 2)
+  suggestedCategory        CostActualCategory?
+  fingerprint              String?
+  fingerprintSource        String?
+  matchStatus              CostImportMatchStatus      @default(NEW)
+  validationStatus         CostImportValidationStatus @default(PENDING)
+  validationNote           String?
+  finalCategory            CostActualCategory?
+  finalDescription         String?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+
+  importSession            CostImportSession          @relation(fields: [importSessionId], references: [id], onDelete: Cascade)
+  jobOrder                 JobOrder                   @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  costActualEntries        CostActualEntry[]
+
+  @@index([importSessionId, validationStatus])
+  @@index([jobOrderId, fingerprint])
+  @@index([jobOrderId, matchStatus])
+}
+
+model CostActualEntry {
+  id                       String             @id @default(cuid())
+  jobOrderId               String
+  category                 CostActualCategory
+  amount                   Decimal            @db.Decimal(12, 2)
+  sourceAccountCode        String?
+  sourceAccountDescription String?
+  supplierCode             String?
+  supplierName             String?
+  documentDate             DateTime?
+  documentNumber           String?
+  descriptionOriginal      String?
+  descriptionCustom        String?
+  fingerprint              String
+  sourceImportSessionId    String?
+  sourceImportRowId        String?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  jobOrder                 JobOrder           @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  sourceImportSession      CostImportSession? @relation(fields: [sourceImportSessionId], references: [id], onDelete: SetNull)
+  sourceImportRow          CostImportRowStaging? @relation(fields: [sourceImportRowId], references: [id], onDelete: SetNull)
+
+  @@index([jobOrderId, category])
+  @@unique([jobOrderId, fingerprint])
 }
 
 model DiaryActivity {

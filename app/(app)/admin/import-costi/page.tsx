@@ -1,14 +1,15 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { redirect } from "next/navigation";
+import { CostImportPanel } from "@/components/admin/cost-import-panel";
+import { AdminFunctionsNav } from "@/components/layout/admin-functions-nav";
 import {
   ensureAdminPanelCredential,
   hasElevatedAdminPanelAccess,
   requireAdminUser,
 } from "@/lib/admin-panel";
+import { listRecentCostImportSessions } from "@/lib/cost-actual-import";
 import { prisma } from "@/lib/prisma";
-import { JobOrderImportPlaceholder } from "@/components/admin/job-order-import-placeholder";
-import { AdminFunctionsNav } from "@/components/layout/admin-functions-nav";
 import { lockAdminPanelAction, unlockAdminPanelAction } from "../accessi/actions";
 
 export default async function AdminImportCostiPage() {
@@ -20,18 +21,21 @@ export default async function AdminImportCostiPage() {
 
   const credential = await ensureAdminPanelCredential();
   const hasElevatedAccess = await hasElevatedAdminPanelAccess(adminUser.id);
-  const jobOrders = hasElevatedAccess
-    ? await prisma.jobOrder.findMany({
-        where: { status: "ACTIVE" },
-        orderBy: { name: "asc" },
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          status: true,
-        },
-      })
-    : [];
+  const [jobOrders, recentSessions] = hasElevatedAccess
+    ? await Promise.all([
+        prisma.jobOrder.findMany({
+          where: { status: "ACTIVE" },
+          orderBy: { name: "asc" },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            status: true,
+          },
+        }),
+        listRecentCostImportSessions(),
+      ])
+    : [[], []];
 
   return (
     <div className="admin-page">
@@ -41,7 +45,7 @@ export default async function AdminImportCostiPage() {
             <p className="dashboard-kicker">Area Riservata</p>
             <h1 className="mobile-section-title">Importa costi</h1>
             <p className="mobile-section-subtitle">
-              Seleziona la commessa su cui agganciare il futuro import dei costi actual.
+              Seleziona la commessa, carica il file partitario `.xls` e valida lo staging prima della scrittura nei costi actual.
             </p>
           </div>
           <div className="admin-request-actions">
@@ -88,12 +92,7 @@ export default async function AdminImportCostiPage() {
         ) : (
           <>
             <AdminFunctionsNav current="import-costi" />
-            <JobOrderImportPlaceholder
-              title="Import costi actual"
-              description="Questa funzione conterrà il caricamento dei costi su una specifica commessa."
-              ctaLabel="Importa costi"
-              jobOrders={jobOrders}
-            />
+            <CostImportPanel jobOrders={jobOrders} recentSessions={recentSessions} />
           </>
         )}
       </section>

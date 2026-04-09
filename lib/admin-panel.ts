@@ -23,6 +23,22 @@ export async function requireAdminUser() {
   return appUser;
 }
 
+export async function requireElevatedAdminUser() {
+  const appUser = await requireAdminUser();
+
+  if (!appUser) {
+    return null;
+  }
+
+  const hasElevatedAccess = await hasElevatedAdminPanelAccess(appUser.id);
+
+  if (!hasElevatedAccess) {
+    return null;
+  }
+
+  return appUser;
+}
+
 export async function ensureAdminPanelCredential() {
   const existingCredential = await prisma.adminPanelCredential.findUnique({
     where: { key: ADMIN_PANEL_CREDENTIAL_KEY },
