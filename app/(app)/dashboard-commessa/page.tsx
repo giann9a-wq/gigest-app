@@ -406,13 +406,12 @@ export default function DashboardCommessaPage() {
                         <p className="job-dashboard-muted">Nessun costo importato per questa categoria.</p>
                       ) : (
                         category.suppliers.map((supplier) => (
-                          <div key={supplier.supplierKey} className="job-dashboard-entry-row">
+                          <div key={supplier.supplierKey} className="job-dashboard-supplier-row">
                             <div>
-                              <strong>{supplier.supplierCode || "Fornitore"}</strong>
-                              <div>{supplier.supplierName}</div>
+                              <strong>{supplier.supplierName}</strong>
                               <small>{supplier.entryCount} movimenti</small>
                             </div>
-                            <div>{formatCurrency(supplier.totalAmount)}</div>
+                            <strong>{formatCurrency(supplier.totalAmount)}</strong>
                           </div>
                         ))
                       )}

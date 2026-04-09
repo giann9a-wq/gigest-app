@@ -91,7 +91,6 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
   const [matchFilter, setMatchFilter] = useState<"ALL" | MatchStatus>("NEW");
   const [validationFilter, setValidationFilter] = useState<"ALL" | ValidationStatus>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<"ALL" | CostActualCategory>("ALL");
-  const [bulkCategory, setBulkCategory] = useState<CostActualCategory>("MATERIE_PRIME");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pendingRowId, setPendingRowId] = useState("");
@@ -152,7 +151,6 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
           body: JSON.stringify({
             action,
             rowIds: selectedIds,
-            category: action === "set-category" ? bulkCategory : undefined,
           }),
         });
         setMessage(
@@ -289,16 +287,6 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
             <button type="button" className="mobile-button-secondary" onClick={() => runBulkAction("reject")} disabled={isPending}>
               Rifiuta selezionate
             </button>
-            <select className="mobile-data-select cost-import-inline-select" value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value as CostActualCategory)}>
-              {CATEGORY_OPTIONS.map((category) => (
-                <option key={category} value={category}>
-                  {categoryLabel(category)}
-                </option>
-              ))}
-            </select>
-            <button type="button" className="mobile-button-secondary" onClick={() => runBulkAction("set-category")} disabled={isPending}>
-              Imposta categoria
-            </button>
             <button type="button" className="button" onClick={applyApprovedRows} disabled={isPending}>
               Conferma nei costi actual
             </button>
@@ -344,12 +332,10 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                     {row.validationNote ? <div className="muted">{row.validationNote}</div> : null}
                   </td>
                   <td>
-                    <strong>{row.sourceAccountCode || "-"}</strong>
-                    <div>{row.sourceAccountDescription || "-"}</div>
+                    {row.sourceAccountDescription || "-"}
                   </td>
                   <td>
-                    <strong>{row.supplierCode || "-"}</strong>
-                    <div>{row.supplierName || "-"}</div>
+                    {row.supplierName || "-"}
                   </td>
                   <td>{formatDate(row.documentDate || row.registrationDate)}</td>
                   <td>{row.documentNumber || "-"}</td>
