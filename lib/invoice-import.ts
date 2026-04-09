@@ -214,11 +214,12 @@ function isIgnorableRow(row: string[]) {
   );
 }
 
+function isLedgerMovementRow(row: string[]) {
+  return Boolean(parseItalianDate(cleanCell(row[1]))) && Boolean(cleanCell(row[6]));
+}
+
 function isInvoiceMovementRow(row: string[]) {
-  return (
-    Boolean(parseItalianDate(cleanCell(row[1]))) &&
-    normalizeText(row[6]) === "EMESSA FATTURA"
-  );
+  return isLedgerMovementRow(row) && normalizeText(row[6]) === "EMESSA FATTURA";
 }
 
 function buildFingerprintInput(input: {
@@ -384,8 +385,14 @@ export function parseIssuedInvoicePartitario(buffer: Buffer): ParsedWorkbookResu
       return;
     }
 
-    if (isInvoiceMovementRow(row)) {
+    if (isLedgerMovementRow(row)) {
       flushPendingInvoice();
+
+      if (!isInvoiceMovementRow(row)) {
+        ignoredRows += 1;
+        return;
+      }
+
       pendingInvoice = {
         movementRowIndex: rowIndex,
         movementRow: row,
