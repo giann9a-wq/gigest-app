@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { formatNumber } from "@/lib/number-format";
 
 type ReportDay = {
   iso: string;
@@ -45,7 +46,7 @@ function formatMonthInput(month: number) {
 
 function formatHours(value: number) {
   if (!value) return "";
-  return value.toFixed(1).replace(".", ",");
+  return formatNumber(value);
 }
 
 function formatMonthLabel(month: number, year: number) {

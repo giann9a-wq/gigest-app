@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Route } from "next";
 import { useParams, useRouter } from "next/navigation";
+import { formatCurrency, formatPercent } from "@/lib/number-format";
 
 type JobTypeValue = "SITE" | "TRAINING" | "LEAVE" | "SICKNESS" | "OTHER";
 type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
@@ -149,20 +150,6 @@ function parseAmount(value: string) {
 
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-  }).format(value || 0);
-}
-
-function formatPercent(value: number) {
-  return `${new Intl.NumberFormat("it-IT", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value || 0)} %`;
 }
 
 function formatDateTime(value: string) {

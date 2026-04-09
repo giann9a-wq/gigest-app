@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatCurrency, formatPercent, formatQuantity } from "@/lib/number-format";
 
 type JobTypeValue = "SITE" | "TRAINING" | "LEAVE" | "SICKNESS" | "OTHER";
 type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
@@ -116,32 +117,11 @@ async function safeJsonFetch(url: string, options?: RequestInit) {
   return data;
 }
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-  }).format(value || 0);
-}
-
-function formatPercent(value: number) {
-  return `${new Intl.NumberFormat("it-IT", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value || 0)} %`;
-}
-
 function formatDate(value: string) {
   if (!value) return "-";
   const [year, month, day] = value.split("-");
   if (!year || !month || !day) return value;
   return `${day}/${month}/${year}`;
-}
-
-function formatDays(value: number) {
-  return `${new Intl.NumberFormat("it-IT", {
-    minimumFractionDigits: value % 1 === 0 ? 0 : 1,
-    maximumFractionDigits: 1,
-  }).format(value || 0)} gg`;
 }
 
 function jobTypeLabel(type: JobTypeValue) {
@@ -327,7 +307,7 @@ export default function DashboardCommessaPage() {
                         <details key={detail.resourceId} className="job-dashboard-subdetail">
                           <summary>
                             <span>{detail.resourceLabel}</span>
-                            <span>{detail.totalHours.toFixed(1)} h · {formatCurrency(detail.totalCost)}</span>
+                            <span>{formatQuantity(detail.totalHours, "h")} · {formatCurrency(detail.totalCost)}</span>
                           </summary>
                           <div className="job-dashboard-entry-list">
                             {detail.entries.map((entry) => (
@@ -336,7 +316,7 @@ export default function DashboardCommessaPage() {
                                   <strong>{formatDate(entry.referenceDate)}</strong>
                                   <div>{entry.description || "Caricamento diario"}</div>
                                 </div>
-                                <div>{entry.hours.toFixed(1)} h · {formatCurrency(entry.totalCost)}</div>
+                                <div>{formatQuantity(entry.hours, "h")} · {formatCurrency(entry.totalCost)}</div>
                               </div>
                             ))}
                           </div>
@@ -360,7 +340,7 @@ export default function DashboardCommessaPage() {
                         <details key={detail.resourceId} className="job-dashboard-subdetail">
                           <summary>
                             <span>{detail.resourceLabel}</span>
-                            <span>{detail.totalHours.toFixed(1)} h · {formatCurrency(detail.totalCost)}</span>
+                            <span>{formatQuantity(detail.totalHours, "h")} · {formatCurrency(detail.totalCost)}</span>
                           </summary>
                           <div className="job-dashboard-entry-list">
                             {detail.entries.map((entry) => (
@@ -369,7 +349,7 @@ export default function DashboardCommessaPage() {
                                   <strong>{formatDate(entry.referenceDate)}</strong>
                                   <div>{entry.description || "Caricamento diario"}</div>
                                 </div>
-                                <div>{entry.hours.toFixed(1)} h · {formatCurrency(entry.totalCost)}</div>
+                                <div>{formatQuantity(entry.hours, "h")} · {formatCurrency(entry.totalCost)}</div>
                               </div>
                             ))}
                           </div>
@@ -393,7 +373,7 @@ export default function DashboardCommessaPage() {
             <section className="job-dashboard-external-panel">
               <div className="job-dashboard-panel-head">
                 <h2>Risorse Esterne</h2>
-                <strong>{formatDays(dashboard.actual.externalResources.totalDays)}</strong>
+                <strong>{formatQuantity(dashboard.actual.externalResources.totalDays, "gg")}</strong>
               </div>
 
               <div className="job-dashboard-external-summary">
@@ -407,7 +387,7 @@ export default function DashboardCommessaPage() {
                 </div>
                 <div className="job-dashboard-head-item">
                   <span>Giornate Totali</span>
-                  <strong>{formatDays(dashboard.actual.externalResources.totalDays)}</strong>
+                  <strong>{formatQuantity(dashboard.actual.externalResources.totalDays, "gg")}</strong>
                 </div>
               </div>
 
@@ -419,7 +399,7 @@ export default function DashboardCommessaPage() {
                     <details key={detail.resourceId} className="job-dashboard-subdetail">
                       <summary>
                         <span>{detail.resourceLabel}</span>
-                        <span>{formatDays(detail.totalDays)} · {detail.entryCount} registrazioni</span>
+                        <span>{formatQuantity(detail.totalDays, "gg")} · {detail.entryCount} registrazioni</span>
                       </summary>
                       <div className="job-dashboard-entry-list">
                         {detail.entries.map((entry) => (
@@ -428,7 +408,7 @@ export default function DashboardCommessaPage() {
                               <strong>{formatDate(entry.referenceDate)}</strong>
                               <div>{entry.description || "Caricamento risorsa esterna"}</div>
                             </div>
-                            <div>{formatDays(entry.days)}</div>
+                            <div>{formatQuantity(entry.days, "gg")}</div>
                           </div>
                         ))}
                       </div>

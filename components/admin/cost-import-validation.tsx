@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { formatCurrency } from "@/lib/number-format";
 
 type MatchStatus = "NEW" | "ALREADY_IMPORTED" | "POSSIBLE_DUPLICATE" | "INVALID";
 type ValidationStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -63,13 +64,6 @@ const CATEGORY_OPTIONS: CostActualCategory[] = [
   "SPESE_VARIE",
 ];
 
-function formatCurrency(value: number | null) {
-  return new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-  }).format(value ?? 0);
-}
-
 function formatDate(value: string) {
   if (!value) return "-";
   const [year, month, day] = value.split("-");
@@ -94,7 +88,7 @@ async function jsonFetch<T>(url: string, options?: RequestInit): Promise<T> {
 export function CostImportValidation({ sessionId }: { sessionId: string }) {
   const [session, setSession] = useState<SessionPayload | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [matchFilter, setMatchFilter] = useState<"ALL" | MatchStatus>("ALL");
+  const [matchFilter, setMatchFilter] = useState<"ALL" | MatchStatus>("NEW");
   const [validationFilter, setValidationFilter] = useState<"ALL" | ValidationStatus>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<"ALL" | CostActualCategory>("ALL");
   const [bulkCategory, setBulkCategory] = useState<CostActualCategory>("MATERIE_PRIME");

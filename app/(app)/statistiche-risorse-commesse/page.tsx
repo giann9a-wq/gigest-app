@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { formatCurrency, formatNumber } from "@/lib/number-format";
 
 type StatisticsRow = {
   resourceLabel: string;
@@ -35,14 +36,7 @@ type MultiSelectDropdownProps = {
 };
 
 function formatHours(value: number) {
-  return value.toFixed(1).replace(".", ",");
-}
-
-function formatCurrency(value: number) {
-  return value.toLocaleString("it-IT", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatNumber(value);
 }
 
 async function safeJsonFetch(url: string) {

@@ -419,6 +419,7 @@ a {
 .cost-import-validation-page {
   display: grid;
   gap: 1rem;
+  min-width: 0;
 }
 
 .cost-import-stats {
@@ -465,12 +466,17 @@ a {
 }
 
 .cost-import-table {
+  width: max-content;
   min-width: 1940px;
   table-layout: fixed;
 }
 
 .scad-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 0.35rem;
@@ -479,6 +485,11 @@ a {
 .cost-import-table td {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.cost-import-validation-page > .card,
+.cost-import-validation-page .scad-table-tools {
+  min-width: 0;
 }
 
 .cost-import-badge {
