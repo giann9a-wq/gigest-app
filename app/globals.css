@@ -460,6 +460,18 @@ a {
   min-width: 210px;
 }
 
+.cost-import-session-table-wrap {
+  display: block;
+}
+
+.cost-import-session-table {
+  min-width: 860px;
+}
+
+.cost-import-session-cards {
+  display: none;
+}
+
 .cost-import-table th,
 .cost-import-table td {
   vertical-align: top;
@@ -2780,6 +2792,15 @@ a {
 
   .cost-import-stats {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .cost-import-session-table-wrap {
+    display: none;
+  }
+
+  .cost-import-session-cards {
+    display: grid;
+    gap: 0.75rem;
   }
 
   .scad-title {

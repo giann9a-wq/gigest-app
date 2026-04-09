@@ -135,9 +135,6 @@ export function CostImportPanel({
         <div className="mobile-section-header">
           <div>
             <h2 style={{ margin: 0 }}>Sessioni recenti</h2>
-            <p className="mobile-section-subtitle">
-              Ogni reimport crea sempre una nuova sessione, così lo staging resta tracciabile e confrontabile.
-            </p>
           </div>
         </div>
 
@@ -146,28 +143,59 @@ export function CostImportPanel({
             Nessuna import session ancora presente.
           </p>
         ) : (
-          <div className="admin-request-list">
-            {recentSessions.map((session) => (
-              <article key={session.id} className="card admin-request-card">
-                <div className="admin-request-head">
-                  <div>
+          <>
+            <div className="scad-table-wrap cost-import-session-table-wrap">
+              <table className="scad-table cost-import-session-table">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Commessa</th>
+                    <th>Data</th>
+                    <th>Righe</th>
+                    <th>Stato</th>
+                    <th>Azione</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentSessions.map((session) => (
+                    <tr key={session.id}>
+                      <td><strong>{session.fileName}</strong></td>
+                      <td>{session.jobOrder.name}</td>
+                      <td>{formatDateTime(session.uploadedAt)}</td>
+                      <td>{session.rowCount}</td>
+                      <td><span className="admin-request-badge">{session.status}</span></td>
+                      <td>
+                        <Link href={`/admin/import-costi/${session.id}`} className="mobile-button-secondary">
+                          Apri
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="cost-import-session-cards">
+              {recentSessions.map((session) => (
+                <article key={session.id} className="card admin-request-card">
+                  <div className="admin-request-head">
                     <strong>{session.fileName}</strong>
-                    <div className="muted">{session.jobOrder.name}</div>
+                    <span className="admin-request-badge">{session.status}</span>
                   </div>
-                  <span className="admin-request-badge">{session.status}</span>
-                </div>
-                <div className="admin-request-meta">
-                  <span>{formatDateTime(session.uploadedAt)}</span>
-                  <span>{session.rowCount} righe staging</span>
-                </div>
-                <div className="admin-request-actions">
-                  <Link href={`/admin/import-costi/${session.id}`} className="mobile-button-secondary">
-                    Apri validazione
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
+                  <div className="admin-request-meta">
+                    <span>{session.jobOrder.name}</span>
+                    <span>{formatDateTime(session.uploadedAt)}</span>
+                    <span>{session.rowCount} righe</span>
+                  </div>
+                  <div className="admin-request-actions">
+                    <Link href={`/admin/import-costi/${session.id}`} className="mobile-button-secondary">
+                      Apri
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
         )}
       </section>
     </div>

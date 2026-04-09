@@ -84,6 +84,8 @@ export default async function AdminImportDiarioManualePage() {
           </div>
         ) : (
           <>
+            <AdminFunctionsNav current="import-diario-manuale" />
+
             <div className="admin-stat-grid">
               <article className="card admin-stat-card">
                 <span className="admin-stat-label">Risorse Attive</span>
@@ -100,8 +102,6 @@ export default async function AdminImportDiarioManualePage() {
                 </a>
               </article>
             </div>
-
-            <AdminFunctionsNav current="import-diario-manuale" />
 
             <div className="admin-grid">
               <ImportPanel />
