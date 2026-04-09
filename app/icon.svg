@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" fill="#ffffff" />
+  <text
+    x="16"
+    y="42"
+    font-family="Arial Black, Arial, sans-serif"
+    font-size="26"
+    font-weight="900"
+    fill="#ff6a00"
+  >
+    G
+  </text>
+  <g transform="translate(64 0) scale(-1 1)">
+    <text
+      x="16"
+      y="42"
+      font-family="Arial Black, Arial, sans-serif"
+      font-size="26"
+      font-weight="900"
+      fill="#000000"
+    >
+      G
+    </text>
+  </g>
+</svg>
