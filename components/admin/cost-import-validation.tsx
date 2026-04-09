@@ -287,7 +287,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
 
           <div className="cost-import-bulk-bar">
             <button type="button" className="mobile-button-secondary" onClick={toggleSelectAllVisible}>
-              {filteredRows.every((row) => selectedIds.includes(row.id)) ? "Deseleziona visibili" : "Seleziona visibili"}
+              {filteredRows.every((row) => selectedIds.includes(row.id)) ? "Deseleziona tutto" : "Seleziona tutto"}
             </button>
             <button type="button" className="button" onClick={() => runBulkAction("approve")} disabled={isPending}>
               Approva selezionate
@@ -321,7 +321,6 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                 <th>Fornitore</th>
                 <th>Data</th>
                 <th>Documento</th>
-                <th>Descrizione originale</th>
                 <th>Descrizione finale</th>
                 <th>Importo</th>
                 <th>Categoria</th>
@@ -348,7 +347,6 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                   </td>
                   <td>{formatDate(row.documentDate || row.registrationDate)}</td>
                   <td>{row.documentNumber || "-"}</td>
-                  <td>{row.descriptionOriginal || "-"}</td>
                   <td>
                     <input
                       className="scad-table-filter-input"

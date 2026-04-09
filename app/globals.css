@@ -464,6 +464,15 @@ a {
   vertical-align: top;
 }
 
+.cost-import-table {
+  min-width: 1180px;
+}
+
+.scad-table-wrap {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
 .cost-import-badge {
   display: inline-flex;
   align-items: center;
