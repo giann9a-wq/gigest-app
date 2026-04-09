@@ -60,6 +60,8 @@ type ParsedInvoiceDraft = {
   movementRowIndex: number;
   movementRow: string[];
   accountContext: ParsedAccountContext | null;
+  movementLabel: string;
+  signFactor: 1 | -1;
   registrationDate: Date | null;
   registrationProtocol: string | null;
   causale: string | null;
@@ -94,6 +96,12 @@ const GENERIC_ACCOUNT_REGEX = /^(\d{3}(?:\.\d{2})?\.\d{5})\s*-\s*(.+)$/i;
 const CUSTOMER_ACCOUNT_PREFIX = "132.";
 const VAT_ACCOUNT_PREFIX = "217.";
 const ITALIAN_DATE_REGEX = /^\d{2}\/\d{2}\/\d{4}$/;
+const ISSUED_INVOICE_MOVEMENT_LABELS = new Set([
+  "EMESSA FATTURA",
+  "NOTA ACCREDITO A CLIENTE",
+  "NOTA DI ACCREDITO A CLIENTE",
+  "NOTA DI CREDITO A CLIENTE",
+]);
 
 export function isInvoiceImportSchemaMissingError(error: unknown) {
   const candidate = error as PrismaKnownError | undefined;
@@ -219,7 +227,12 @@ function isLedgerMovementRow(row: string[]) {
 }
 
 function isInvoiceMovementRow(row: string[]) {
-  return isLedgerMovementRow(row) && normalizeText(row[6]) === "EMESSA FATTURA";
+  return isLedgerMovementRow(row) && ISSUED_INVOICE_MOVEMENT_LABELS.has(normalizeText(row[6]));
+}
+
+function getMovementSignFactor(label: string): 1 | -1 {
+  const normalized = normalizeText(label);
+  return normalized.includes("ACCREDITO") || normalized.includes("CREDITO") ? -1 : 1;
 }
 
 function buildFingerprintInput(input: {
@@ -269,6 +282,7 @@ function buildFingerprintInput(input: {
 
 function buildInvoiceBlock(draft: ParsedInvoiceDraft): ParsedInvoiceBlock {
   const notes = new Set<string>();
+  const signFactor = draft.signFactor;
 
   if (!draft.accountContext?.code) {
     notes.add("Conto ricavo 401.* non rilevato.");
@@ -289,8 +303,12 @@ function buildInvoiceBlock(draft: ParsedInvoiceDraft): ParsedInvoiceBlock {
     notes.add("Totale fattura non ricostruito dalla contropartita cliente.");
   }
 
-  const vatAmount = draft.vat?.amount ?? null;
-  const grossAmount = draft.customer?.amount ?? null;
+  const signedNetAmount =
+    draft.netAmount != null ? Number((draft.netAmount * signFactor).toFixed(2)) : null;
+  const vatAmount =
+    draft.vat?.amount != null ? Number((draft.vat.amount * signFactor).toFixed(2)) : null;
+  const grossAmount =
+    draft.customer?.amount != null ? Number((draft.customer.amount * signFactor).toFixed(2)) : null;
 
   const fingerprintData = buildFingerprintInput({
     sourceAccountCode: draft.accountContext?.code ?? null,
@@ -298,7 +316,7 @@ function buildInvoiceBlock(draft: ParsedInvoiceDraft): ParsedInvoiceBlock {
     documentDate: draft.documentDate ?? draft.registrationDate,
     customerCode: draft.customer?.code ?? null,
     customerName: draft.customer?.description ?? null,
-    netAmount: draft.netAmount,
+    netAmount: signedNetAmount,
     grossAmount,
     registrationProtocol: draft.registrationProtocol,
   });
@@ -320,13 +338,13 @@ function buildInvoiceBlock(draft: ParsedInvoiceDraft): ParsedInvoiceBlock {
     invoiceNumber: draft.invoiceNumber,
     customerCode: draft.customer?.code ?? null,
     customerName: draft.customer?.description ?? null,
-    netAmount: draft.netAmount,
+    netAmount: signedNetAmount,
     vatAmount,
     grossAmount,
     extraLinesJson: draft.extraLines.map((line) => ({
       code: line.code,
       description: line.description,
-      amount: line.amount,
+      amount: line.amount != null ? Number((line.amount * signFactor).toFixed(2)) : null,
       rowIndex: line.rowIndex,
     })),
     rawDataJson: {
@@ -397,6 +415,8 @@ export function parseIssuedInvoicePartitario(buffer: Buffer): ParsedWorkbookResu
         movementRowIndex: rowIndex,
         movementRow: row,
         accountContext: currentAccount,
+        movementLabel: cleanCell(row[6]),
+        signFactor: getMovementSignFactor(row[6]),
         registrationDate: parseItalianDate(row[1]),
         registrationProtocol: cleanCell(row[4]) || null,
         causale: cleanCell(row[5]) || null,

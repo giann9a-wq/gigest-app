@@ -1,25 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" fill="#ffffff" />
-  <text
-    x="16"
-    y="42"
-    font-family="Arial Black, Arial, sans-serif"
-    font-size="26"
-    font-weight="900"
-    fill="#ff6a00"
-  >
-    G
-  </text>
-  <g transform="translate(64 0) scale(-1 1)">
-    <text
-      x="16"
-      y="42"
-      font-family="Arial Black, Arial, sans-serif"
-      font-size="26"
-      font-weight="900"
-      fill="#000000"
-    >
-      G
-    </text>
-  </g>
+<svg width="300" height="150" viewBox="0 0 300 150" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .g1 { fill: #f97316; font-family: Arial, Helvetica, sans-serif; font-weight: bold; }
+    .g2 { fill: #000000; font-family: Arial, Helvetica, sans-serif; font-weight: bold; }
+  </style>
+
+  <!-- G arancione -->
+  <text x="60" y="100" font-size="80" class="g1">G</text>
+
+  <!-- G nera specchiata e riportata dentro -->
+  <text x="-200" y="100" font-size="80" class="g2" transform="scale(-1,1)">G</text>
 </svg>
