@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatCurrency, formatPercent, formatQuantity } from "@/lib/number-format";
 
@@ -89,6 +90,19 @@ type JobOrderDashboardResponse = {
       misc: string;
       revenue: string;
     };
+    costCategories: Array<{
+      key: "MATERIE_PRIME" | "PRESTAZIONI_PROFESSIONALI" | "PRESTAZIONI_TERZI" | "SPESE_VARIE";
+      label: string;
+      totalAmount: number;
+      entryCount: number;
+      suppliers: Array<{
+        supplierKey: string;
+        supplierCode: string;
+        supplierName: string;
+        totalAmount: number;
+        entryCount: number;
+      }>;
+    }>;
   };
 };
 
@@ -211,6 +225,13 @@ export default function DashboardCommessaPage() {
             <p className="job-dashboard-kicker">GiGEST</p>
             <h1 className="job-dashboard-title">Dashboard Commessa</h1>
           </div>
+          {selectedJobOrderId ? (
+            <div className="job-dashboard-actions">
+              <Link href={`/dashboard-commessa/costi?jobOrderId=${selectedJobOrderId}`} className="mobile-button-secondary">
+                Vedi Costi
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         <div className="job-dashboard-selector-card">
@@ -359,10 +380,42 @@ export default function DashboardCommessaPage() {
                   </div>
                 </details>
 
-                <div className="job-dashboard-static-line"><span>Materie Prime</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.materials)}</span><small>{dashboard.actual.importSources.materials}</small></div></div>
-                <div className="job-dashboard-static-line"><span>Prestazioni Professionali</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.professionalServices)}</span><small>{dashboard.actual.importSources.professionalServices}</small></div></div>
-                <div className="job-dashboard-static-line"><span>Prestazioni Terzi</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.thirdPartyServices)}</span><small>{dashboard.actual.importSources.thirdPartyServices}</small></div></div>
-                <div className="job-dashboard-static-line"><span>Spese Varie</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.misc)}</span><small>{dashboard.actual.importSources.misc}</small></div></div>
+                {dashboard.actual.costCategories.map((category) => (
+                  <details key={category.key} className="job-dashboard-accordion">
+                    <summary>
+                      <span className="job-dashboard-plus">+</span>
+                      <span>{category.label}</span>
+                      <strong>{formatCurrency(category.totalAmount)}</strong>
+                    </summary>
+                    <div className="job-dashboard-detail-list">
+                      <div className="job-dashboard-category-meta">
+                        <small>{dashboard.actual.importSources[
+                          category.key === "MATERIE_PRIME"
+                            ? "materials"
+                            : category.key === "PRESTAZIONI_PROFESSIONALI"
+                              ? "professionalServices"
+                              : category.key === "PRESTAZIONI_TERZI"
+                                ? "thirdPartyServices"
+                                : "misc"
+                        ]}</small>
+                      </div>
+                      {category.suppliers.length === 0 ? (
+                        <p className="job-dashboard-muted">Nessun costo importato per questa categoria.</p>
+                      ) : (
+                        category.suppliers.map((supplier) => (
+                          <div key={supplier.supplierKey} className="job-dashboard-entry-row">
+                            <div>
+                              <strong>{supplier.supplierCode || "Fornitore"}</strong>
+                              <div>{supplier.supplierName}</div>
+                              <small>{supplier.entryCount} movimenti</small>
+                            </div>
+                            <div>{formatCurrency(supplier.totalAmount)}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </details>
+                ))}
                 <div className="job-dashboard-divider" />
                 <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Totale costi</span><strong>{formatCurrency(dashboard.actual.totalCosts)}</strong></div>
                 <div className="job-dashboard-summary-row"><span>Fatturato Actual</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.revenue)}</span><small>{dashboard.actual.importSources.revenue}</small></div></div>

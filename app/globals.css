@@ -1623,6 +1623,59 @@ a {
   align-items: flex-start;
 }
 
+.job-dashboard-category-meta {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--text-muted);
+  margin-bottom: 0.45rem;
+}
+
+.cost-view-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.cost-view-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 420px);
+  gap: 0.75rem;
+}
+
+.cost-view-tabbar {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.cost-view-tab {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 200px;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(240, 176, 137, 0.5);
+  background: rgba(255, 247, 242, 0.72);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+.cost-view-tab strong {
+  font-size: 1rem;
+}
+
+.cost-view-tab-active {
+  background: linear-gradient(180deg, #fff3ea 0%, #fffaf6 100%);
+  border-color: #eb5b19;
+  box-shadow: 0 10px 24px rgba(235, 91, 25, 0.12);
+}
+
+.cost-view-table {
+  min-width: 980px;
+}
+
 .job-dashboard-import-note,
 .job-dashboard-error,
 .job-dashboard-success {

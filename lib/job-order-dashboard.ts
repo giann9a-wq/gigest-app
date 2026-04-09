@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { CostActualCategory, Prisma } from "@prisma/client";
 
 type CostHistoryRow = {
   hourlyCost: unknown;
@@ -34,6 +35,153 @@ function roundHours(value: number) {
 function toRatio(costs: number, revenue: number) {
   if (!revenue) return 0;
   return Number((((revenue - costs) / revenue) * 100).toFixed(2));
+}
+
+function getCostCategoryLabel(category: CostActualCategory) {
+  switch (category) {
+    case "MATERIE_PRIME":
+      return "Materie Prime";
+    case "PRESTAZIONI_PROFESSIONALI":
+      return "Prestazioni Professionali";
+    case "PRESTAZIONI_TERZI":
+      return "Prestazioni Terzi";
+    case "SPESE_VARIE":
+      return "Spese Varie";
+  }
+}
+
+function toDecimalNumber(value: Prisma.Decimal | null | undefined) {
+  if (value == null) return 0;
+  return Number(value);
+}
+
+async function getCostActualCategoryViews(jobOrderId: string) {
+  const entries = await prisma.costActualEntry.findMany({
+    where: { jobOrderId },
+    orderBy: [
+      { category: "asc" },
+      { documentDate: "desc" },
+      { supplierName: "asc" },
+      { createdAt: "desc" },
+    ],
+    select: {
+      id: true,
+      category: true,
+      amount: true,
+      sourceAccountCode: true,
+      sourceAccountDescription: true,
+      supplierCode: true,
+      supplierName: true,
+      documentDate: true,
+      documentNumber: true,
+      descriptionOriginal: true,
+      descriptionCustom: true,
+      createdAt: true,
+    },
+  });
+
+  const categoryOrder: CostActualCategory[] = [
+    "MATERIE_PRIME",
+    "PRESTAZIONI_PROFESSIONALI",
+    "PRESTAZIONI_TERZI",
+    "SPESE_VARIE",
+  ];
+
+  const grouped = new Map<
+    CostActualCategory,
+    {
+      key: CostActualCategory;
+      label: string;
+      totalAmount: number;
+      entryCount: number;
+      suppliers: Map<
+        string,
+        {
+          supplierKey: string;
+          supplierCode: string;
+          supplierName: string;
+          totalAmount: number;
+          entryCount: number;
+        }
+      >;
+      rows: {
+        id: string;
+        supplierCode: string;
+        supplierName: string;
+        documentDate: string;
+        documentNumber: string;
+        description: string;
+        amount: number;
+        sourceAccountCode: string;
+        sourceAccountDescription: string;
+        createdAt: string;
+      }[];
+    }
+  >();
+
+  for (const category of categoryOrder) {
+    grouped.set(category, {
+      key: category,
+      label: getCostCategoryLabel(category),
+      totalAmount: 0,
+      entryCount: 0,
+      suppliers: new Map(),
+      rows: [],
+    });
+  }
+
+  for (const entry of entries) {
+    const categoryBucket = grouped.get(entry.category);
+    if (!categoryBucket) continue;
+
+    const amount = toDecimalNumber(entry.amount);
+    const supplierCode = entry.supplierCode ?? "";
+    const supplierName = entry.supplierName ?? "Fornitore non definito";
+    const supplierKey = supplierCode || supplierName.toUpperCase();
+    const existingSupplier = categoryBucket.suppliers.get(supplierKey);
+
+    categoryBucket.totalAmount = roundCurrency(categoryBucket.totalAmount + amount);
+    categoryBucket.entryCount += 1;
+    categoryBucket.rows.push({
+      id: entry.id,
+      supplierCode,
+      supplierName,
+      documentDate: entry.documentDate?.toISOString().slice(0, 10) ?? "",
+      documentNumber: entry.documentNumber ?? "",
+      description: entry.descriptionCustom || entry.descriptionOriginal || "",
+      amount,
+      sourceAccountCode: entry.sourceAccountCode ?? "",
+      sourceAccountDescription: entry.sourceAccountDescription ?? "",
+      createdAt: entry.createdAt.toISOString(),
+    });
+
+    if (existingSupplier) {
+      existingSupplier.totalAmount = roundCurrency(existingSupplier.totalAmount + amount);
+      existingSupplier.entryCount += 1;
+    } else {
+      categoryBucket.suppliers.set(supplierKey, {
+        supplierKey,
+        supplierCode,
+        supplierName,
+        totalAmount: amount,
+        entryCount: 1,
+      });
+    }
+  }
+
+  return categoryOrder.map((category) => {
+    const bucket = grouped.get(category)!;
+    return {
+      key: bucket.key,
+      label: bucket.label,
+      totalAmount: bucket.totalAmount,
+      entryCount: bucket.entryCount,
+      suppliers: [...bucket.suppliers.values()].sort((a, b) =>
+        a.supplierName.localeCompare(b.supplierName, "it", { sensitivity: "base" })
+      ),
+      rows: bucket.rows,
+    };
+  });
 }
 
 export async function getJobOrderDashboard(jobOrderId: string) {
@@ -325,6 +473,30 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         misc: "Import costi actual",
         revenue: "Import file dedicato",
       },
+      costCategories: await getCostActualCategoryViews(jobOrder.id),
     },
+  };
+}
+
+export async function getJobOrderCostActualView(jobOrderId: string) {
+  const jobOrder = await prisma.jobOrder.findUnique({
+    where: { id: jobOrderId },
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      status: true,
+    },
+  });
+
+  if (!jobOrder) {
+    return null;
+  }
+
+  const categories = await getCostActualCategoryViews(jobOrderId);
+
+  return {
+    jobOrder,
+    categories,
   };
 }
