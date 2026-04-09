@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
-  const [people, equipment, jobOrders] = await Promise.all([
+  const [people, equipment, jobOrders, externalResources] = await Promise.all([
     prisma.person.findMany({
       where: { status: "ACTIVE" },
       orderBy: { fullName: "asc" },
@@ -36,6 +36,13 @@ export async function GET() {
         type: true,
       },
     }),
+    prisma.externalResource.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
   ]);
 
   const resources = [
@@ -54,5 +61,6 @@ export async function GET() {
   return NextResponse.json({
     resources,
     jobOrders,
+    externalResources,
   });
 }

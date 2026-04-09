@@ -22,6 +22,21 @@ type ActualDetailGroup = {
   entries: ActualDetailEntry[];
 };
 
+type ExternalDetailEntry = {
+  id: string;
+  referenceDate: string;
+  days: number;
+  description: string;
+};
+
+type ExternalDetailGroup = {
+  resourceId: string;
+  resourceLabel: string;
+  totalDays: number;
+  entryCount: number;
+  entries: ExternalDetailEntry[];
+};
+
 type JobOrderDashboardResponse = {
   jobOrder: {
     id: string;
@@ -32,6 +47,7 @@ type JobOrderDashboardResponse = {
     status: ResourceStatusValue;
     description: string;
     activityCount: number;
+    externalActivityCount: number;
     createdAt: string;
     updatedAt: string;
   };
@@ -60,6 +76,11 @@ type JobOrderDashboardResponse = {
     grossMarginPct: number;
     personnelDetails: ActualDetailGroup[];
     equipmentDetails: ActualDetailGroup[];
+    externalResources: {
+      totalDays: number;
+      totalEntries: number;
+      details: ExternalDetailGroup[];
+    };
     importSources: {
       materials: string;
       professionalServices: string;
@@ -114,6 +135,13 @@ function formatDate(value: string) {
   const [year, month, day] = value.split("-");
   if (!year || !month || !day) return value;
   return `${day}/${month}/${year}`;
+}
+
+function formatDays(value: number) {
+  return `${new Intl.NumberFormat("it-IT", {
+    minimumFractionDigits: value % 1 === 0 ? 0 : 1,
+    maximumFractionDigits: 1,
+  }).format(value || 0)} gg`;
 }
 
 function jobTypeLabel(type: JobTypeValue) {
@@ -361,6 +389,54 @@ export default function DashboardCommessaPage() {
                 <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Primo Margine</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.grossMargin)}</strong><span>{formatPercent(dashboard.actual.grossMarginPct)}</span></div></div>
               </section>
             </div>
+
+            <section className="job-dashboard-external-panel">
+              <div className="job-dashboard-panel-head">
+                <h2>Risorse Esterne</h2>
+                <strong>{formatDays(dashboard.actual.externalResources.totalDays)}</strong>
+              </div>
+
+              <div className="job-dashboard-external-summary">
+                <div className="job-dashboard-head-item">
+                  <span>Risorse Utilizzate</span>
+                  <strong>{dashboard.actual.externalResources.details.length}</strong>
+                </div>
+                <div className="job-dashboard-head-item">
+                  <span>Caricamenti</span>
+                  <strong>{dashboard.actual.externalResources.totalEntries}</strong>
+                </div>
+                <div className="job-dashboard-head-item">
+                  <span>Giornate Totali</span>
+                  <strong>{formatDays(dashboard.actual.externalResources.totalDays)}</strong>
+                </div>
+              </div>
+
+              <div className="job-dashboard-detail-list">
+                {dashboard.actual.externalResources.details.length === 0 ? (
+                  <p className="job-dashboard-muted">Nessun caricamento di risorse esterne associato.</p>
+                ) : (
+                  dashboard.actual.externalResources.details.map((detail) => (
+                    <details key={detail.resourceId} className="job-dashboard-subdetail">
+                      <summary>
+                        <span>{detail.resourceLabel}</span>
+                        <span>{formatDays(detail.totalDays)} · {detail.entryCount} registrazioni</span>
+                      </summary>
+                      <div className="job-dashboard-entry-list">
+                        {detail.entries.map((entry) => (
+                          <div key={entry.id} className="job-dashboard-entry-row">
+                            <div>
+                              <strong>{formatDate(entry.referenceDate)}</strong>
+                              <div>{entry.description || "Caricamento risorsa esterna"}</div>
+                            </div>
+                            <div>{formatDays(entry.days)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))
+                )}
+              </div>
+            </section>
           </>
         ) : null}
       </section>

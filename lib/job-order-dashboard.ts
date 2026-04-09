@@ -43,6 +43,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       _count: {
         select: {
           diaryActivities: true,
+          externalDiaryActivities: true,
         },
       },
       diaryActivities: {
@@ -74,6 +75,17 @@ export async function getJobOrderDashboard(jobOrderId: string) {
                   validTo: true,
                 },
               },
+            },
+          },
+        },
+      },
+      externalDiaryActivities: {
+        orderBy: [{ referenceDate: "desc" }, { createdAt: "desc" }],
+        include: {
+          externalResource: {
+            select: {
+              id: true,
+              name: true,
             },
           },
         },
@@ -121,8 +133,25 @@ export async function getJobOrderDashboard(jobOrderId: string) {
     }
   >();
 
+  const externalResourceMap = new Map<
+    string,
+    {
+      resourceId: string;
+      resourceLabel: string;
+      totalDays: number;
+      entryCount: number;
+      entries: {
+        id: string;
+        referenceDate: string;
+        days: number;
+        description: string;
+      }[];
+    }
+  >();
+
   let actualPersonnelCost = 0;
   let actualEquipmentCost = 0;
+  let totalExternalDays = 0;
 
   for (const activity of jobOrder.diaryActivities) {
     const hours = Number(activity.hours);
@@ -184,6 +213,36 @@ export async function getJobOrderDashboard(jobOrderId: string) {
     }
   }
 
+  for (const activity of jobOrder.externalDiaryActivities) {
+    const days = roundHours(Number(activity.days));
+    totalExternalDays = roundHours(totalExternalDays + days);
+
+    const detailEntry = {
+      id: activity.id,
+      referenceDate: activity.referenceDate.toISOString().slice(0, 10),
+      days,
+      description: activity.activityDescription ?? "",
+    };
+
+    const resourceId = activity.externalResourceId;
+    const resourceLabel = activity.externalResource.name;
+    const current = externalResourceMap.get(resourceId);
+
+    if (current) {
+      current.totalDays = roundHours(current.totalDays + days);
+      current.entryCount += 1;
+      current.entries.push(detailEntry);
+    } else {
+      externalResourceMap.set(resourceId, {
+        resourceId,
+        resourceLabel,
+        totalDays: days,
+        entryCount: 1,
+        entries: [detailEntry],
+      });
+    }
+  }
+
   const budget = {
     personnel: toAmount(jobOrder.budgetPersonnelCost),
     equipment: toAmount(jobOrder.budgetEquipmentCost),
@@ -231,6 +290,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       status: jobOrder.status,
       description: jobOrder.description ?? "",
       activityCount: jobOrder._count.diaryActivities,
+      externalActivityCount: jobOrder._count.externalDiaryActivities,
       createdAt: jobOrder.createdAt.toISOString(),
       updatedAt: jobOrder.updatedAt.toISOString(),
     },
@@ -251,6 +311,13 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       equipmentDetails: [...equipmentMap.values()].sort((a, b) =>
         a.resourceLabel.localeCompare(b.resourceLabel, "it", { sensitivity: "base" })
       ),
+      externalResources: {
+        totalDays: totalExternalDays,
+        totalEntries: jobOrder._count.externalDiaryActivities,
+        details: [...externalResourceMap.values()].sort((a, b) =>
+          a.resourceLabel.localeCompare(b.resourceLabel, "it", { sensitivity: "base" })
+        ),
+      },
       importSources: {
         materials: "Import file dedicato",
         professionalServices: "Import file dedicato",

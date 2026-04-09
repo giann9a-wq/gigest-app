@@ -73,6 +73,8 @@ model User {
   managedAccessRequests AccessRequest[] @relation("ManagedBy")
   createdActivities     DiaryActivity[] @relation("ActivityCreatedBy")
   updatedActivities     DiaryActivity[] @relation("ActivityUpdatedBy")
+  createdExternalActivities ExternalDiaryActivity[] @relation("ExternalActivityCreatedBy")
+  updatedExternalActivities ExternalDiaryActivity[] @relation("ExternalActivityUpdatedBy")
   createdDeadlines      Deadline[]      @relation("DeadlineCreatedBy")
   updatedDeadlines      Deadline[]      @relation("DeadlineUpdatedBy")
   createdMaintenances   Maintenance[]   @relation("MaintenanceCreatedBy")
@@ -228,6 +230,7 @@ model JobOrder {
   updatedAt   DateTime       @updatedAt
 
   diaryActivities DiaryActivity[]
+  externalDiaryActivities ExternalDiaryActivity[]
 }
 
 model DiaryActivity {
@@ -254,6 +257,37 @@ model DiaryActivity {
   @@index([jobOrderId])
   @@index([personId])
   @@index([equipmentId])
+}
+
+model ExternalResource {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  diaryActivities ExternalDiaryActivity[]
+}
+
+model ExternalDiaryActivity {
+  id                  String   @id @default(cuid())
+  referenceDate       DateTime
+  externalResourceId  String
+  jobOrderId          String
+  days                Decimal  @db.Decimal(4, 1)
+  activityDescription String?
+  createdByUserId     String?
+  updatedByUserId     String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  externalResource ExternalResource @relation(fields: [externalResourceId], references: [id], onDelete: Cascade)
+  jobOrder          JobOrder         @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  createdBy         User?            @relation("ExternalActivityCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy         User?            @relation("ExternalActivityUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  @@index([referenceDate])
+  @@index([jobOrderId])
+  @@index([externalResourceId])
 }
 
 model Deadline {

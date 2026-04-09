@@ -9,19 +9,42 @@ function getUtcDayRange(dateString: string) {
   return { start, end };
 }
 
-type BatchRowInput = {
+type InternalBatchRowInput = {
   resourceValue: string;
   jobOrderId: string;
   hours: number | string;
   activityDescription?: string;
 };
 
-export async function GET(request: NextRequest) {
+type ExternalBatchRowInput = {
+  externalResourceId: string;
+  jobOrderId: string;
+  days: number | string;
+  activityDescription?: string;
+};
+
+async function getAuthorizedUser() {
   const session = await auth();
 
   if (!session?.user?.email) {
-    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    return { error: NextResponse.json({ error: "Non autorizzato" }, { status: 401 }) };
   }
+
+  const appUser = await prisma.user.findUnique({
+    where: { email: session.user.email.toLowerCase() },
+    select: { id: true, status: true },
+  });
+
+  if (!appUser || appUser.status !== UserStatus.ACTIVE) {
+    return { error: NextResponse.json({ error: "Utente non autorizzato" }, { status: 403 }) };
+  }
+
+  return { appUser };
+}
+
+export async function GET(request: NextRequest) {
+  const authResult = await getAuthorizedUser();
+  if (authResult.error) return authResult.error;
 
   const date = request.nextUrl.searchParams.get("date");
 
@@ -31,42 +54,66 @@ export async function GET(request: NextRequest) {
 
   const { start, end } = getUtcDayRange(date);
 
-  const activities = await prisma.diaryActivity.findMany({
-    where: {
-      referenceDate: {
-        gte: start,
-        lte: end,
-      },
-    },
-    orderBy: { createdAt: "asc" },
-    include: {
-      person: {
-        select: {
-          fullName: true,
+  const [activities, externalActivities] = await Promise.all([
+    prisma.diaryActivity.findMany({
+      where: {
+        referenceDate: {
+          gte: start,
+          lte: end,
         },
       },
-      equipment: {
-        select: {
-          nameDescription: true,
+      orderBy: { createdAt: "asc" },
+      include: {
+        person: {
+          select: {
+            fullName: true,
+          },
+        },
+        equipment: {
+          select: {
+            nameDescription: true,
+          },
+        },
+        jobOrder: {
+          select: {
+            name: true,
+            type: true,
+          },
         },
       },
-      jobOrder: {
-        select: {
-          name: true,
-          type: true,
+    }),
+    prisma.externalDiaryActivity.findMany({
+      where: {
+        referenceDate: {
+          gte: start,
+          lte: end,
         },
       },
-    },
-  });
+      orderBy: { createdAt: "asc" },
+      include: {
+        externalResource: {
+          select: {
+            name: true,
+          },
+        },
+        jobOrder: {
+          select: {
+            name: true,
+            type: true,
+          },
+        },
+      },
+    }),
+  ]);
 
-  const rows = activities.map((activity) => ({
+  const internalRows = activities.map((activity) => ({
     id: activity.id,
     resourceValue:
       activity.resourceType === "PERSON" && activity.personId
         ? `PERSON:${activity.personId}`
         : activity.resourceType === "EQUIPMENT" && activity.equipmentId
-        ? `EQUIPMENT:${activity.equipmentId}`
-        : "",
+          ? `EQUIPMENT:${activity.equipmentId}`
+          : "",
     resourceLabel:
       activity.resourceType === "PERSON"
         ? activity.person?.fullName ?? "-"
@@ -77,58 +124,69 @@ export async function GET(request: NextRequest) {
     activityDescription: activity.activityDescription ?? "",
   }));
 
-  return NextResponse.json({ rows });
+  const externalRows = externalActivities.map((activity) => ({
+    id: activity.id,
+    externalResourceId: activity.externalResourceId,
+    externalResourceLabel: activity.externalResource.name,
+    jobOrderId: activity.jobOrderId,
+    jobOrderLabel: activity.jobOrder.name,
+    days: Number(activity.days),
+    activityDescription: activity.activityDescription ?? "",
+  }));
+
+  return NextResponse.json({ internalRows, externalRows });
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
+  const authResult = await getAuthorizedUser();
+  if (authResult.error) return authResult.error;
 
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  }
-
-  const appUser = await prisma.user.findUnique({
-    where: { email: session.user.email.toLowerCase() },
-    select: { id: true, status: true },
-  });
-
-  if (!appUser || appUser.status !== UserStatus.ACTIVE) {
-    return NextResponse.json({ error: "Utente non autorizzato" }, { status: 403 });
-  }
-
+  const { appUser } = authResult;
   const body = await request.json();
 
   const {
     referenceDate,
-    rows,
+    internalRows,
+    externalRows,
   }: {
     referenceDate?: string;
-    rows?: BatchRowInput[];
+    internalRows?: InternalBatchRowInput[];
+    externalRows?: ExternalBatchRowInput[];
   } = body;
 
   if (!referenceDate) {
-    return NextResponse.json({ error: "La data è obbligatoria" }, { status: 400 });
+    return NextResponse.json({ error: "La data e obbligatoria" }, { status: 400 });
   }
 
-  if (!Array.isArray(rows)) {
-    return NextResponse.json({ error: "Le righe devono essere un array" }, { status: 400 });
+  if (!Array.isArray(internalRows) || !Array.isArray(externalRows)) {
+    return NextResponse.json(
+      { error: "Le righe interne ed esterne devono essere array" },
+      { status: 400 }
+    );
   }
 
-  const cleanedRows = rows
+  const cleanedInternalRows = internalRows
     .map((row) => ({
       resourceValue: row.resourceValue?.trim() ?? "",
       jobOrderId: row.jobOrderId?.trim() ?? "",
       hours: row.hours,
       activityDescription: row.activityDescription?.trim() ?? "",
     }))
-    .filter((row) => {
-      return row.resourceValue || row.jobOrderId || row.hours || row.activityDescription;
-    });
+    .filter((row) => row.resourceValue || row.jobOrderId || row.hours || row.activityDescription);
 
-  for (const row of cleanedRows) {
+  const cleanedExternalRows = externalRows
+    .map((row) => ({
+      externalResourceId: row.externalResourceId?.trim() ?? "",
+      jobOrderId: row.jobOrderId?.trim() ?? "",
+      days: row.days,
+      activityDescription: row.activityDescription?.trim() ?? "",
+    }))
+    .filter((row) => row.externalResourceId || row.jobOrderId || row.days || row.activityDescription);
+
+  for (const row of cleanedInternalRows) {
     if (!row.resourceValue || !row.jobOrderId || row.hours === undefined || row.hours === null || row.hours === "") {
       return NextResponse.json(
-        { error: "Ogni riga compilata deve avere risorsa, commessa e ore" },
+        { error: "Ogni riga interna compilata deve avere risorsa, commessa e ore" },
         { status: 400 }
       );
     }
@@ -136,36 +194,81 @@ export async function POST(request: NextRequest) {
     const parsedHours = Number(row.hours);
     if (Number.isNaN(parsedHours) || parsedHours <= 0) {
       return NextResponse.json(
-        { error: "Le ore devono essere maggiori di zero" },
+        { error: "Le ore delle risorse interne devono essere maggiori di zero" },
         { status: 400 }
       );
     }
 
     const [resourceTypeRaw, resourceId] = row.resourceValue.split(":");
     if (!resourceTypeRaw || !resourceId) {
-      return NextResponse.json({ error: "Formato risorsa non valido" }, { status: 400 });
+      return NextResponse.json({ error: "Formato risorsa interna non valido" }, { status: 400 });
     }
 
     if (resourceTypeRaw !== "PERSON" && resourceTypeRaw !== "EQUIPMENT") {
-      return NextResponse.json({ error: "Tipo risorsa non valido" }, { status: 400 });
+      return NextResponse.json({ error: "Tipo risorsa interna non valido" }, { status: 400 });
+    }
+  }
+
+  for (const row of cleanedExternalRows) {
+    if (!row.externalResourceId || !row.jobOrderId || row.days === undefined || row.days === null || row.days === "") {
+      return NextResponse.json(
+        { error: "Ogni riga esterna compilata deve avere risorsa, commessa e giornate" },
+        { status: 400 }
+      );
+    }
+
+    const parsedDays = Number(row.days);
+    if (Number.isNaN(parsedDays) || parsedDays <= 0) {
+      return NextResponse.json(
+        { error: "Le giornate delle risorse esterne devono essere maggiori di zero" },
+        { status: 400 }
+      );
+    }
+  }
+
+  const externalResourceIds = [...new Set(cleanedExternalRows.map((row) => row.externalResourceId))];
+  if (externalResourceIds.length > 0) {
+    const existingResources = await prisma.externalResource.findMany({
+      where: { id: { in: externalResourceIds } },
+      select: { id: true },
+    });
+
+    if (existingResources.length !== externalResourceIds.length) {
+      return NextResponse.json({ error: "Alcune risorse esterne selezionate non esistono" }, { status: 400 });
     }
   }
 
   const { start, end } = getUtcDayRange(referenceDate);
+  const referenceDateValue = new Date(`${referenceDate}T00:00:00.000Z`);
 
-  const createData: Prisma.DiaryActivityCreateManyInput[] = cleanedRows.map((row) => {
+  const internalCreateData: Prisma.DiaryActivityCreateManyInput[] = cleanedInternalRows.map((row) => {
     const parsedHours = Number(row.hours);
     const roundedHours = Math.round(parsedHours * 10) / 10;
     const [resourceTypeRaw, resourceId] = row.resourceValue.split(":");
     const resourceType = resourceTypeRaw as ResourceType;
 
     return {
-      referenceDate: new Date(`${referenceDate}T00:00:00.000Z`),
+      referenceDate: referenceDateValue,
       resourceType,
       personId: resourceType === "PERSON" ? resourceId : null,
       equipmentId: resourceType === "EQUIPMENT" ? resourceId : null,
       jobOrderId: row.jobOrderId,
       hours: new Prisma.Decimal(roundedHours),
+      activityDescription: row.activityDescription || null,
+      createdByUserId: appUser.id,
+      updatedByUserId: appUser.id,
+    };
+  });
+
+  const externalCreateData: Prisma.ExternalDiaryActivityCreateManyInput[] = cleanedExternalRows.map((row) => {
+    const parsedDays = Number(row.days);
+    const roundedDays = Math.round(parsedDays * 10) / 10;
+
+    return {
+      referenceDate: referenceDateValue,
+      externalResourceId: row.externalResourceId,
+      jobOrderId: row.jobOrderId,
+      days: new Prisma.Decimal(roundedDays),
       activityDescription: row.activityDescription || null,
       createdByUserId: appUser.id,
       updatedByUserId: appUser.id,
@@ -182,15 +285,31 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (createData.length > 0) {
+    await tx.externalDiaryActivity.deleteMany({
+      where: {
+        referenceDate: {
+          gte: start,
+          lte: end,
+        },
+      },
+    });
+
+    if (internalCreateData.length > 0) {
       await tx.diaryActivity.createMany({
-        data: createData,
+        data: internalCreateData,
+      });
+    }
+
+    if (externalCreateData.length > 0) {
+      await tx.externalDiaryActivity.createMany({
+        data: externalCreateData,
       });
     }
   });
 
   return NextResponse.json({
     success: true,
-    savedRows: createData.length,
+    savedInternalRows: internalCreateData.length,
+    savedExternalRows: externalCreateData.length,
   });
 }
