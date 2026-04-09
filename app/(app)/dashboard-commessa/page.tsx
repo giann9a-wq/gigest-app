@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { JobOrderTabs } from "@/components/layout/job-order-tabs";
 import { formatCurrency, formatPercent, formatQuantity } from "@/lib/number-format";
 
 type JobTypeValue = "SITE" | "TRAINING" | "LEAVE" | "SICKNESS" | "OTHER";
@@ -223,7 +224,7 @@ export default function DashboardCommessaPage() {
         <div className="job-dashboard-topbar">
           <div>
             <p className="job-dashboard-kicker">GiGEST</p>
-            <h1 className="job-dashboard-title">Dashboard Commessa</h1>
+            <h1 className="job-dashboard-title">Gestione Commesse</h1>
           </div>
           {selectedJobOrderId ? (
             <div className="job-dashboard-actions">
@@ -233,6 +234,8 @@ export default function DashboardCommessaPage() {
             </div>
           ) : null}
         </div>
+
+        <JobOrderTabs current="dashboard" />
 
         <div className="job-dashboard-selector-card">
           <label className="job-sheet-field job-sheet-field-wide">

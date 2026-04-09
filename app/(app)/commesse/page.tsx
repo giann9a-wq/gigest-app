@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { JobOrderTabs } from "@/components/layout/job-order-tabs";
 
 type JobTypeValue = "SITE" | "TRAINING" | "LEAVE" | "SICKNESS" | "OTHER";
 type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
@@ -270,13 +271,15 @@ export default function CommessePage() {
       <div className="card">
         <div className="mobile-section-header">
           <div>
-            <h1 className="mobile-section-title">Commesse</h1>
+            <h1 className="mobile-section-title">Gestione Commesse</h1>
             <p className="mobile-section-subtitle">
               Qui gestisci l'anagrafica delle commesse. I dati economici restano dentro la
               scheda commessa e nella sezione dedicata Dashboard Commessa.
             </p>
           </div>
         </div>
+
+        <JobOrderTabs current="list" />
 
         {message ? <div style={{ color: "#166534", fontWeight: 700, marginBottom: 16 }}>{message}</div> : null}
         {error ? <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 16 }}>{error}</div> : null}

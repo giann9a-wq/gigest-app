@@ -38,14 +38,10 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
 
   const navItems: NavItem[] = [
     { href: "/dashboard" as Route, label: "Dashboard" },
-    { href: "/diario" as Route, label: "Diario" },
-    { href: "/risorse" as Route, label: "Risorse" },
-    { href: "/mezzi" as Route, label: "Mezzi" },
-    { href: "/commesse" as Route, label: "Commesse" },
+    { href: "/diario" as Route, label: "Diario di cantiere" },
+    { href: "/commesse" as Route, label: "Gestione Commesse" },
     { href: "/scadenziario" as Route, label: "Scadenziario" },
     { href: "/stampa-risorse-mese" as Route, label: "Stampa Risorse" },
-    { href: "/statistiche-risorse-commesse" as Route, label: "Statistiche" },
-    { href: "/dashboard-commessa" as Route, label: "Dashboard Commessa" },
     ...(showAdminLink ? [{ href: "/admin/accessi" as Route, label: "Admin" }] : []),
   ];
 

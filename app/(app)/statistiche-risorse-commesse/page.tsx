@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { JobOrderTabs } from "@/components/layout/job-order-tabs";
 import { formatCurrency, formatNumber } from "@/lib/number-format";
 
 type StatisticsRow = {
@@ -267,7 +268,16 @@ export default function StatisticheRisorseCommessePage() {
   return (
     <div className="grid gap-4">
       <div className="card">
-        <h1 style={{ marginTop: 0 }}>Statistiche per Risorsa / Commessa</h1>
+        <div className="mobile-section-header">
+          <div>
+            <h1 className="mobile-section-title">Gestione Commesse</h1>
+            <p className="mobile-section-subtitle">
+              Estrazione statistiche trasversali per risorsa e commessa.
+            </p>
+          </div>
+        </div>
+
+        <JobOrderTabs current="statistics" />
 
         <div className="stats-filter-bar">
           <MultiSelectDropdown

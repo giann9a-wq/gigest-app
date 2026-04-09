@@ -1686,6 +1686,39 @@ a {
   min-width: 980px;
 }
 
+.job-order-tabs {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.job-order-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.78rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(240, 176, 137, 0.55);
+  background: rgba(255, 255, 255, 0.86);
+  color: #7c2d12;
+  font-weight: 800;
+  transition: 0.18s ease;
+}
+
+.job-order-tab:hover {
+  background: var(--brand-soft);
+  border-color: var(--border-strong);
+}
+
+.job-order-tab-active {
+  background: linear-gradient(180deg, #fff3ea 0%, #fffaf6 100%);
+  border-color: #eb5b19;
+  color: #9a3412;
+  box-shadow: 0 10px 24px rgba(235, 91, 25, 0.12);
+}
+
 .job-dashboard-import-note,
 .job-dashboard-error,
 .job-dashboard-success {
