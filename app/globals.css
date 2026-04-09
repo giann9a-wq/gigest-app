@@ -465,12 +465,20 @@ a {
 }
 
 .cost-import-table {
-  min-width: 1180px;
+  min-width: 1940px;
+  table-layout: fixed;
 }
 
 .scad-table-wrap {
   overflow-x: auto;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.35rem;
+}
+
+.cost-import-table td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .cost-import-badge {

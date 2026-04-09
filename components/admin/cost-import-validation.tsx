@@ -313,6 +313,18 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
 
         <div className="scad-table-wrap">
           <table className="scad-table cost-import-table">
+            <colgroup>
+              <col style={{ width: "72px" }} />
+              <col style={{ width: "180px" }} />
+              <col style={{ width: "320px" }} />
+              <col style={{ width: "280px" }} />
+              <col style={{ width: "140px" }} />
+              <col style={{ width: "180px" }} />
+              <col style={{ width: "260px" }} />
+              <col style={{ width: "150px" }} />
+              <col style={{ width: "210px" }} />
+              <col style={{ width: "150px" }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>Sel.</th>
