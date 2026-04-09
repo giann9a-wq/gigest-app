@@ -8,7 +8,11 @@ import {
   hasElevatedAdminPanelAccess,
   requireAdminUser,
 } from "@/lib/admin-panel";
-import { listRecentCostImportSessions } from "@/lib/cost-actual-import";
+import {
+  getCostImportSchemaMissingMessage,
+  isCostImportSchemaMissingError,
+  listRecentCostImportSessions,
+} from "@/lib/cost-actual-import";
 import { prisma } from "@/lib/prisma";
 import { lockAdminPanelAction, unlockAdminPanelAction } from "../accessi/actions";
 
@@ -21,21 +25,32 @@ export default async function AdminImportCostiPage() {
 
   const credential = await ensureAdminPanelCredential();
   const hasElevatedAccess = await hasElevatedAdminPanelAccess(adminUser.id);
-  const [jobOrders, recentSessions] = hasElevatedAccess
-    ? await Promise.all([
-        prisma.jobOrder.findMany({
-          where: { status: "ACTIVE" },
-          orderBy: { name: "asc" },
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            status: true,
-          },
-        }),
-        listRecentCostImportSessions(),
-      ])
-    : [[], []];
+  let jobOrders: Array<{ id: string; name: string; type: string; status: string }> = [];
+  let recentSessions: Awaited<ReturnType<typeof listRecentCostImportSessions>> = [];
+  let schemaWarning = "";
+
+  if (hasElevatedAccess) {
+    jobOrders = await prisma.jobOrder.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        status: true,
+      },
+    });
+
+    try {
+      recentSessions = await listRecentCostImportSessions();
+    } catch (error) {
+      if (isCostImportSchemaMissingError(error)) {
+        schemaWarning = getCostImportSchemaMissingMessage();
+      } else {
+        throw error;
+      }
+    }
+  }
 
   return (
     <div className="admin-page">
@@ -92,6 +107,7 @@ export default async function AdminImportCostiPage() {
         ) : (
           <>
             <AdminFunctionsNav current="import-costi" />
+            {schemaWarning ? <div className="admin-note">{schemaWarning}</div> : null}
             <CostImportPanel jobOrders={jobOrders} recentSessions={recentSessions} />
           </>
         )}

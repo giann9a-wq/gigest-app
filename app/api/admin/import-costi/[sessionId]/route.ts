@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireElevatedAdminUser } from "@/lib/admin-panel";
-import { getCostImportSessionDetails } from "@/lib/cost-actual-import";
+import {
+  getCostImportSchemaMissingMessage,
+  getCostImportSessionDetails,
+  isCostImportSchemaMissingError,
+} from "@/lib/cost-actual-import";
 
 export async function GET(
   _request: NextRequest,
@@ -13,11 +17,19 @@ export async function GET(
   }
 
   const { sessionId } = await context.params;
-  const session = await getCostImportSessionDetails(sessionId);
+  try {
+    const session = await getCostImportSessionDetails(sessionId);
 
-  if (!session) {
-    return NextResponse.json({ error: "Sessione import non trovata" }, { status: 404 });
+    if (!session) {
+      return NextResponse.json({ error: "Sessione import non trovata" }, { status: 404 });
+    }
+
+    return NextResponse.json(session);
+  } catch (error) {
+    if (isCostImportSchemaMissingError(error)) {
+      return NextResponse.json({ error: getCostImportSchemaMissingMessage() }, { status: 503 });
+    }
+
+    return NextResponse.json({ error: "Errore leggendo la sessione import" }, { status: 500 });
   }
-
-  return NextResponse.json(session);
 }

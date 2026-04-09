@@ -59,12 +59,36 @@ type ParsedWorkbookResult = {
 };
 
 type ImportSessionDetails = Awaited<ReturnType<typeof getCostImportSessionDetails>>;
+type PrismaKnownError = {
+  code?: string;
+  message?: string;
+};
 
 const HEADER_PREFIXES = ["PARTITARI", "Agenzia:", "Data esportazione:"];
 const ACCOUNT_CODE_REGEX = /^303\.\d{2}\.\d{5}\s*-\s*(.+)$/i;
 const SUPPLIER_CODE_REGEX = /^(212\.\d{5})\s*-\s*(.+)$/i;
 const GENERIC_ACCOUNT_REGEX = /^(\d{3}\.\d{2}\.\d{5})\s*-\s*(.+)$/i;
 const ITALIAN_DATE_REGEX = /^\d{2}\/\d{2}\/\d{4}$/;
+
+export function isCostImportSchemaMissingError(error: unknown) {
+  const candidate = error as PrismaKnownError | undefined;
+  const message = candidate?.message ?? "";
+
+  return (
+    candidate?.code === "P2021" ||
+    candidate?.code === "P2022" ||
+    message.includes('relation "CostImportSession" does not exist') ||
+    message.includes('relation "CostImportRowStaging" does not exist') ||
+    message.includes('relation "CostActualEntry" does not exist') ||
+    message.includes('The table `public.CostImportSession` does not exist') ||
+    message.includes('The table `public.CostImportRowStaging` does not exist') ||
+    message.includes('The table `public.CostActualEntry` does not exist')
+  );
+}
+
+export function getCostImportSchemaMissingMessage() {
+  return "Il database dell'ambiente non ha ancora la migration dei costi actual. Esegui `prisma migrate deploy` prima di usare questa sezione.";
+}
 
 function normalizeText(value: string | null | undefined) {
   if (!value) return "";

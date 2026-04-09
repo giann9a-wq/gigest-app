@@ -8,7 +8,11 @@ import {
   hasElevatedAdminPanelAccess,
   requireAdminUser,
 } from "@/lib/admin-panel";
-import { getCostImportSessionDetails } from "@/lib/cost-actual-import";
+import {
+  getCostImportSchemaMissingMessage,
+  getCostImportSessionDetails,
+  isCostImportSchemaMissingError,
+} from "@/lib/cost-actual-import";
 import { lockAdminPanelAction, unlockAdminPanelAction } from "../../accessi/actions";
 
 export default async function AdminImportCostiSessionPage({
@@ -66,7 +70,39 @@ export default async function AdminImportCostiSessionPage({
     );
   }
 
-  const session = await getCostImportSessionDetails(sessionId);
+  let session = null;
+  let schemaWarning = "";
+
+  try {
+    session = await getCostImportSessionDetails(sessionId);
+  } catch (error) {
+    if (isCostImportSchemaMissingError(error)) {
+      schemaWarning = getCostImportSchemaMissingMessage();
+    } else {
+      throw error;
+    }
+  }
+
+  if (schemaWarning) {
+    return (
+      <div className="admin-page">
+        <section className="card">
+          <div className="mobile-section-header">
+            <div>
+              <p className="dashboard-kicker">Area Riservata</p>
+              <h1 className="mobile-section-title">Validazione import costi</h1>
+              <p className="mobile-section-subtitle">{schemaWarning}</p>
+            </div>
+            <div className="admin-request-actions">
+              <Link href={"/admin/import-costi" as Route} className="mobile-button-secondary">
+                Torna all&apos;upload
+              </Link>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   if (!session) {
     notFound();

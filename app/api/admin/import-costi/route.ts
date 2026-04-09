@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireElevatedAdminUser } from "@/lib/admin-panel";
-import { createCostImportSession, listRecentCostImportSessions } from "@/lib/cost-actual-import";
+import {
+  createCostImportSession,
+  getCostImportSchemaMissingMessage,
+  isCostImportSchemaMissingError,
+  listRecentCostImportSessions,
+} from "@/lib/cost-actual-import";
 
 export async function GET() {
   const adminUser = await requireElevatedAdminUser();
@@ -9,8 +14,16 @@ export async function GET() {
     return NextResponse.json({ error: "Accesso admin elevato richiesto" }, { status: 403 });
   }
 
-  const sessions = await listRecentCostImportSessions();
-  return NextResponse.json({ sessions });
+  try {
+    const sessions = await listRecentCostImportSessions();
+    return NextResponse.json({ sessions });
+  } catch (error) {
+    if (isCostImportSchemaMissingError(error)) {
+      return NextResponse.json({ error: getCostImportSchemaMissingMessage() }, { status: 503 });
+    }
+
+    return NextResponse.json({ error: "Errore leggendo le sessioni import costi" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -51,6 +64,10 @@ export async function POST(request: NextRequest) {
       summary: result.summary,
     });
   } catch (error) {
+    if (isCostImportSchemaMissingError(error)) {
+      return NextResponse.json({ error: getCostImportSchemaMissingMessage() }, { status: 503 });
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Errore durante l'import del file" },
       { status: 500 }
