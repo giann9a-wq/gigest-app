@@ -1,14 +1,18 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { redirect } from "next/navigation";
+import { InvoiceImportPanel } from "@/components/admin/invoice-import-panel";
+import { AdminFunctionsNav } from "@/components/layout/admin-functions-nav";
 import {
   ensureAdminPanelCredential,
   hasElevatedAdminPanelAccess,
   requireAdminUser,
 } from "@/lib/admin-panel";
-import { prisma } from "@/lib/prisma";
-import { JobOrderImportPlaceholder } from "@/components/admin/job-order-import-placeholder";
-import { AdminFunctionsNav } from "@/components/layout/admin-functions-nav";
+import {
+  getInvoiceImportSchemaMissingMessage,
+  isInvoiceImportSchemaMissingError,
+  listRecentInvoiceImportSessions,
+} from "@/lib/invoice-import";
 import { lockAdminPanelAction, unlockAdminPanelAction } from "../accessi/actions";
 
 export default async function AdminImportFatturePage() {
@@ -20,18 +24,20 @@ export default async function AdminImportFatturePage() {
 
   const credential = await ensureAdminPanelCredential();
   const hasElevatedAccess = await hasElevatedAdminPanelAccess(adminUser.id);
-  const jobOrders = hasElevatedAccess
-    ? await prisma.jobOrder.findMany({
-        where: { status: "ACTIVE" },
-        orderBy: { name: "asc" },
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          status: true,
-        },
-      })
-    : [];
+  let recentSessions: Awaited<ReturnType<typeof listRecentInvoiceImportSessions>> = [];
+  let schemaWarning = "";
+
+  if (hasElevatedAccess) {
+    try {
+      recentSessions = await listRecentInvoiceImportSessions();
+    } catch (error) {
+      if (isInvoiceImportSchemaMissingError(error)) {
+        schemaWarning = getInvoiceImportSchemaMissingMessage();
+      } else {
+        throw error;
+      }
+    }
+  }
 
   return (
     <div className="admin-page">
@@ -41,7 +47,7 @@ export default async function AdminImportFatturePage() {
             <p className="dashboard-kicker">Area Riservata</p>
             <h1 className="mobile-section-title">Importa fatture</h1>
             <p className="mobile-section-subtitle">
-              Seleziona la commessa su cui agganciare il futuro import del fatturato actual.
+              Carica il partitario fatture `.xls`, valida lo staging globale e collega manualmente ogni fattura alla commessa corretta prima della conferma.
             </p>
           </div>
           <div className="admin-request-actions">
@@ -69,7 +75,7 @@ export default async function AdminImportFatturePage() {
             <div className="card admin-password-form">
               <strong>Sblocco area import</strong>
               <p className="muted" style={{ margin: 0 }}>
-                L&apos;import fatture è disponibile solo dopo sblocco dell&apos;area admin con la password aggiuntiva.
+                L&apos;import fatture e disponibile solo dopo sblocco dell&apos;area admin con la password aggiuntiva.
               </p>
               <form action={unlockAdminPanelAction} className="admin-password-form">
                 <input
@@ -88,12 +94,8 @@ export default async function AdminImportFatturePage() {
         ) : (
           <>
             <AdminFunctionsNav current="import-fatture" />
-            <JobOrderImportPlaceholder
-              title="Import fatturato actual"
-              description="Questa funzione conterrà il caricamento delle fatture su una specifica commessa."
-              ctaLabel="Importa fatture"
-              jobOrders={jobOrders}
-            />
+            {schemaWarning ? <div className="admin-note">{schemaWarning}</div> : null}
+            <InvoiceImportPanel recentSessions={recentSessions} />
           </>
         )}
       </section>

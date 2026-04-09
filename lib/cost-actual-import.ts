@@ -527,6 +527,9 @@ export async function createCostImportSession(input: {
     throw new Error("Commessa non trovata.");
   }
 
+  const fileHash = createHash("sha256").update(input.buffer).digest("hex");
+  const fileSizeBytes = input.buffer.byteLength;
+
   const parsed = parsePartitarioXls(input.buffer, input.jobOrderId);
   const classification = await classifyParsedRows(input.jobOrderId, parsed.rows);
 
@@ -540,6 +543,9 @@ export async function createCostImportSession(input: {
       data: {
         jobOrderId: input.jobOrderId,
         fileName: input.fileName,
+        fileHash,
+        fileSizeBytes,
+        storagePath: null,
         sourceType: CostImportSourceType.PARTITARIO_XLS,
         uploadedById: input.uploadedById ?? null,
         status: CostImportSessionStatus.PARSED,

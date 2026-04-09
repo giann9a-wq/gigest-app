@@ -89,6 +89,35 @@ enum CostActualCategory {
   SPESE_VARIE
 }
 
+enum InvoiceImportSourceType {
+  PARTITARIO_XLS
+}
+
+enum InvoiceImportSessionStatus {
+  PARSED
+  VALIDATED
+  APPLIED
+  FAILED
+}
+
+enum InvoiceImportMatchStatus {
+  NEW
+  ALREADY_IMPORTED
+  POSSIBLE_DUPLICATE
+  INVALID
+}
+
+enum InvoiceImportValidationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum InvoiceImportAssignmentSource {
+  SUGGESTED
+  MANUAL
+}
+
 model User {
   id            String           @id @default(cuid())
   googleSub     String?          @unique
@@ -112,6 +141,7 @@ model User {
   connectedCalendars    CalendarIntegration[] @relation("CalendarIntegrationConnectedBy")
   adminPanelSessions    AdminPanelSession[]
   uploadedCostImportSessions CostImportSession[] @relation("CostImportSessionUploadedBy")
+  uploadedInvoiceImportSessions InvoiceImportSession[] @relation("InvoiceImportSessionUploadedBy")
 
   accounts      Account[]
   sessions      Session[]
@@ -266,12 +296,18 @@ model JobOrder {
   costImportSessions CostImportSession[]
   costImportRows CostImportRowStaging[]
   costActualEntries CostActualEntry[]
+  invoiceImportRows InvoiceImportRowStaging[]
+  issuedInvoiceActuals IssuedInvoiceActual[]
+  suggestedInvoiceImportRows InvoiceImportRowStaging[] @relation("InvoiceImportRowSuggestedJobOrder")
 }
 
 model CostImportSession {
   id             String                  @id @default(cuid())
   jobOrderId     String
   fileName       String
+  fileHash       String?
+  fileSizeBytes  Int?
+  storagePath    String?
   sourceType     CostImportSourceType
   uploadedById   String?
   uploadedAt     DateTime                @default(now())
@@ -287,6 +323,7 @@ model CostImportSession {
   costActualEntries CostActualEntry[]
 
   @@index([jobOrderId, uploadedAt])
+  @@index([fileHash])
   @@index([status, uploadedAt])
 }
 
@@ -352,6 +389,98 @@ model CostActualEntry {
 
   @@index([jobOrderId, category])
   @@unique([jobOrderId, fingerprint])
+}
+
+model InvoiceImportSession {
+  id             String                     @id @default(cuid())
+  fileName       String
+  fileHash       String?
+  fileSizeBytes  Int?
+  storagePath    String?
+  sourceType     InvoiceImportSourceType
+  uploadedById   String?
+  uploadedAt     DateTime                   @default(now())
+  status         InvoiceImportSessionStatus @default(PARSED)
+  parseSummary   Json?
+  appliedAt      DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  uploadedBy     User?                      @relation("InvoiceImportSessionUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  rows           InvoiceImportRowStaging[]
+  issuedInvoices IssuedInvoiceActual[]
+
+  @@index([fileHash])
+  @@index([status, uploadedAt])
+}
+
+model InvoiceImportRowStaging {
+  id                       String                        @id @default(cuid())
+  importSessionId          String
+  rowIndexStart            Int
+  rowIndexEnd              Int
+  sourceAccountCode        String?
+  sourceAccountDescription String?
+  registrationDate         DateTime?
+  registrationProtocol     String?
+  causale                  String?
+  documentDate             DateTime?
+  invoiceNumber            String?
+  customerCode             String?
+  customerName             String?
+  netAmount                Decimal?                      @db.Decimal(12, 2)
+  vatAmount                Decimal?                      @db.Decimal(12, 2)
+  grossAmount              Decimal?                      @db.Decimal(12, 2)
+  extraLinesJson           Json?
+  rawDataJson              Json
+  fingerprint              String?
+  fingerprintSource        String?
+  matchStatus              InvoiceImportMatchStatus      @default(NEW)
+  validationStatus         InvoiceImportValidationStatus @default(PENDING)
+  jobOrderId               String?
+  suggestedJobOrderId      String?
+  suggestedJobOrderReason  String?
+  assignmentSource         InvoiceImportAssignmentSource?
+  validationNote           String?
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+
+  importSession            InvoiceImportSession          @relation(fields: [importSessionId], references: [id], onDelete: Cascade)
+  jobOrder                 JobOrder?                     @relation(fields: [jobOrderId], references: [id], onDelete: SetNull)
+  suggestedJobOrder        JobOrder?                     @relation("InvoiceImportRowSuggestedJobOrder", fields: [suggestedJobOrderId], references: [id], onDelete: SetNull)
+  issuedInvoices           IssuedInvoiceActual[]
+
+  @@index([importSessionId, validationStatus])
+  @@index([jobOrderId, matchStatus])
+  @@index([fingerprint])
+}
+
+model IssuedInvoiceActual {
+  id                       String               @id @default(cuid())
+  jobOrderId               String
+  sourceImportSessionId    String?
+  sourceImportRowId        String?
+  sourceAccountCode        String?
+  sourceAccountDescription String?
+  registrationDate         DateTime?
+  registrationProtocol     String?
+  documentDate             DateTime?
+  invoiceNumber            String?
+  customerCode             String?
+  customerName             String?
+  netAmount                Decimal              @db.Decimal(12, 2)
+  vatAmount                Decimal?             @db.Decimal(12, 2)
+  grossAmount              Decimal?             @db.Decimal(12, 2)
+  fingerprint              String               @unique
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+
+  jobOrder                 JobOrder             @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  sourceImportSession      InvoiceImportSession? @relation(fields: [sourceImportSessionId], references: [id], onDelete: SetNull)
+  sourceImportRow          InvoiceImportRowStaging? @relation(fields: [sourceImportRowId], references: [id], onDelete: SetNull)
+
+  @@index([jobOrderId, documentDate])
+  @@index([jobOrderId, customerName])
 }
 
 model DiaryActivity {

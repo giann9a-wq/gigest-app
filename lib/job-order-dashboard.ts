@@ -471,7 +471,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         professionalServices: "Import costi actual",
         thirdPartyServices: "Import costi actual",
         misc: "Import costi actual",
-        revenue: "Import file dedicato",
+        revenue: "Import fatture emesse",
       },
       costCategories: await getCostActualCategoryViews(jobOrder.id),
     },
