@@ -328,6 +328,38 @@ function buildSourceRowFingerprintInput(input: {
   };
 }
 
+function buildApprovedFallbackFingerprint(input: {
+  jobOrderId: string;
+  sourceRowFingerprint: string | null;
+  rowId: string;
+  sourceAccountCode: string | null;
+  supplierCode: string | null;
+  supplierName: string | null;
+  documentDate: Date | null;
+  registrationDate: Date | null;
+  documentNumber: string | null;
+  amount: number | null;
+}) {
+  const source = [
+    "MANUAL_OVERRIDE",
+    input.jobOrderId,
+    input.sourceRowFingerprint ?? "",
+    input.rowId,
+    input.sourceAccountCode ?? "",
+    input.supplierCode ?? "",
+    normalizeText(input.supplierName),
+    input.documentDate?.toISOString().slice(0, 10) ?? "",
+    input.registrationDate?.toISOString().slice(0, 10) ?? "",
+    normalizeText(input.documentNumber),
+    input.amount == null ? "" : input.amount.toFixed(2),
+  ].join("|");
+
+  return {
+    fingerprint: createHash("sha256").update(source).digest("hex"),
+    fingerprintSource: source,
+  };
+}
+
 function extractAccountContext(row: string[]) {
   const cell = cleanCell(row[0]);
   const match = cell.match(ACCOUNT_CODE_REGEX);
@@ -1200,18 +1232,48 @@ export async function applyApprovedCostImportRows(sessionId: string) {
 
   await prisma.$transaction(async (tx) => {
     for (const row of session.rows) {
-      if (!row.fingerprint || !row.finalCategory || row.amount == null) {
+      if (!row.finalCategory || row.amount == null) {
         await tx.costImportRowStaging.update({
           where: { id: row.id },
           data: {
             matchStatus: CostImportMatchStatus.INVALID,
-            validationNote: "Riga approvata ma ancora incompleta: servono fingerprint, categoria finale e importo.",
+            validationNote: "Riga approvata ma ancora incompleta: servono almeno categoria finale e importo.",
           },
         });
         continue;
       }
 
-      if (existingByFingerprint.has(row.fingerprint)) {
+      const resolvedFingerprint =
+        row.fingerprint ??
+        buildApprovedFallbackFingerprint({
+          jobOrderId: session.jobOrderId,
+          sourceRowFingerprint: row.sourceRowFingerprint,
+          rowId: row.id,
+          sourceAccountCode: row.sourceAccountCode,
+          supplierCode: row.supplierCode,
+          supplierName: row.supplierName,
+          documentDate: row.documentDate,
+          registrationDate: row.registrationDate,
+          documentNumber: row.documentNumber,
+          amount: decimalToNumber(row.amount),
+        }).fingerprint;
+
+      const resolvedFingerprintSource =
+        row.fingerprintSource ??
+        buildApprovedFallbackFingerprint({
+          jobOrderId: session.jobOrderId,
+          sourceRowFingerprint: row.sourceRowFingerprint,
+          rowId: row.id,
+          sourceAccountCode: row.sourceAccountCode,
+          supplierCode: row.supplierCode,
+          supplierName: row.supplierName,
+          documentDate: row.documentDate,
+          registrationDate: row.registrationDate,
+          documentNumber: row.documentNumber,
+          amount: decimalToNumber(row.amount),
+        }).fingerprintSource;
+
+      if (existingByFingerprint.has(resolvedFingerprint)) {
         await tx.costImportRowStaging.update({
           where: { id: row.id },
           data: {
@@ -1235,7 +1297,7 @@ export async function applyApprovedCostImportRows(sessionId: string) {
           documentNumber: row.documentNumber,
           descriptionOriginal: row.descriptionOriginal,
           descriptionCustom: row.finalDescription || null,
-          fingerprint: row.fingerprint,
+          fingerprint: resolvedFingerprint,
           sourceImportSessionId: session.id,
           sourceImportRowId: row.id,
         },
@@ -1263,8 +1325,8 @@ export async function applyApprovedCostImportRows(sessionId: string) {
             amount: row.amount,
             finalCategory: row.finalCategory,
             finalDescription: row.finalDescription,
-            finalFingerprint: row.fingerprint,
-            finalFingerprintSource: row.fingerprintSource,
+            finalFingerprint: resolvedFingerprint,
+            finalFingerprintSource: resolvedFingerprintSource,
           },
           update: {
             sourceRowFingerprintSource: row.sourceRowFingerprintSource,
@@ -1278,13 +1340,25 @@ export async function applyApprovedCostImportRows(sessionId: string) {
             amount: row.amount,
             finalCategory: row.finalCategory,
             finalDescription: row.finalDescription,
-            finalFingerprint: row.fingerprint,
-            finalFingerprintSource: row.fingerprintSource,
+            finalFingerprint: resolvedFingerprint,
+            finalFingerprintSource: resolvedFingerprintSource,
           },
         });
       }
 
-      existingByFingerprint.add(row.fingerprint);
+      await tx.costImportRowStaging.update({
+        where: { id: row.id },
+        data: {
+          fingerprint: resolvedFingerprint,
+          fingerprintSource: resolvedFingerprintSource,
+          validationNote:
+            row.fingerprint == null
+              ? "Import forzato da approvazione manuale con fingerprint tecnico di fallback."
+              : row.validationNote,
+        },
+      });
+
+      existingByFingerprint.add(resolvedFingerprint);
       createdCount += 1;
     }
 
