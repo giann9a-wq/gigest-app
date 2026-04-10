@@ -102,6 +102,11 @@ type JobOrderDashboardResponse = {
         supplierName: string;
         totalAmount: number;
         entryCount: number;
+        rows: Array<{
+          id: string;
+          documentDate: string;
+          amount: number;
+        }>;
       }>;
     }>;
   };
@@ -406,13 +411,26 @@ export default function DashboardCommessaPage() {
                         <p className="job-dashboard-muted">Nessun costo importato per questa categoria.</p>
                       ) : (
                         category.suppliers.map((supplier) => (
-                          <div key={supplier.supplierKey} className="job-dashboard-supplier-row">
-                            <div>
-                              <strong>{supplier.supplierName}</strong>
-                              <small>{supplier.entryCount} movimenti</small>
+                          <details key={supplier.supplierKey} className="job-dashboard-subdetail job-dashboard-subdetail-compact">
+                            <summary>
+                              <span className="job-dashboard-subdetail-head">
+                                <span className="job-dashboard-plus job-dashboard-plus-small">+</span>
+                                <span>
+                                  <strong>{supplier.supplierName}</strong>
+                                  <small>{supplier.entryCount} movimenti</small>
+                                </span>
+                              </span>
+                              <strong>{formatCurrency(supplier.totalAmount)}</strong>
+                            </summary>
+                            <div className="job-dashboard-entry-list job-dashboard-entry-list-compact">
+                              {supplier.rows.map((entry) => (
+                                <div key={entry.id} className="job-dashboard-entry-row job-dashboard-entry-row-compact">
+                                  <strong>{formatDate(entry.documentDate)}</strong>
+                                  <span>{formatCurrency(entry.amount)}</span>
+                                </div>
+                              ))}
                             </div>
-                            <strong>{formatCurrency(supplier.totalAmount)}</strong>
-                          </div>
+                          </details>
                         ))
                       )}
                     </div>

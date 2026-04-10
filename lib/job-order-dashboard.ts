@@ -102,6 +102,11 @@ async function getCostActualCategoryViews(jobOrderId: string) {
           supplierName: string;
           totalAmount: number;
           entryCount: number;
+          rows: {
+            id: string;
+            documentDate: string;
+            amount: number;
+          }[];
         }
       >;
       rows: {
@@ -158,6 +163,11 @@ async function getCostActualCategoryViews(jobOrderId: string) {
     if (existingSupplier) {
       existingSupplier.totalAmount = roundCurrency(existingSupplier.totalAmount + amount);
       existingSupplier.entryCount += 1;
+      existingSupplier.rows.push({
+        id: entry.id,
+        documentDate: entry.documentDate?.toISOString().slice(0, 10) ?? "",
+        amount,
+      });
     } else {
       categoryBucket.suppliers.set(supplierKey, {
         supplierKey,
@@ -165,6 +175,13 @@ async function getCostActualCategoryViews(jobOrderId: string) {
         supplierName,
         totalAmount: amount,
         entryCount: 1,
+        rows: [
+          {
+            id: entry.id,
+            documentDate: entry.documentDate?.toISOString().slice(0, 10) ?? "",
+            amount,
+          },
+        ],
       });
     }
   }
