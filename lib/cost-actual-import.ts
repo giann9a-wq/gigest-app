@@ -35,6 +35,8 @@ type ParsedMovementDraft = {
   amount: number | null;
   quantity: number | null;
   suggestedCategory: CostActualCategory | null;
+  sourceRowFingerprint: string | null;
+  sourceRowFingerprintSource: string | null;
   fingerprint: string | null;
   fingerprintSource: string | null;
   matchStatus: CostImportMatchStatus;
@@ -115,6 +117,24 @@ function parseItalianDate(value: string | null | undefined) {
   return date;
 }
 
+function parseDateInput(value: string | null | undefined) {
+  if (!value) return null;
+  const cleaned = cleanCell(value);
+  if (!cleaned) return null;
+
+  if (ITALIAN_DATE_REGEX.test(cleaned)) {
+    return parseItalianDate(cleaned);
+  }
+
+  const isoMatch = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!isoMatch) return null;
+
+  const [, year, month, day] = isoMatch;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
 function parseAmount(value: unknown) {
   if (value == null || value === "") return null;
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -127,6 +147,20 @@ function parseAmount(value: unknown) {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) return null;
   return Number(parsed.toFixed(2));
+}
+
+function parseSignedMovementAmount(row: string[]) {
+  const amountDare = parseAmount(row[11]);
+  if (amountDare != null && amountDare !== 0) {
+    return amountDare;
+  }
+
+  const amountAvere = parseAmount(row[12]);
+  if (amountAvere != null && amountAvere !== 0) {
+    return Number((-amountAvere).toFixed(2));
+  }
+
+  return null;
 }
 
 function toDecimal(value: number | null) {
@@ -150,6 +184,58 @@ function getCategoryFromSource(
   }
   if (text.includes("SPESE VARIE")) return CostActualCategory.SPESE_VARIE;
   return null;
+}
+
+function buildRowValidationState(input: {
+  jobOrderId: string;
+  sourceAccountCode: string | null;
+  sourceAccountDescription: string | null;
+  supplierCode: string | null;
+  supplierName: string | null;
+  documentDate: Date | null;
+  registrationDate: Date | null;
+  documentNumber: string | null;
+  amount: number | null;
+  finalCategory: CostActualCategory | null;
+}) {
+  const fingerprintData = buildFingerprintInput({
+    jobOrderId: input.jobOrderId,
+    sourceAccountCode: input.sourceAccountCode,
+    supplierCode: input.supplierCode,
+    supplierName: input.supplierName,
+    documentDate: input.documentDate,
+    registrationDate: input.registrationDate,
+    documentNumber: input.documentNumber,
+    amount: input.amount,
+  });
+
+  const notes = new Set<string>();
+
+  if (!input.sourceAccountCode) {
+    notes.add("Conto sorgente 303.* non rilevato.");
+  }
+  if (!input.finalCategory) {
+    notes.add("Categoria non mappata automaticamente.");
+  }
+  if (!input.amount) {
+    notes.add("Importo movimento non leggibile.");
+  }
+  if (!input.documentDate && !input.registrationDate) {
+    notes.add("Data documento/registrazione assente.");
+  }
+  if (!input.supplierCode && !input.supplierName) {
+    notes.add("Fornitore non rilevato dalle contropartite.");
+  }
+  if (!fingerprintData.fingerprint) {
+    notes.add("Fingerprint incompleto: servono fornitore, documento, data e importo affidabili.");
+  }
+
+  return {
+    fingerprint: fingerprintData.fingerprint,
+    fingerprintSource: fingerprintData.fingerprintSource,
+    matchStatus: notes.size > 0 ? CostImportMatchStatus.INVALID : CostImportMatchStatus.NEW,
+    validationNote: notes.size > 0 ? `${[...notes].join(". ")}.` : null,
+  };
 }
 
 function buildFingerprintInput(input: {
@@ -204,6 +290,44 @@ function buildFingerprintInput(input: {
   };
 }
 
+function buildSourceRowFingerprintInput(input: {
+  jobOrderId: string;
+  sourceAccountCode: string | null;
+  sourceAccountDescription: string | null;
+  supplierCode: string | null;
+  supplierName: string | null;
+  documentDate: Date | null;
+  registrationDate: Date | null;
+  documentNumber: string | null;
+  descriptionOriginal: string | null;
+  amount: number | null;
+}) {
+  const parts = [
+    input.jobOrderId,
+    input.sourceAccountCode ?? "",
+    normalizeText(input.sourceAccountDescription),
+    input.supplierCode ?? "",
+    normalizeText(input.supplierName),
+    input.documentDate?.toISOString().slice(0, 10) ?? "",
+    input.registrationDate?.toISOString().slice(0, 10) ?? "",
+    normalizeText(input.documentNumber),
+    normalizeText(input.descriptionOriginal),
+    input.amount == null ? "" : input.amount.toFixed(2),
+  ];
+
+  const meaningfulParts = parts.filter(Boolean).length;
+  const source = parts.join("|");
+
+  if (meaningfulParts < 5) {
+    return { fingerprint: null, fingerprintSource: source };
+  }
+
+  return {
+    fingerprint: createHash("sha256").update(source).digest("hex"),
+    fingerprintSource: source,
+  };
+}
+
 function extractAccountContext(row: string[]) {
   const cell = cleanCell(row[0]);
   const match = cell.match(ACCOUNT_CODE_REGEX);
@@ -226,8 +350,19 @@ function extractSupplierContext(row: string[]) {
   } satisfies ParsedSupplierContext;
 }
 
+function extractFallbackCounterparty(row: string[]) {
+  const cell = cleanCell(row[8]);
+  const match = cell.match(GENERIC_ACCOUNT_REGEX);
+  if (!match) return null;
+
+  return {
+    code: match[1] ?? null,
+    name: match[2] ?? null,
+  } satisfies ParsedSupplierContext;
+}
+
 function isMovementRow(row: string[]) {
-  return Boolean(parseItalianDate(cleanCell(row[1]))) && Boolean(cleanCell(row[10]));
+  return Boolean(parseItalianDate(cleanCell(row[1]))) && Boolean(cleanCell(row[6]));
 }
 
 function isIgnorableRow(row: string[]) {
@@ -251,12 +386,24 @@ function createMovementDraft(
 ) {
   const registrationDate = parseItalianDate(cleanCell(row[1]));
   const documentDate = parseItalianDate(cleanCell(row[9]));
-  const amount = parseAmount(row[11]);
+  const amount = parseSignedMovementAmount(row);
   const descriptionOriginal = cleanCell(row[6]) || cleanCell(row[5]) || null;
   const descriptionNormalized = normalizeText(descriptionOriginal);
   const sourceAccountCode = accountContext?.code ?? null;
   const sourceAccountDescription = accountContext?.description ?? null;
   const suggestedCategory = getCategoryFromSource(sourceAccountCode, sourceAccountDescription);
+  const sourceRowData = buildSourceRowFingerprintInput({
+    jobOrderId,
+    sourceAccountCode,
+    sourceAccountDescription,
+    supplierCode: null,
+    supplierName: null,
+    documentDate,
+    registrationDate,
+    documentNumber: cleanCell(row[10]) || null,
+    descriptionOriginal,
+    amount,
+  });
 
   const fingerprintData = buildFingerprintInput({
     jobOrderId,
@@ -278,7 +425,7 @@ function createMovementDraft(
     validationNoteParts.push("Data documento/registrazione assente.");
   }
   if (!amount) {
-    validationNoteParts.push("Importo dare non leggibile.");
+    validationNoteParts.push("Importo movimento non leggibile.");
   }
   if (!suggestedCategory) {
     validationNoteParts.push("Categoria non mappata automaticamente.");
@@ -301,6 +448,8 @@ function createMovementDraft(
     amount,
     quantity: null,
     suggestedCategory,
+    sourceRowFingerprint: sourceRowData.fingerprint,
+    sourceRowFingerprintSource: sourceRowData.fingerprintSource,
     fingerprint: fingerprintData.fingerprint,
     fingerprintSource: fingerprintData.fingerprintSource,
     matchStatus: isInvalid ? CostImportMatchStatus.INVALID : CostImportMatchStatus.NEW,
@@ -318,6 +467,22 @@ function attachSupplierToDraft(
 ) {
   draft.supplierCode = supplierContext.code;
   draft.supplierName = supplierContext.name;
+
+  const sourceRowData = buildSourceRowFingerprintInput({
+    jobOrderId,
+    sourceAccountCode: draft.sourceAccountCode,
+    sourceAccountDescription: draft.sourceAccountDescription,
+    supplierCode: draft.supplierCode,
+    supplierName: draft.supplierName,
+    documentDate: draft.documentDate,
+    registrationDate: draft.registrationDate,
+    documentNumber: draft.documentNumber,
+    descriptionOriginal: draft.descriptionOriginal,
+    amount: draft.amount,
+  });
+
+  draft.sourceRowFingerprint = sourceRowData.fingerprint;
+  draft.sourceRowFingerprintSource = sourceRowData.fingerprintSource;
 
   const fingerprintData = buildFingerprintInput({
     jobOrderId,
@@ -426,6 +591,18 @@ export function parsePartitarioXls(buffer: Buffer, jobOrderId: string): ParsedWo
     const contropartitaCell = cleanCell(row[8]);
     if (pendingMovement && contropartitaCell) {
       const genericCounterparty = contropartitaCell.match(GENERIC_ACCOUNT_REGEX);
+      const fallbackCounterparty = extractFallbackCounterparty(row);
+
+      if (
+        fallbackCounterparty &&
+        !pendingMovement.supplierCode &&
+        !pendingMovement.supplierName &&
+        !String(fallbackCounterparty.code ?? "").startsWith("138.") &&
+        !String(fallbackCounterparty.code ?? "").startsWith("217.")
+      ) {
+        attachSupplierToDraft(pendingMovement, fallbackCounterparty, jobOrderId);
+      }
+
       if (genericCounterparty && !genericCounterparty[1].startsWith("212.")) {
         warnings.push(
           `Riga ${index + 1}: contropartita non fornitore ${genericCounterparty[1]} collegata al documento ${pendingMovement.documentNumber ?? "-"}.`
@@ -475,7 +652,10 @@ async function classifyParsedRows(
   const fingerprintSet = new Set(existingEntries.map((entry) => entry.fingerprint));
 
   for (const row of rows) {
-    if (row.matchStatus === CostImportMatchStatus.INVALID) {
+    if (
+      row.matchStatus === CostImportMatchStatus.INVALID ||
+      row.matchStatus === CostImportMatchStatus.UPDATED_DUPLICATE
+    ) {
       continue;
     }
 
@@ -506,10 +686,154 @@ async function classifyParsedRows(
 
   return {
     duplicateRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.ALREADY_IMPORTED).length,
+    updatedDuplicateRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.UPDATED_DUPLICATE).length,
     possibleDuplicateRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.POSSIBLE_DUPLICATE).length,
     newRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.NEW).length,
     invalidRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.INVALID).length,
   };
+}
+
+async function applySavedCorrections(jobOrderId: string, rows: ParsedMovementDraft[]) {
+  const sourceFingerprints = rows
+    .map((row) => row.sourceRowFingerprint)
+    .filter((value): value is string => Boolean(value));
+
+  if (sourceFingerprints.length === 0) {
+    return;
+  }
+
+  const rules = await prisma.costImportCorrectionRule.findMany({
+    where: {
+      jobOrderId,
+      sourceRowFingerprint: { in: sourceFingerprints },
+    },
+  });
+
+  const rulesByFingerprint = new Map(rules.map((rule) => [rule.sourceRowFingerprint, rule]));
+
+  for (const row of rows) {
+    if (!row.sourceRowFingerprint) continue;
+    const rule = rulesByFingerprint.get(row.sourceRowFingerprint);
+    if (!rule) continue;
+
+    row.sourceAccountCode = rule.sourceAccountCode ?? row.sourceAccountCode;
+    row.sourceAccountDescription =
+      rule.sourceAccountDescription ?? row.sourceAccountDescription;
+    row.supplierCode = rule.supplierCode ?? row.supplierCode;
+    row.supplierName = rule.supplierName ?? row.supplierName;
+    row.documentDate = rule.documentDate ?? row.documentDate;
+    row.registrationDate = rule.registrationDate ?? row.registrationDate;
+    row.documentNumber = rule.documentNumber ?? row.documentNumber;
+    row.amount = decimalToNumber(rule.amount) ?? row.amount;
+    row.finalCategory = rule.finalCategory ?? row.finalCategory;
+    row.finalDescription = rule.finalDescription ?? row.finalDescription;
+    row.suggestedCategory = rule.finalCategory ?? row.suggestedCategory;
+
+    const recalculated = buildRowValidationState({
+      jobOrderId,
+      sourceAccountCode: row.sourceAccountCode,
+      sourceAccountDescription: row.sourceAccountDescription,
+      supplierCode: row.supplierCode,
+      supplierName: row.supplierName,
+      documentDate: row.documentDate,
+      registrationDate: row.registrationDate,
+      documentNumber: row.documentNumber,
+      amount: row.amount,
+      finalCategory: row.finalCategory,
+    });
+
+    row.fingerprint = recalculated.fingerprint;
+    row.fingerprintSource = recalculated.fingerprintSource;
+    row.matchStatus = recalculated.matchStatus;
+    row.validationNote = recalculated.validationNote;
+
+    if (
+      rule.finalFingerprint &&
+      row.fingerprint &&
+      rule.finalFingerprint !== row.fingerprint &&
+      row.matchStatus !== CostImportMatchStatus.INVALID
+    ) {
+      row.matchStatus = CostImportMatchStatus.UPDATED_DUPLICATE;
+      row.validationNote =
+        "Correzione storica trovata, ma la riga sorgente risulta aggiornata rispetto all'import approvato precedente.";
+    }
+  }
+}
+
+async function evaluateEditedCostImportRow(input: {
+  rowId: string;
+  jobOrderId: string;
+  sourceAccountCode: string | null;
+  sourceAccountDescription: string | null;
+  supplierCode: string | null;
+  supplierName: string | null;
+  documentDate: Date | null;
+  registrationDate: Date | null;
+  documentNumber: string | null;
+  amount: number | null;
+  finalCategory: CostActualCategory | null;
+}) {
+  const baseState = buildRowValidationState({
+    jobOrderId: input.jobOrderId,
+    sourceAccountCode: input.sourceAccountCode,
+    sourceAccountDescription: input.sourceAccountDescription,
+    supplierCode: input.supplierCode,
+    supplierName: input.supplierName,
+    documentDate: input.documentDate,
+    registrationDate: input.registrationDate,
+    documentNumber: input.documentNumber,
+    amount: input.amount,
+    finalCategory: input.finalCategory,
+  });
+
+  if (baseState.matchStatus === CostImportMatchStatus.INVALID || !baseState.fingerprint) {
+    return baseState;
+  }
+
+  const existingEntries = await prisma.costActualEntry.findMany({
+    where: { jobOrderId: input.jobOrderId },
+    select: {
+      id: true,
+      fingerprint: true,
+      amount: true,
+      documentDate: true,
+      supplierCode: true,
+      supplierName: true,
+      documentNumber: true,
+    },
+  });
+
+  if (existingEntries.some((entry) => entry.fingerprint === baseState.fingerprint)) {
+    return {
+      ...baseState,
+      matchStatus: CostImportMatchStatus.ALREADY_IMPORTED,
+      validationNote: "Fingerprint gia importato in passato per questa commessa.",
+    };
+  }
+
+  const possibleDuplicate = existingEntries.find((entry) => {
+    const sameDate =
+      entry.documentDate?.toISOString().slice(0, 10) === input.documentDate?.toISOString().slice(0, 10);
+    const sameAmount = Number(entry.amount) === (input.amount ?? Number.NaN);
+    const sameSupplier =
+      (entry.supplierCode && entry.supplierCode === input.supplierCode) ||
+      normalizeText(entry.supplierName) === normalizeText(input.supplierName);
+    const sameDocumentNumber =
+      normalizeText(entry.documentNumber) === normalizeText(input.documentNumber);
+
+    return sameDate && sameAmount && sameSupplier && !sameDocumentNumber;
+  });
+
+  if (possibleDuplicate) {
+    return {
+      ...baseState,
+      matchStatus: CostImportMatchStatus.POSSIBLE_DUPLICATE,
+      validationNote:
+        "Possibile duplicato: data/importo/fornitore coincidono ma il fingerprint non e completo.",
+    };
+  }
+
+  return baseState;
 }
 
 export async function createCostImportSession(input: {
@@ -531,6 +855,7 @@ export async function createCostImportSession(input: {
   const fileSizeBytes = input.buffer.byteLength;
 
   const parsed = parsePartitarioXls(input.buffer, input.jobOrderId);
+  await applySavedCorrections(input.jobOrderId, parsed.rows);
   const classification = await classifyParsedRows(input.jobOrderId, parsed.rows);
 
   const summary = {
@@ -573,6 +898,8 @@ export async function createCostImportSession(input: {
           amount: toDecimal(row.amount),
           quantity: toDecimal(row.quantity),
           suggestedCategory: row.suggestedCategory,
+          sourceRowFingerprint: row.sourceRowFingerprint,
+          sourceRowFingerprintSource: row.sourceRowFingerprintSource,
           fingerprint: row.fingerprint,
           fingerprintSource: row.fingerprintSource,
           matchStatus: row.matchStatus,
@@ -626,6 +953,7 @@ export async function getCostImportSessionDetails(sessionId: string) {
     approved: session.rows.filter((row) => row.validationStatus === CostImportValidationStatus.APPROVED).length,
     rejected: session.rows.filter((row) => row.validationStatus === CostImportValidationStatus.REJECTED).length,
     alreadyImported: session.rows.filter((row) => row.matchStatus === CostImportMatchStatus.ALREADY_IMPORTED).length,
+    updatedDuplicate: session.rows.filter((row) => row.matchStatus === CostImportMatchStatus.UPDATED_DUPLICATE).length,
     invalid: session.rows.filter((row) => row.matchStatus === CostImportMatchStatus.INVALID).length,
     possibleDuplicate: session.rows.filter((row) => row.matchStatus === CostImportMatchStatus.POSSIBLE_DUPLICATE).length,
     newRows: session.rows.filter((row) => row.matchStatus === CostImportMatchStatus.NEW).length,
@@ -656,6 +984,7 @@ export async function getCostImportSessionDetails(sessionId: string) {
       amount: decimalToNumber(row.amount),
       quantity: decimalToNumber(row.quantity),
       suggestedCategory: row.suggestedCategory,
+      sourceRowFingerprint: row.sourceRowFingerprint,
       fingerprint: row.fingerprint,
       matchStatus: row.matchStatus,
       validationStatus: row.validationStatus,
@@ -702,6 +1031,14 @@ export async function updateCostImportRow(
   sessionId: string,
   rowId: string,
   input: {
+    sourceAccountCode?: string | null;
+    sourceAccountDescription?: string | null;
+    supplierCode?: string | null;
+    supplierName?: string | null;
+    documentDate?: string | null;
+    registrationDate?: string | null;
+    documentNumber?: string | null;
+    amount?: number | string | null;
     finalDescription?: string;
     finalCategory?: CostActualCategory | null;
     validationNote?: string;
@@ -709,19 +1046,93 @@ export async function updateCostImportRow(
 ) {
   const existing = await prisma.costImportRowStaging.findUnique({
     where: { id: rowId },
-    select: { id: true, importSessionId: true },
+    select: {
+      id: true,
+      importSessionId: true,
+      jobOrderId: true,
+      sourceAccountCode: true,
+      sourceAccountDescription: true,
+      supplierCode: true,
+      supplierName: true,
+      documentDate: true,
+      registrationDate: true,
+      documentNumber: true,
+      amount: true,
+      finalCategory: true,
+    },
   });
 
   if (!existing || existing.importSessionId !== sessionId) {
     throw new Error("Riga staging non coerente con la sessione.");
   }
 
+  const sourceAccountCode =
+    input.sourceAccountCode !== undefined
+      ? cleanCell(input.sourceAccountCode) || null
+      : existing.sourceAccountCode;
+  const sourceAccountDescription =
+    input.sourceAccountDescription !== undefined
+      ? cleanCell(input.sourceAccountDescription) || null
+      : existing.sourceAccountDescription;
+  const supplierCode =
+    input.supplierCode !== undefined ? cleanCell(input.supplierCode) || null : existing.supplierCode;
+  const supplierName =
+    input.supplierName !== undefined ? cleanCell(input.supplierName) || null : existing.supplierName;
+  const documentDate =
+    input.documentDate !== undefined
+      ? parseDateInput(typeof input.documentDate === "string" ? input.documentDate : null)
+      : existing.documentDate;
+  const registrationDate =
+    input.registrationDate !== undefined
+      ? parseDateInput(typeof input.registrationDate === "string" ? input.registrationDate : null)
+      : existing.registrationDate;
+  const documentNumber =
+    input.documentNumber !== undefined
+      ? cleanCell(input.documentNumber) || null
+      : existing.documentNumber;
+  const amount =
+    input.amount !== undefined
+      ? typeof input.amount === "number"
+        ? Number(input.amount.toFixed(2))
+        : parseAmount(input.amount)
+      : decimalToNumber(existing.amount);
+  const finalCategory =
+    input.finalCategory !== undefined ? input.finalCategory : existing.finalCategory;
+
+  const recalculatedState = await evaluateEditedCostImportRow({
+    rowId,
+    jobOrderId: existing.jobOrderId,
+    sourceAccountCode,
+    sourceAccountDescription,
+    supplierCode,
+    supplierName,
+    documentDate,
+    registrationDate,
+    documentNumber,
+    amount,
+    finalCategory,
+  });
+
   const updated = await prisma.costImportRowStaging.update({
     where: { id: rowId },
     data: {
+      ...(input.sourceAccountCode !== undefined ? { sourceAccountCode } : {}),
+      ...(input.sourceAccountDescription !== undefined ? { sourceAccountDescription } : {}),
+      ...(input.supplierCode !== undefined ? { supplierCode } : {}),
+      ...(input.supplierName !== undefined ? { supplierName } : {}),
+      ...(input.documentDate !== undefined ? { documentDate } : {}),
+      ...(input.registrationDate !== undefined ? { registrationDate } : {}),
+      ...(input.documentNumber !== undefined ? { documentNumber } : {}),
+      ...(input.amount !== undefined ? { amount: toDecimal(amount) } : {}),
       ...(input.finalDescription !== undefined ? { finalDescription: input.finalDescription } : {}),
-      ...(input.finalCategory !== undefined ? { finalCategory: input.finalCategory } : {}),
-      ...(input.validationNote !== undefined ? { validationNote: input.validationNote } : {}),
+      ...(input.finalCategory !== undefined ? { finalCategory } : {}),
+      fingerprint: recalculatedState.fingerprint,
+      fingerprintSource: recalculatedState.fingerprintSource,
+      matchStatus: recalculatedState.matchStatus,
+      validationNote:
+        input.validationNote !== undefined
+          ? input.validationNote
+          : recalculatedState.validationNote,
     },
     select: { id: true, importSessionId: true },
   });
@@ -829,6 +1240,49 @@ export async function applyApprovedCostImportRows(sessionId: string) {
           sourceImportRowId: row.id,
         },
       });
+
+      if (row.sourceRowFingerprint) {
+        await tx.costImportCorrectionRule.upsert({
+          where: {
+            jobOrderId_sourceRowFingerprint: {
+              jobOrderId: session.jobOrderId,
+              sourceRowFingerprint: row.sourceRowFingerprint,
+            },
+          },
+          create: {
+            jobOrderId: session.jobOrderId,
+            sourceRowFingerprint: row.sourceRowFingerprint,
+            sourceRowFingerprintSource: row.sourceRowFingerprintSource,
+            sourceAccountCode: row.sourceAccountCode,
+            sourceAccountDescription: row.sourceAccountDescription,
+            supplierCode: row.supplierCode,
+            supplierName: row.supplierName,
+            documentDate: row.documentDate,
+            registrationDate: row.registrationDate,
+            documentNumber: row.documentNumber,
+            amount: row.amount,
+            finalCategory: row.finalCategory,
+            finalDescription: row.finalDescription,
+            finalFingerprint: row.fingerprint,
+            finalFingerprintSource: row.fingerprintSource,
+          },
+          update: {
+            sourceRowFingerprintSource: row.sourceRowFingerprintSource,
+            sourceAccountCode: row.sourceAccountCode,
+            sourceAccountDescription: row.sourceAccountDescription,
+            supplierCode: row.supplierCode,
+            supplierName: row.supplierName,
+            documentDate: row.documentDate,
+            registrationDate: row.registrationDate,
+            documentNumber: row.documentNumber,
+            amount: row.amount,
+            finalCategory: row.finalCategory,
+            finalDescription: row.finalDescription,
+            finalFingerprint: row.fingerprint,
+            finalFingerprintSource: row.fingerprintSource,
+          },
+        });
+      }
 
       existingByFingerprint.add(row.fingerprint);
       createdCount += 1;

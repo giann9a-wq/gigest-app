@@ -72,6 +72,7 @@ enum CostImportSessionStatus {
 enum CostImportMatchStatus {
   NEW
   ALREADY_IMPORTED
+  UPDATED_DUPLICATE
   POSSIBLE_DUPLICATE
   INVALID
 }
@@ -296,6 +297,7 @@ model JobOrder {
   costImportSessions CostImportSession[]
   costImportRows CostImportRowStaging[]
   costActualEntries CostActualEntry[]
+  costImportCorrectionRules CostImportCorrectionRule[]
   invoiceImportRows InvoiceImportRowStaging[]
   issuedInvoiceActuals IssuedInvoiceActual[]
   suggestedInvoiceImportRows InvoiceImportRowStaging[] @relation("InvoiceImportRowSuggestedJobOrder")
@@ -345,6 +347,8 @@ model CostImportRowStaging {
   amount                   Decimal?                   @db.Decimal(12, 2)
   quantity                 Decimal?                   @db.Decimal(12, 2)
   suggestedCategory        CostActualCategory?
+  sourceRowFingerprint     String?
+  sourceRowFingerprintSource String?
   fingerprint              String?
   fingerprintSource        String?
   matchStatus              CostImportMatchStatus      @default(NEW)
@@ -362,6 +366,7 @@ model CostImportRowStaging {
   @@index([importSessionId, validationStatus])
   @@index([jobOrderId, fingerprint])
   @@index([jobOrderId, matchStatus])
+  @@index([jobOrderId, sourceRowFingerprint])
 }
 
 model CostActualEntry {
@@ -389,6 +394,32 @@ model CostActualEntry {
 
   @@index([jobOrderId, category])
   @@unique([jobOrderId, fingerprint])
+}
+
+model CostImportCorrectionRule {
+  id                          String   @id @default(cuid())
+  jobOrderId                  String
+  sourceRowFingerprint        String
+  sourceRowFingerprintSource  String?
+  sourceAccountCode           String?
+  sourceAccountDescription    String?
+  supplierCode                String?
+  supplierName                String?
+  documentDate                DateTime?
+  registrationDate            DateTime?
+  documentNumber              String?
+  amount                      Decimal? @db.Decimal(12, 2)
+  finalCategory               CostActualCategory?
+  finalDescription            String?
+  finalFingerprint            String?
+  finalFingerprintSource      String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  jobOrder                    JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([jobOrderId, sourceRowFingerprint])
+  @@index([jobOrderId, updatedAt])
 }
 
 model InvoiceImportSession {

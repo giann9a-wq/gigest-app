@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { formatCurrency } from "@/lib/number-format";
 
-type MatchStatus = "NEW" | "ALREADY_IMPORTED" | "POSSIBLE_DUPLICATE" | "INVALID";
+type MatchStatus = "NEW" | "ALREADY_IMPORTED" | "UPDATED_DUPLICATE" | "POSSIBLE_DUPLICATE" | "INVALID";
 type ValidationStatus = "PENDING" | "APPROVED" | "REJECTED";
 type CostActualCategory =
   | "MATERIE_PRIME"
@@ -30,6 +30,7 @@ type SessionPayload = {
     approved: number;
     rejected: number;
     alreadyImported: number;
+    updatedDuplicate: number;
     invalid: number;
     possibleDuplicate: number;
     newRows: number;
@@ -88,6 +89,25 @@ async function jsonFetch<T>(url: string, options?: RequestInit): Promise<T> {
 export function CostImportValidation({ sessionId }: { sessionId: string }) {
   const [session, setSession] = useState<SessionPayload | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [expandedInvalidRows, setExpandedInvalidRows] = useState<string[]>([]);
+  const [rowDrafts, setRowDrafts] = useState<
+    Record<
+      string,
+      {
+        sourceAccountCode: string;
+        sourceAccountDescription: string;
+        supplierCode: string;
+        supplierName: string;
+        documentDate: string;
+        registrationDate: string;
+        documentNumber: string;
+        amount: string;
+        finalDescription: string;
+        finalCategory: string;
+        validationNote: string;
+      }
+    >
+  >({});
   const [matchFilter, setMatchFilter] = useState<"ALL" | MatchStatus>("NEW");
   const [validationFilter, setValidationFilter] = useState<"ALL" | ValidationStatus>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<"ALL" | CostActualCategory>("ALL");
@@ -118,6 +138,52 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
       return true;
     });
   }, [categoryFilter, matchFilter, session, validationFilter]);
+
+  function getRowDraft(row: SessionPayload["rows"][number]) {
+    return (
+      rowDrafts[row.id] ?? {
+        sourceAccountCode: row.sourceAccountCode ?? "",
+        sourceAccountDescription: row.sourceAccountDescription ?? "",
+        supplierCode: row.supplierCode ?? "",
+        supplierName: row.supplierName ?? "",
+        documentDate: row.documentDate ?? "",
+        registrationDate: row.registrationDate ?? "",
+        documentNumber: row.documentNumber ?? "",
+        amount: row.amount == null ? "" : String(row.amount),
+        finalDescription: row.finalDescription ?? "",
+        finalCategory: row.finalCategory ?? "",
+        validationNote: row.validationNote ?? "",
+      }
+    );
+  }
+
+  function updateRowDraft(rowId: string, field: string, value: string) {
+    setRowDrafts((current) => ({
+      ...current,
+      [rowId]: {
+        ...(current[rowId] ?? {
+          sourceAccountCode: "",
+          sourceAccountDescription: "",
+          supplierCode: "",
+          supplierName: "",
+          documentDate: "",
+          registrationDate: "",
+          documentNumber: "",
+          amount: "",
+          finalDescription: "",
+          finalCategory: "",
+          validationNote: "",
+        }),
+        [field]: value,
+      },
+    }));
+  }
+
+  function toggleInvalidEditor(rowId: string) {
+    setExpandedInvalidRows((current) =>
+      current.includes(rowId) ? current.filter((id) => id !== rowId) : [...current, rowId]
+    );
+  }
 
   function toggleSelection(rowId: string) {
     setSelectedIds((current) =>
@@ -190,6 +256,23 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
     });
   }
 
+  function saveInvalidCorrection(row: SessionPayload["rows"][number]) {
+    const draft = getRowDraft(row);
+    saveRow(row.id, {
+      sourceAccountCode: draft.sourceAccountCode,
+      sourceAccountDescription: draft.sourceAccountDescription,
+      supplierCode: draft.supplierCode,
+      supplierName: draft.supplierName,
+      documentDate: draft.documentDate || null,
+      registrationDate: draft.registrationDate || null,
+      documentNumber: draft.documentNumber,
+      amount: draft.amount === "" ? null : Number(draft.amount),
+      finalDescription: draft.finalDescription,
+      finalCategory: draft.finalCategory || null,
+      validationNote: draft.validationNote,
+    });
+  }
+
   function applyApprovedRows() {
     setError("");
     setMessage("");
@@ -231,6 +314,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
           <div className="cost-import-stat-card"><span>Totale righe</span><strong>{session.stats.total}</strong></div>
           <div className="cost-import-stat-card"><span>Nuove</span><strong>{session.stats.newRows}</strong></div>
           <div className="cost-import-stat-card"><span>Gia importate</span><strong>{session.stats.alreadyImported}</strong></div>
+          <div className="cost-import-stat-card"><span>Duplicate aggiornate</span><strong>{session.stats.updatedDuplicate}</strong></div>
           <div className="cost-import-stat-card"><span>Possibili duplicati</span><strong>{session.stats.possibleDuplicate}</strong></div>
           <div className="cost-import-stat-card"><span>Invalide</span><strong>{session.stats.invalid}</strong></div>
           <div className="cost-import-stat-card"><span>Approvate</span><strong>{session.stats.approved}</strong></div>
@@ -249,6 +333,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                 <option value="ALL">Tutte</option>
                 <option value="NEW">Solo nuove</option>
                 <option value="ALREADY_IMPORTED">Gia importate</option>
+                <option value="UPDATED_DUPLICATE">Duplicate aggiornate</option>
                 <option value="POSSIBLE_DUPLICATE">Possibili duplicati</option>
                 <option value="INVALID">Invalide</option>
               </select>
@@ -322,57 +407,183 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => toggleSelection(row.id)} />
-                  </td>
-                  <td>
-                    <div className={`cost-import-badge cost-import-badge-${row.matchStatus.toLowerCase()}`}>{row.matchStatus}</div>
-                    {row.validationNote ? <div className="muted">{row.validationNote}</div> : null}
-                  </td>
-                  <td>
-                    {row.sourceAccountDescription || "-"}
-                  </td>
-                  <td>
-                    {row.supplierName || "-"}
-                  </td>
-                  <td>{formatDate(row.documentDate || row.registrationDate)}</td>
-                  <td>{row.documentNumber || "-"}</td>
-                  <td>
-                    <input
-                      className="scad-table-filter-input"
-                      defaultValue={row.finalDescription}
-                      onBlur={(event) =>
-                        saveRow(row.id, {
-                          finalDescription: event.target.value,
-                        })
-                      }
-                    />
-                    {pendingRowId === row.id ? <div className="muted">Salvataggio...</div> : null}
-                  </td>
-                  <td>{formatCurrency(row.amount)}</td>
-                  <td>
-                    <select
-                      className="mobile-data-select"
-                      value={row.finalCategory ?? ""}
-                      onChange={(event) =>
-                        saveRow(row.id, {
-                          finalCategory: event.target.value || null,
-                        })
-                      }
-                    >
-                      <option value="">Da definire</option>
-                      {CATEGORY_OPTIONS.map((category) => (
-                        <option key={category} value={category}>
-                          {categoryLabel(category)}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>{row.validationStatus}</td>
-                </tr>
-              ))}
+              {filteredRows.map((row) => {
+                const isInvalid = row.matchStatus === "INVALID";
+                const isExpanded = expandedInvalidRows.includes(row.id);
+                const draft = getRowDraft(row);
+
+                return (
+                  <Fragment key={row.id}>
+                    <tr key={row.id}>
+                      <td>
+                        <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => toggleSelection(row.id)} />
+                      </td>
+                      <td>
+                        <div className={`cost-import-badge cost-import-badge-${row.matchStatus.toLowerCase()}`}>{row.matchStatus}</div>
+                        {row.validationNote ? <div className="muted">{row.validationNote}</div> : null}
+                        {isInvalid ? (
+                          <button
+                            type="button"
+                            className="mobile-button-secondary"
+                            style={{ marginTop: 8 }}
+                            onClick={() => toggleInvalidEditor(row.id)}
+                          >
+                            {isExpanded ? "Chiudi correzione" : "Correggi import"}
+                          </button>
+                        ) : null}
+                      </td>
+                      <td>{row.sourceAccountDescription || "-"}</td>
+                      <td>{row.supplierName || "-"} </td>
+                      <td>{formatDate(row.documentDate || row.registrationDate)}</td>
+                      <td>{row.documentNumber || "-"}</td>
+                      <td>
+                        <input
+                          className="scad-table-filter-input"
+                          defaultValue={row.finalDescription}
+                          onBlur={(event) =>
+                            saveRow(row.id, {
+                              finalDescription: event.target.value,
+                            })
+                          }
+                        />
+                        {pendingRowId === row.id ? <div className="muted">Salvataggio...</div> : null}
+                      </td>
+                      <td>{formatCurrency(row.amount)}</td>
+                      <td>
+                        <select
+                          className="mobile-data-select"
+                          value={row.finalCategory ?? ""}
+                          onChange={(event) =>
+                            saveRow(row.id, {
+                              finalCategory: event.target.value || null,
+                            })
+                          }
+                        >
+                          <option value="">Da definire</option>
+                          {CATEGORY_OPTIONS.map((category) => (
+                            <option key={category} value={category}>
+                              {categoryLabel(category)}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>{row.validationStatus}</td>
+                    </tr>
+                    {isInvalid && isExpanded ? (
+                      <tr>
+                        <td colSpan={10}>
+                          <div className="admin-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Codice conto</span>
+                              <input
+                                className="admin-password-input"
+                                value={draft.sourceAccountCode}
+                                onChange={(event) => updateRowDraft(row.id, "sourceAccountCode", event.target.value)}
+                              />
+                            </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Conto sorgente</span>
+                              <input
+                                className="admin-password-input"
+                                value={draft.sourceAccountDescription}
+                                onChange={(event) => updateRowDraft(row.id, "sourceAccountDescription", event.target.value)}
+                              />
+                            </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Codice fornitore</span>
+                              <input
+                                className="admin-password-input"
+                                value={draft.supplierCode}
+                                onChange={(event) => updateRowDraft(row.id, "supplierCode", event.target.value)}
+                              />
+                            </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Fornitore</span>
+                              <input
+                                className="admin-password-input"
+                                value={draft.supplierName}
+                                onChange={(event) => updateRowDraft(row.id, "supplierName", event.target.value)}
+                              />
+                            </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Data documento</span>
+                              <input
+                                type="date"
+                                className="admin-password-input"
+                                value={draft.documentDate}
+                                onChange={(event) => updateRowDraft(row.id, "documentDate", event.target.value)}
+                              />
+                            </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Data registrazione</span>
+                              <input
+                                type="date"
+                                className="admin-password-input"
+                                value={draft.registrationDate}
+                                onChange={(event) => updateRowDraft(row.id, "registrationDate", event.target.value)}
+                              />
+                            </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Documento</span>
+                              <input
+                                className="admin-password-input"
+                                value={draft.documentNumber}
+                                onChange={(event) => updateRowDraft(row.id, "documentNumber", event.target.value)}
+                              />
+                            </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Importo</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="admin-password-input"
+                                value={draft.amount}
+                                onChange={(event) => updateRowDraft(row.id, "amount", event.target.value)}
+                              />
+                            </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Categoria finale</span>
+                              <select
+                                className="mobile-data-select"
+                                value={draft.finalCategory}
+                                onChange={(event) => updateRowDraft(row.id, "finalCategory", event.target.value)}
+                              >
+                                <option value="">Da definire</option>
+                                {CATEGORY_OPTIONS.map((category) => (
+                                  <option key={category} value={category}>
+                                    {categoryLabel(category)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="mobile-data-field" style={{ gridColumn: "1 / span 2" }}>
+                              <span className="mobile-data-label">Descrizione finale</span>
+                              <input
+                                className="admin-password-input"
+                                value={draft.finalDescription}
+                                onChange={(event) => updateRowDraft(row.id, "finalDescription", event.target.value)}
+                              />
+                            </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Nota validazione</span>
+                              <input
+                                className="admin-password-input"
+                                value={draft.validationNote}
+                                onChange={(event) => updateRowDraft(row.id, "validationNote", event.target.value)}
+                              />
+                            </label>
+                          </div>
+                          <div className="cost-import-bulk-bar" style={{ marginTop: 12 }}>
+                            <button type="button" className="button" onClick={() => saveInvalidCorrection(row)} disabled={isPending}>
+                              Salva correzione
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

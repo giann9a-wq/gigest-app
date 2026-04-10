@@ -22,6 +22,28 @@ export async function PATCH(
 
   const body = await request.json();
   const { sessionId, rowId } = await context.params;
+  const sourceAccountCode =
+    body.sourceAccountCode === undefined ? undefined : String(body.sourceAccountCode ?? "");
+  const sourceAccountDescription =
+    body.sourceAccountDescription === undefined
+      ? undefined
+      : String(body.sourceAccountDescription ?? "");
+  const supplierCode =
+    body.supplierCode === undefined ? undefined : String(body.supplierCode ?? "");
+  const supplierName =
+    body.supplierName === undefined ? undefined : String(body.supplierName ?? "");
+  const documentDate =
+    body.documentDate === undefined ? undefined : body.documentDate === null ? null : String(body.documentDate);
+  const registrationDate =
+    body.registrationDate === undefined ? undefined : body.registrationDate === null ? null : String(body.registrationDate);
+  const documentNumber =
+    body.documentNumber === undefined ? undefined : String(body.documentNumber ?? "");
+  const amount =
+    body.amount === undefined
+      ? undefined
+      : body.amount === null || body.amount === ""
+        ? null
+        : Number(body.amount);
   const finalDescription =
     body.finalDescription === undefined ? undefined : String(body.finalDescription ?? "");
   const finalCategory =
@@ -39,6 +61,14 @@ export async function PATCH(
 
   try {
     await updateCostImportRow(sessionId, rowId, {
+      sourceAccountCode,
+      sourceAccountDescription,
+      supplierCode,
+      supplierName,
+      documentDate,
+      registrationDate,
+      documentNumber,
+      amount,
       finalDescription,
       finalCategory,
       validationNote,
