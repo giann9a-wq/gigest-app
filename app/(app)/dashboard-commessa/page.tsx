@@ -43,9 +43,6 @@ export default function DashboardCommessaPage() {
         const data = await safeJsonFetch("/api/commesse");
         const rows = (Array.isArray(data.rows) ? data.rows : []) as JobOrderOption[];
         setJobOrders(rows);
-        if (rows[0]?.id) {
-          setSelectedJobOrderId(rows[0].id);
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Errore nel caricamento commesse");
       } finally {
@@ -96,6 +93,31 @@ export default function DashboardCommessaPage() {
             loading={loading}
             onJobOrderChange={setSelectedJobOrderId}
           />
+        ) : null}
+
+        {!dashboardLoading && !dashboard && !error ? (
+          <div className="job-premium-empty-landing">
+            <div>
+              <p className="job-premium-eyebrow">Gestione commessa</p>
+              <h1>Seleziona una commessa</h1>
+              <p>Scegli una commessa dal menu per visualizzare KPI, grafici e dettaglio costi.</p>
+            </div>
+            <label className="job-premium-select-field">
+              <span>Commessa</span>
+              <select
+                value={selectedJobOrderId}
+                onChange={(event) => setSelectedJobOrderId(event.target.value)}
+                disabled={loading}
+              >
+                <option value="">Seleziona una commessa</option>
+                {jobOrders.map((jobOrder) => (
+                  <option key={jobOrder.id} value={jobOrder.id}>
+                    {jobOrder.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         ) : null}
       </section>
     </div>
