@@ -105,6 +105,8 @@ async function getCostActualCategoryViews(jobOrderId: string) {
           rows: {
             id: string;
             documentDate: string;
+            documentNumber: string;
+            description: string;
             amount: number;
           }[];
         }
@@ -166,6 +168,8 @@ async function getCostActualCategoryViews(jobOrderId: string) {
       existingSupplier.rows.push({
         id: entry.id,
         documentDate: entry.documentDate?.toISOString().slice(0, 10) ?? "",
+        documentNumber: entry.documentNumber ?? "",
+        description: entry.descriptionCustom || entry.descriptionOriginal || "",
         amount,
       });
     } else {
@@ -179,6 +183,8 @@ async function getCostActualCategoryViews(jobOrderId: string) {
           {
             id: entry.id,
             documentDate: entry.documentDate?.toISOString().slice(0, 10) ?? "",
+            documentNumber: entry.documentNumber ?? "",
+            description: entry.descriptionCustom || entry.descriptionOriginal || "",
             amount,
           },
         ],
