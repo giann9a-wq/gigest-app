@@ -2466,9 +2466,34 @@ a {
   color: #4b5563 !important;
 }
 
+.job-premium-kpi-section {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.job-premium-kpi-group {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.job-premium-kpi-group h2 {
+  margin: 0;
+  color: var(--job-premium-text);
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.job-premium-kpi-group-actual h2 {
+  color: #9a3412;
+}
+
+.job-premium-kpi-group-budget h2 {
+  color: #1d4ed8;
+}
+
 .job-premium-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.9rem;
 }
 
@@ -2502,16 +2527,20 @@ a {
   font-size: 0.9rem;
 }
 
-.job-premium-kpi-positive::before {
-  background: var(--job-premium-success);
+.job-premium-kpi-card-actual::before {
+  background: #f97316;
 }
 
-.job-premium-kpi-negative::before {
-  background: var(--job-premium-danger);
+.job-premium-kpi-card-budget::before {
+  background: #2563eb;
 }
 
-.job-premium-kpi-neutral::before {
-  background: var(--job-premium-primary);
+.job-premium-kpi-card-actual {
+  border-color: rgba(249, 115, 22, 0.26);
+}
+
+.job-premium-kpi-card-budget {
+  border-color: rgba(37, 99, 235, 0.22);
 }
 
 .job-premium-chart-grid {

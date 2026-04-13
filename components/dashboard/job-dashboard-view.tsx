@@ -188,12 +188,6 @@ function statusLabel(status: ResourceStatusValue) {
   }
 }
 
-function semanticClass(value: number, zeroClass = "neutral") {
-  if (value > 0) return "positive";
-  if (value < 0) return "negative";
-  return zeroClass;
-}
-
 function toDeltaPercent(actual: number, budget: number) {
   if (!budget) return null;
   return ((actual - budget) / Math.abs(budget)) * 100;
@@ -344,46 +338,48 @@ function JobDashboardHeader({
 }
 
 function JobKpiCards({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
-  const marginTone = semanticClass(dashboard.actual.grossMargin);
-  const expectedMarginTone = semanticClass(dashboard.budget.grossMargin);
+  const actualCards = [
+    { label: "Actual Totale", value: formatCurrency(dashboard.actual.totalCosts), note: "Costi consuntivi registrati" },
+    { label: "Margine Actual", value: formatCurrency(dashboard.actual.grossMargin), note: "Margine consuntivo" },
+    { label: "Margine % Actual", value: formatPercent(dashboard.actual.grossMarginPct), note: "Percentuale consuntiva" },
+  ];
 
-  const cards = [
-    {
-      label: "Actual totale",
-      value: formatCurrency(dashboard.actual.totalCosts),
-      note: `Fatturato actual ${formatCurrency(dashboard.actual.revenue)}`,
-      tone: "neutral",
-    },
-    {
-      label: "Budget totale",
-      value: formatCurrency(dashboard.budget.totalCosts),
-      note: `Fatturato previsto ${formatCurrency(dashboard.budget.revenue)}`,
-      tone: "neutral",
-    },
-    {
-      label: "Margine previsto",
-      value: formatCurrency(dashboard.budget.grossMargin),
-      note: `Actual ${formatCurrency(dashboard.actual.grossMargin)}`,
-      tone: expectedMarginTone,
-    },
-    {
-      label: "Margine %",
-      value: formatPercent(dashboard.actual.grossMarginPct),
-      note: `Previsto ${formatPercent(dashboard.budget.grossMarginPct)}`,
-      tone: marginTone,
-    },
+  const budgetCards = [
+    { label: "Budget Totale", value: formatCurrency(dashboard.budget.totalCosts), note: "Costi previsti a budget" },
+    { label: "Margine Previsto", value: formatCurrency(dashboard.budget.grossMargin), note: "Margine da previsione" },
+    { label: "Margine % Previsto", value: formatPercent(dashboard.budget.grossMarginPct), note: "Percentuale prevista" },
   ];
 
   return (
-    <section className="job-premium-kpi-grid" aria-label="Indicatori principali">
-      {cards.map((card) => (
-        <article key={card.label} className={`job-premium-kpi-card job-premium-kpi-${card.tone}`}>
-          <span>{card.label}</span>
-          <strong>{card.value}</strong>
-          <p>{card.note}</p>
-        </article>
-      ))}
+    <section className="job-premium-kpi-section" aria-label="Indicatori principali">
+      <JobKpiSection title="Actual" tone="actual" cards={actualCards} />
+      <JobKpiSection title="Budget / Previsione" tone="budget" cards={budgetCards} />
     </section>
+  );
+}
+
+function JobKpiSection({
+  title,
+  tone,
+  cards,
+}: {
+  title: string;
+  tone: "actual" | "budget";
+  cards: Array<{ label: string; value: string; note: string }>;
+}) {
+  return (
+    <div className={`job-premium-kpi-group job-premium-kpi-group-${tone}`}>
+      <h2>{title}</h2>
+      <div className="job-premium-kpi-grid">
+        {cards.map((card) => (
+          <article key={card.label} className={`job-premium-kpi-card job-premium-kpi-card-${tone}`}>
+            <span>{card.label}</span>
+            <strong>{card.value}</strong>
+            <p>{card.note}</p>
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }
 
