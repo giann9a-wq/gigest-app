@@ -339,15 +339,15 @@ function JobDashboardHeader({
 
 function JobKpiCards({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
   const actualCards = [
-    { label: "Actual Totale", value: formatCurrency(dashboard.actual.totalCosts), note: "Costi consuntivi registrati" },
-    { label: "Margine Actual", value: formatCurrency(dashboard.actual.grossMargin), note: "Margine consuntivo" },
-    { label: "Margine % Actual", value: formatPercent(dashboard.actual.grossMarginPct), note: "Percentuale consuntiva" },
+    { label: "Costi Actual", value: formatCurrency(dashboard.actual.totalCosts) },
+    { label: "Margine Actual", value: formatCurrency(dashboard.actual.grossMargin) },
+    { label: "Margine % Actual", value: formatPercent(dashboard.actual.grossMarginPct) },
   ];
 
   const budgetCards = [
-    { label: "Budget Totale", value: formatCurrency(dashboard.budget.totalCosts), note: "Costi previsti a budget" },
-    { label: "Margine Previsto", value: formatCurrency(dashboard.budget.grossMargin), note: "Margine da previsione" },
-    { label: "Margine % Previsto", value: formatPercent(dashboard.budget.grossMarginPct), note: "Percentuale prevista" },
+    { label: "Budget Totale", value: formatCurrency(dashboard.budget.totalCosts) },
+    { label: "Margine Previsto", value: formatCurrency(dashboard.budget.grossMargin) },
+    { label: "Margine % Previsto", value: formatPercent(dashboard.budget.grossMarginPct) },
   ];
 
   return (
@@ -365,7 +365,7 @@ function JobKpiSection({
 }: {
   title: string;
   tone: "actual" | "budget";
-  cards: Array<{ label: string; value: string; note: string }>;
+  cards: Array<{ label: string; value: string }>;
 }) {
   return (
     <div className={`job-premium-kpi-group job-premium-kpi-group-${tone}`}>
@@ -375,7 +375,6 @@ function JobKpiSection({
           <article key={card.label} className={`job-premium-kpi-card job-premium-kpi-card-${tone}`}>
             <span>{card.label}</span>
             <strong>{card.value}</strong>
-            <p>{card.note}</p>
           </article>
         ))}
       </div>
