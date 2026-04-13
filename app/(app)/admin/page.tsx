@@ -28,13 +28,16 @@ export default async function AdminPage() {
               Da qui puoi entrare nelle funzioni dedicate di gestione accessi e import.
             </p>
           </div>
-          {hasElevatedAccess ? (
-            <form action={lockAdminPanelAction}>
-              <button type="submit" className="mobile-button-secondary">
-                Blocca area admin
-              </button>
-            </form>
-          ) : null}
+          <div className="admin-request-actions">
+            <span className="admin-header-action-spacer" aria-hidden="true" />
+            {hasElevatedAccess ? (
+              <form action={lockAdminPanelAction}>
+                <button type="submit" className="mobile-button-secondary">
+                  Blocca area admin
+                </button>
+              </form>
+            ) : null}
+          </div>
         </div>
 
         {!credential ? (

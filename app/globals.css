@@ -366,6 +366,25 @@ a {
   flex-wrap: wrap;
 }
 
+.mobile-section-header > .admin-request-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, auto));
+  justify-content: end;
+  align-items: start;
+}
+
+.mobile-section-header > .admin-request-actions > * {
+  min-width: 140px;
+}
+
+.mobile-section-header > .admin-request-actions .mobile-button-secondary {
+  width: 100%;
+}
+
+.admin-header-action-spacer {
+  display: block;
+}
+
 .admin-request-head {
   justify-content: space-between;
   align-items: flex-start;
