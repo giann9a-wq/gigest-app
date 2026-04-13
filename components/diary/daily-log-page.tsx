@@ -868,13 +868,10 @@ export function DailyLogPage() {
 
         <DailyLogStatsBar
           completedInternalRows={completedInternalRows}
-          internalRowsCount={internalRows.length}
           totalInternalHours={totalInternalHours}
           completedExternalRows={completedExternalRows}
-          externalRowsCount={externalRows.length}
           totalExternalDays={totalExternalDays}
           completedExternalEconomyRows={completedExternalEconomyRows}
-          externalEconomyRowsCount={externalEconomyRows.length}
           totalExternalEconomyHours={totalExternalEconomyHours}
         />
 
@@ -1009,32 +1006,26 @@ function DailyLogDateCard({
 
 function DailyLogStatsBar({
   completedInternalRows,
-  internalRowsCount,
   totalInternalHours,
   completedExternalRows,
-  externalRowsCount,
   totalExternalDays,
   completedExternalEconomyRows,
-  externalEconomyRowsCount,
   totalExternalEconomyHours,
 }: {
   completedInternalRows: number;
-  internalRowsCount: number;
   totalInternalHours: number;
   completedExternalRows: number;
-  externalRowsCount: number;
   totalExternalDays: number;
   completedExternalEconomyRows: number;
-  externalEconomyRowsCount: number;
   totalExternalEconomyHours: number;
 }) {
   return (
     <section className="diary-kpi-strip">
-      <div><span>Interne</span><strong>{completedInternalRows}/{internalRowsCount}</strong></div>
+      <div><span>Interne</span><strong>{completedInternalRows}</strong></div>
       <div><span>Ore interne</span><strong>{toOneDecimal(totalInternalHours)}</strong></div>
-      <div><span>Subappalto</span><strong>{completedExternalRows}/{externalRowsCount}</strong></div>
+      <div><span>Subappalto</span><strong>{completedExternalRows}</strong></div>
       <div><span>Giornate subappalto</span><strong>{toOneDecimal(totalExternalDays)}</strong></div>
-      <div><span>Economia</span><strong>{completedExternalEconomyRows}/{externalEconomyRowsCount}</strong></div>
+      <div><span>Economia</span><strong>{completedExternalEconomyRows}</strong></div>
       <div><span>Ore economia</span><strong>{toOneDecimal(totalExternalEconomyHours)}</strong></div>
     </section>
   );
@@ -1195,10 +1186,10 @@ function ExternalResourcesSection({
         </div>
       ) : null}
 
-      <details className="diary-resource-accordion" open>
+      <details className="diary-resource-accordion">
         <summary>
           <span>Risorse in subappalto</span>
-          <small>{rows.length} righe · giornate</small>
+          <small>{rows.filter(isFilledExternal).length} righe · giornate</small>
         </summary>
         <ExternalResourceRowsTable
           rows={rows}
@@ -1218,7 +1209,7 @@ function ExternalResourcesSection({
       <details className="diary-resource-accordion">
         <summary>
           <span>Risorse in economia</span>
-          <small>{economyRows.length} righe · ore</small>
+          <small>{economyRows.filter(isFilledExternalEconomy).length} righe · ore</small>
         </summary>
         <ExternalEconomyRowsTable
           rows={economyRows}

@@ -609,46 +609,97 @@ function JobSummaryTable({ categories }: { categories: DashboardCategory[] }) {
   );
 }
 
-function JobExternalEconomySummary({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
-  const rows = dashboard.actual.externalEconomyResources?.details ?? [];
+function JobExternalResourcesSummary({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
+  const subcontractRows = dashboard.actual.externalResources?.details ?? [];
+  const economyRows = dashboard.actual.externalEconomyResources?.details ?? [];
 
   return (
     <section className="job-premium-card">
       <div className="job-premium-section-head">
         <div>
           <span>Risorse esterne</span>
-          <h2>Risorse in economia</h2>
+          <h2>Subappalto ed economia</h2>
         </div>
-        <strong>{formatQuantity(dashboard.actual.externalEconomyResources?.totalHours ?? 0, "h")}</strong>
       </div>
 
-      <div className="job-premium-table-wrap">
-        <table className="job-premium-summary-table job-premium-economy-table">
-          <thead>
-            <tr>
-              <th>Risorsa</th>
-              <th>Movimenti</th>
-              <th>Ore totali</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={3}>Nessuna risorsa in economia associata alla commessa.</td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={row.resourceId}>
-                  <td><strong>{row.resourceLabel}</strong></td>
-                  <td>{row.entryCount}</td>
-                  <td>{formatQuantity(row.totalHours, "h")}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="job-premium-external-grid">
+        <ExternalResourceSummaryTable
+          title="Risorse in subappalto"
+          emptyText="Nessuna risorsa in subappalto associata alla commessa."
+          quantityLabel="Giornate totali"
+          rows={subcontractRows.map((row) => ({
+            resourceId: row.resourceId,
+            resourceLabel: row.resourceLabel,
+            entryCount: row.entryCount,
+            total: row.totalDays,
+          }))}
+          total={formatQuantity(dashboard.actual.externalResources?.totalDays ?? 0, "gg")}
+          unit="gg"
+        />
+        <ExternalResourceSummaryTable
+          title="Risorse in economia"
+          emptyText="Nessuna risorsa in economia associata alla commessa."
+          quantityLabel="Ore totali"
+          rows={economyRows.map((row) => ({
+            resourceId: row.resourceId,
+            resourceLabel: row.resourceLabel,
+            entryCount: row.entryCount,
+            total: row.totalHours,
+          }))}
+          total={formatQuantity(dashboard.actual.externalEconomyResources?.totalHours ?? 0, "h")}
+          unit="h"
+        />
       </div>
     </section>
+  );
+}
+
+function ExternalResourceSummaryTable({
+  title,
+  emptyText,
+  quantityLabel,
+  rows,
+  total,
+  unit,
+}: {
+  title: string;
+  emptyText: string;
+  quantityLabel: string;
+  rows: Array<{ resourceId: string; resourceLabel: string; entryCount: number; total: number }>;
+  total: string;
+  unit: string;
+}) {
+  return (
+    <div className="job-premium-table-wrap">
+      <div className="job-premium-external-table-head">
+        <strong>{title}</strong>
+        <span>{total}</span>
+      </div>
+      <table className="job-premium-summary-table job-premium-economy-table">
+        <thead>
+          <tr>
+            <th>Risorsa</th>
+            <th>Movimenti</th>
+            <th>{quantityLabel}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={3}>{emptyText}</td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr key={row.resourceId}>
+                <td><strong>{row.resourceLabel}</strong></td>
+                <td>{row.entryCount}</td>
+                <td>{formatQuantity(row.total, unit)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -664,7 +715,7 @@ export function JobDashboardView(props: JobDashboardViewProps) {
       <JobBudgetVsActualChart categories={categories} />
       </div>
       <JobCostBreakdownAccordion categories={categories} />
-      <JobExternalEconomySummary dashboard={props.dashboard} />
+      <JobExternalResourcesSummary dashboard={props.dashboard} />
       <JobSummaryTable categories={categories} />
     </div>
   );
