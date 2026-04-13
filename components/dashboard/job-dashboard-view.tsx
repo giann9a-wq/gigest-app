@@ -340,12 +340,14 @@ function JobDashboardHeader({
 function JobKpiCards({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
   const actualCards = [
     { label: "Costi Actual", value: formatCurrency(dashboard.actual.totalCosts) },
+    { label: "Fatturato Actual", value: formatCurrency(dashboard.actual.revenue) },
     { label: "Margine Actual", value: formatCurrency(dashboard.actual.grossMargin) },
     { label: "Margine % Actual", value: formatPercent(dashboard.actual.grossMarginPct) },
   ];
 
   const budgetCards = [
-    { label: "Budget Totale", value: formatCurrency(dashboard.budget.totalCosts) },
+    { label: "Totale Costi Budget", value: formatCurrency(dashboard.budget.totalCosts) },
+    { label: "Fatturato Budget", value: formatCurrency(dashboard.budget.revenue) },
     { label: "Margine Previsto", value: formatCurrency(dashboard.budget.grossMargin) },
     { label: "Margine % Previsto", value: formatPercent(dashboard.budget.grossMarginPct) },
   ];
