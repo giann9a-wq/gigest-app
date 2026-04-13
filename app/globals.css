@@ -685,6 +685,11 @@ a {
   color: var(--text-muted);
 }
 
+.commesse-page-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .commesse-filter-bar {
   display: flex;
   align-items: flex-end;
@@ -698,6 +703,9 @@ a {
 }
 
 .commesse-table-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   border: 1px solid rgba(240, 176, 137, 0.32);
   background: rgba(255, 255, 255, 0.52);

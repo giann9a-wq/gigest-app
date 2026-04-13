@@ -276,7 +276,7 @@ export default function CommessePage() {
 
   return (
     <div className="grid gap-4">
-      <div className="card">
+      <div className="card commesse-page-card">
         <div className="mobile-section-header">
           <div>
             <h1 className="mobile-section-title">Gestione Commesse</h1>
