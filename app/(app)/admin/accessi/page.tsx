@@ -1,4 +1,4 @@
-import { AccessRequestStatus } from "@prisma/client";
+import { AccessRequestStatus, UserRole, UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import {
   ensureAdminPanelCredential,
@@ -11,6 +11,7 @@ import {
   approveAccessRequestAction,
   lockAdminPanelAction,
   rejectAccessRequestAction,
+  updateUserRoleAction,
   unlockAdminPanelAction,
 } from "./actions";
 
@@ -39,7 +40,7 @@ export default async function AdminAccessPage({
   const credential = await ensureAdminPanelCredential();
   const hasElevatedAccess = await hasElevatedAdminPanelAccess(adminUser.id);
 
-  const [pendingRequests, recentRequests] = hasElevatedAccess
+  const [pendingRequests, recentRequests, activeUsers] = hasElevatedAccess
     ? await Promise.all([
         prisma.accessRequest.findMany({
           where: { status: AccessRequestStatus.PENDING },
@@ -61,8 +62,19 @@ export default async function AdminAccessPage({
             },
           },
         }),
+        prisma.user.findMany({
+          where: { status: UserStatus.ACTIVE },
+          orderBy: { email: "asc" },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        }),
       ])
-    : [[], []];
+    : [[], [], []];
 
   const approvedCount = hasElevatedAccess
     ? await prisma.accessRequest.count({
@@ -206,42 +218,85 @@ export default async function AdminAccessPage({
               <section className="card">
                 <div className="mobile-section-header">
                   <div>
-                    <h2 style={{ margin: 0 }}>Storico recente</h2>
+                    <h2 style={{ margin: 0 }}>Utenze attive</h2>
                     <p className="mobile-section-subtitle">
-                      Ultime richieste gia gestite.
+                      Modifica il ruolo degli utenti. Deve restare sempre almeno un admin attivo.
                     </p>
                   </div>
                 </div>
 
-                {recentRequests.length === 0 ? (
+                {activeUsers.length === 0 ? (
                   <p className="muted" style={{ margin: 0 }}>
-                    Nessuna richiesta gestita finora.
+                    Nessuna utenza attiva.
                   </p>
                 ) : (
-                  <div className="admin-request-list">
-                    {recentRequests.map((request) => (
-                      <article key={request.id} className="card admin-request-card">
-                        <div className="admin-request-head">
+                  <div className="admin-user-role-list">
+                    {activeUsers.map((user) => {
+                      const displayName =
+                        user.firstName || user.lastName
+                          ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
+                          : user.email;
+
+                      return (
+                        <article key={user.id} className="admin-user-role-card">
                           <div>
-                            <strong>{request.email}</strong>
+                            <strong>{displayName}</strong>
                             <div className="admin-request-meta">
-                              <span>{request.status}</span>
-                              <span>Gestita: {request.handledAt ? formatDateTime(request.handledAt) : "-"}</span>
+                              <span>{user.email}</span>
+                              <span>Ruolo attuale: {user.role}</span>
                             </div>
                           </div>
-                          <span className="admin-request-badge">{request.status}</span>
-                        </div>
 
-                        <div className="admin-request-meta">
-                          <span>Richiedente: {request.firstName || request.lastName ? `${request.firstName ?? ""} ${request.lastName ?? ""}`.trim() : "N/D"}</span>
-                          <span>Gestita da: {request.handledBy?.email ?? "N/D"}</span>
-                        </div>
-                      </article>
-                    ))}
+                          <form action={updateUserRoleAction} className="admin-user-role-form">
+                            <input type="hidden" name="userId" value={user.id} />
+                            <select name="role" defaultValue={user.role} className="admin-role-select" aria-label={`Ruolo di ${user.email}`}>
+                              <option value={UserRole.ADMIN}>Admin</option>
+                              <option value={UserRole.OPERATOR}>Operator</option>
+                            </select>
+                            <button type="submit" className="mobile-button-secondary">
+                              Salva ruolo
+                            </button>
+                          </form>
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
               </section>
             </div>
+
+            <section className="card">
+              <div className="mobile-section-header">
+                <div>
+                  <h2 style={{ margin: 0 }}>Storico recente</h2>
+                  <p className="mobile-section-subtitle">
+                    Ultime richieste gia gestite.
+                  </p>
+                </div>
+              </div>
+
+              {recentRequests.length === 0 ? (
+                <p className="muted" style={{ margin: 0 }}>
+                  Nessuna richiesta gestita finora.
+                </p>
+              ) : (
+                <div className="admin-history-list">
+                  {recentRequests.map((request) => (
+                    <article key={request.id} className="admin-history-row">
+                      <div className="admin-history-main">
+                        <strong>{request.email}</strong>
+                        <span>{request.firstName || request.lastName ? `${request.firstName ?? ""} ${request.lastName ?? ""}`.trim() : "Richiedente N/D"}</span>
+                      </div>
+                      <div className="admin-history-meta">
+                        <span>Gestita: {request.handledAt ? formatDateTime(request.handledAt) : "-"}</span>
+                        <span>Da: {request.handledBy?.email ?? "N/D"}</span>
+                      </div>
+                      <span className="admin-request-badge">{request.status}</span>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
           </>
         )}
       </section>

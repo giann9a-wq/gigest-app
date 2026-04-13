@@ -1,7 +1,7 @@
 "use server";
 
 import type { Route } from "next";
-import { AccessRequestStatus, UserStatus } from "@prisma/client";
+import { AccessRequestStatus, UserRole, UserStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -145,4 +145,62 @@ export async function rejectAccessRequestAction(formData: FormData) {
 
   revalidatePath("/admin/accessi");
   redirect(buildAdminRedirect(`Richiesta rifiutata per ${accessRequest.email}.`));
+}
+
+export async function updateUserRoleAction(formData: FormData) {
+  const adminUser = await requireAdminUser();
+
+  if (!adminUser) {
+    redirect("/dashboard");
+  }
+
+  const hasAccess = await hasElevatedAdminPanelAccess(adminUser.id);
+
+  if (!hasAccess) {
+    redirect(buildAdminRedirect("Sblocca prima l'area admin con la password aggiuntiva.", "error"));
+  }
+
+  const userId = String(formData.get("userId") ?? "");
+  const nextRole = String(formData.get("role") ?? "");
+
+  if (nextRole !== UserRole.ADMIN && nextRole !== UserRole.OPERATOR) {
+    redirect(buildAdminRedirect("Ruolo selezionato non valido.", "error"));
+  }
+
+  const targetUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      status: true,
+    },
+  });
+
+  if (!targetUser || targetUser.status !== UserStatus.ACTIVE) {
+    redirect(buildAdminRedirect("Utente attivo non trovato.", "error"));
+  }
+
+  if (targetUser.role === UserRole.ADMIN && nextRole === UserRole.OPERATOR) {
+    const activeAdminCount = await prisma.user.count({
+      where: {
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+
+    if (activeAdminCount <= 1) {
+      redirect(buildAdminRedirect("Deve restare almeno un utente admin attivo.", "error"));
+    }
+  }
+
+  await prisma.user.update({
+    where: { id: targetUser.id },
+    data: {
+      role: nextRole,
+    },
+  });
+
+  revalidatePath("/admin/accessi");
+  redirect(buildAdminRedirect(`Ruolo aggiornato per ${targetUser.email}.`));
 }
