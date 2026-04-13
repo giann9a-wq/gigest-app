@@ -42,7 +42,7 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
     { href: "/commesse" as Route, label: "Gestione Commesse" },
     { href: "/scadenziario" as Route, label: "Scadenziario" },
     { href: "/stampa-risorse-mese" as Route, label: "Stampa Risorse" },
-    ...(showAdminLink ? [{ href: "/admin/accessi" as Route, label: "Admin" }] : []),
+    ...(showAdminLink ? [{ href: "/admin" as Route, label: "Admin" }] : []),
   ];
 
   return (

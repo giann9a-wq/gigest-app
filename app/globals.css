@@ -366,19 +366,34 @@ a {
   flex-wrap: wrap;
 }
 
-.mobile-section-header > .admin-request-actions {
+.admin-page > .card > .mobile-section-header {
   display: grid;
-  grid-template-columns: repeat(2, minmax(140px, auto));
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 1rem;
+}
+
+.admin-page > .card > .mobile-section-header > .admin-request-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 150px);
   justify-content: end;
   align-items: start;
+  gap: 0.75rem;
 }
 
-.mobile-section-header > .admin-request-actions > * {
-  min-width: 140px;
+.admin-page > .card > .mobile-section-header > .admin-request-actions > * {
+  min-width: 0;
 }
 
-.mobile-section-header > .admin-request-actions .mobile-button-secondary {
+.admin-page > .card > .mobile-section-header > .admin-request-actions .mobile-button-secondary {
+  min-height: 46px;
   width: 100%;
+  padding: 0.72rem 1rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .admin-header-action-spacer {
@@ -4323,6 +4338,15 @@ a {
   .admin-grid,
   .admin-stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-page > .card > .mobile-section-header {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-page > .card > .mobile-section-header > .admin-request-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
   }
 
   .cost-import-stats,
