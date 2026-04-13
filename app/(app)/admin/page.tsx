@@ -29,7 +29,6 @@ export default async function AdminPage() {
             </p>
           </div>
           <div className="admin-request-actions">
-            <span className="admin-header-action-spacer" aria-hidden="true" />
             {hasElevatedAccess ? (
               <form action={lockAdminPanelAction}>
                 <button type="submit" className="mobile-button-secondary">
