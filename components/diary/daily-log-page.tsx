@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatItalianLongDate, formatItalianShortDate } from "@/lib/date-format";
 
@@ -380,6 +380,7 @@ export function DailyLogPage() {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
   const [printPreviewDays, setPrintPreviewDays] = useState<PrintDay[]>([]);
+  const printPreviewRequestRef = useRef(0);
   const [printOptions, setPrintOptions] = useState<PrintOptions>({
     mode: "single",
     singleDate: referenceDate,
@@ -828,15 +829,24 @@ export function DailyLogPage() {
   }
 
   async function refreshPrintPreview(options = printOptions) {
+    const requestId = printPreviewRequestRef.current + 1;
+    printPreviewRequestRef.current = requestId;
     setPrintLoading(true);
     setError("");
 
     try {
-      setPrintPreviewDays(await buildPrintDays(options));
+      const days = await buildPrintDays(options);
+      if (requestId === printPreviewRequestRef.current) {
+        setPrintPreviewDays(days);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore nella preparazione della stampa");
+      if (requestId === printPreviewRequestRef.current) {
+        setError(err instanceof Error ? err.message : "Errore nella preparazione della stampa");
+      }
     } finally {
-      setPrintLoading(false);
+      if (requestId === printPreviewRequestRef.current) {
+        setPrintLoading(false);
+      }
     }
   }
 
