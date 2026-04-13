@@ -60,6 +60,7 @@ type PrintDay = {
 
 type PrintOptions = {
   mode: "single" | "multi";
+  singleDate: string;
   selectedDates: string[];
   rangeFrom: string;
   rangeTo: string;
@@ -381,6 +382,7 @@ export function DailyLogPage() {
   const [printPreviewDays, setPrintPreviewDays] = useState<PrintDay[]>([]);
   const [printOptions, setPrintOptions] = useState<PrintOptions>({
     mode: "single",
+    singleDate: referenceDate,
     selectedDates: [],
     rangeFrom: referenceDate,
     rangeTo: referenceDate,
@@ -781,7 +783,7 @@ export function DailyLogPage() {
 
   async function buildPrintDays(options = printOptions) {
     if (options.mode === "single") {
-      const selectedDate = options.selectedDates[0] ?? referenceDate;
+      const selectedDate = options.singleDate || referenceDate;
       if (selectedDate === referenceDate) return [currentPrintDay()];
 
       const rows = await fetchRowsForDate(selectedDate);
@@ -840,7 +842,13 @@ export function DailyLogPage() {
 
   function openPrintDialog() {
     setPrintDialogOpen(true);
-    const nextOptions = { ...printOptions, selectedDates: [referenceDate], rangeFrom: referenceDate, rangeTo: referenceDate };
+    const nextOptions = {
+      ...printOptions,
+      singleDate: referenceDate,
+      selectedDates: [],
+      rangeFrom: referenceDate,
+      rangeTo: referenceDate,
+    };
     setPrintOptions(nextOptions);
     void refreshPrintPreview(nextOptions);
   }
@@ -867,8 +875,12 @@ export function DailyLogPage() {
 
   function updatePrintOptions(patch: Partial<PrintOptions>) {
     const nextOptions = { ...printOptions, ...patch };
-    if (patch.mode === "single" && nextOptions.selectedDates.length === 0) {
-      nextOptions.selectedDates = [referenceDate];
+    if (patch.mode === "single") {
+      nextOptions.singleDate = nextOptions.singleDate || referenceDate;
+      nextOptions.selectedDates = [];
+    }
+    if (patch.mode === "multi") {
+      nextOptions.selectedDates = [];
     }
     setPrintOptions(nextOptions);
     void refreshPrintPreview(nextOptions);
@@ -1408,8 +1420,8 @@ function DailyLogPrintDialog({
                 <span>Giorno da stampare</span>
                 <input
                   type="date"
-                  value={options.selectedDates[0] ?? ""}
-                  onChange={(event) => onOptionsChange({ selectedDates: event.target.value ? [event.target.value] : [] })}
+                  value={options.singleDate}
+                  onChange={(event) => onOptionsChange({ singleDate: event.target.value })}
                 />
               </div>
             ) : null}
