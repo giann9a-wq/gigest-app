@@ -41,10 +41,21 @@ type ExternalEditableRow = {
   activityDescription: string;
 };
 
+type ExternalEconomyEditableRow = {
+  localId: string;
+  externalResourceId: string;
+  externalResourceLabel?: string;
+  jobOrderId: string;
+  jobOrderLabel?: string;
+  hours: string;
+  activityDescription: string;
+};
+
 type PrintDay = {
   date: string;
   internalRows: InternalEditableRow[];
   externalRows: ExternalEditableRow[];
+  externalEconomyRows: ExternalEconomyEditableRow[];
 };
 
 type PrintOptions = {
@@ -115,6 +126,16 @@ function makeEmptyExternalRow(): ExternalEditableRow {
   };
 }
 
+function makeEmptyExternalEconomyRow(): ExternalEconomyEditableRow {
+  return {
+    localId: crypto.randomUUID(),
+    externalResourceId: "",
+    jobOrderId: "",
+    hours: "",
+    activityDescription: "",
+  };
+}
+
 async function safeJsonFetch(url: string, options?: RequestInit) {
   const response = await fetch(url, options);
   const contentType = response.headers.get("content-type") || "";
@@ -153,6 +174,10 @@ function isFilledInternal(row: InternalEditableRow) {
 
 function isFilledExternal(row: ExternalEditableRow) {
   return row.externalResourceId.trim() && row.jobOrderId.trim() && row.days.trim();
+}
+
+function isFilledExternalEconomy(row: ExternalEconomyEditableRow) {
+  return row.externalResourceId.trim() && row.jobOrderId.trim() && row.hours.trim();
 }
 
 function escapeHtml(value: string) {
@@ -208,8 +233,10 @@ function buildPrintHtml(days: PrintDay[], options: PrintOptions) {
     .map((day) => {
       const internalRows = day.internalRows.filter(isFilledInternal);
       const externalRows = day.externalRows.filter(isFilledExternal);
+      const externalEconomyRows = day.externalEconomyRows.filter(isFilledExternalEconomy);
       const totalHours = sumNumericStrings(internalRows.map((row) => row.hours));
       const totalDays = sumNumericStrings(externalRows.map((row) => row.days));
+      const totalEconomyHours = sumNumericStrings(externalEconomyRows.map((row) => row.hours));
 
       return `
         <article class="print-page">
@@ -226,8 +253,10 @@ function buildPrintHtml(days: PrintDay[], options: PrintOptions) {
               ? `<section class="print-totals">
                   <div><span>Interne</span><strong>${internalRows.length}</strong></div>
                   <div><span>Ore interne</span><strong>${toOneDecimal(totalHours)}</strong></div>
-                  <div><span>Esterne</span><strong>${externalRows.length}</strong></div>
+                  <div><span>Subappalto</span><strong>${externalRows.length}</strong></div>
                   <div><span>Giornate esterne</span><strong>${toOneDecimal(totalDays)}</strong></div>
+                  <div><span>Economia</span><strong>${externalEconomyRows.length}</strong></div>
+                  <div><span>Ore economia</span><strong>${toOneDecimal(totalEconomyHours)}</strong></div>
                 </section>`
               : ""
           }
@@ -259,6 +288,22 @@ function buildPrintHtml(days: PrintDay[], options: PrintOptions) {
                     description: row.activityDescription,
                   })),
                   "Giornate",
+                  options.includeDescriptions
+                )
+              : ""
+          }
+          ${
+            options.includeExternal
+              ? printRowsTable(
+                  "Risorse in economia",
+                  "Nessuna risorsa in economia caricata.",
+                  externalEconomyRows.map((row) => ({
+                    resource: row.externalResourceLabel || row.externalResourceId,
+                    jobOrder: row.jobOrderLabel || row.jobOrderId,
+                    quantity: toOneDecimal(Number(row.hours) || 0),
+                    description: row.activityDescription,
+                  })),
+                  "Ore",
                   options.includeDescriptions
                 )
               : ""
@@ -315,6 +360,9 @@ export function DailyLogPage() {
     makeEmptyExternalRow(),
     makeEmptyExternalRow(),
   ]);
+  const [externalEconomyRows, setExternalEconomyRows] = useState<ExternalEconomyEditableRow[]>([
+    makeEmptyExternalEconomyRow(),
+  ]);
   const [externalResourceDraft, setExternalResourceDraft] = useState("");
   const [showExternalResourceManager, setShowExternalResourceManager] = useState(false);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
@@ -368,11 +416,20 @@ export function DailyLogPage() {
     }));
   }
 
+  function hydrateExternalEconomyRows(rows: ExternalEconomyEditableRow[]) {
+    return rows.map((row) => ({
+      ...row,
+      externalResourceLabel: row.externalResourceLabel || externalResourceLabel(row.externalResourceId),
+      jobOrderLabel: row.jobOrderLabel || jobOrderLabel(row.jobOrderId),
+    }));
+  }
+
   function currentPrintDay(): PrintDay {
     return {
       date: referenceDate,
       internalRows: hydrateInternalRows(internalRows),
       externalRows: hydrateExternalRows(externalRows),
+      externalEconomyRows: hydrateExternalEconomyRows(externalEconomyRows),
     };
   }
 
@@ -388,12 +445,22 @@ export function DailyLogPage() {
     );
   }
 
+  function setExternalEconomyRowValue(localId: string, patch: Partial<ExternalEconomyEditableRow>) {
+    setExternalEconomyRows((current) =>
+      current.map((row) => (row.localId === localId ? { ...row, ...patch } : row))
+    );
+  }
+
   function addInternalRow() {
     setInternalRows((current) => [...current, makeEmptyInternalRow()]);
   }
 
   function addExternalRow() {
     setExternalRows((current) => [...current, makeEmptyExternalRow()]);
+  }
+
+  function addExternalEconomyRow() {
+    setExternalEconomyRows((current) => [...current, makeEmptyExternalEconomyRow()]);
   }
 
   function duplicateInternalRow(localId: string) {
@@ -412,6 +479,14 @@ export function DailyLogPage() {
     });
   }
 
+  function duplicateExternalEconomyRow(localId: string) {
+    setExternalEconomyRows((current) => {
+      const sourceRow = current.find((row) => row.localId === localId);
+      if (!sourceRow) return current;
+      return [...current, { ...sourceRow, localId: crypto.randomUUID() }];
+    });
+  }
+
   function removeInternalRow(localId: string) {
     setInternalRows((current) => {
       const updated = current.filter((row) => row.localId !== localId);
@@ -423,6 +498,13 @@ export function DailyLogPage() {
     setExternalRows((current) => {
       const updated = current.filter((row) => row.localId !== localId);
       return updated.length > 0 ? updated : [makeEmptyExternalRow()];
+    });
+  }
+
+  function removeExternalEconomyRow(localId: string) {
+    setExternalEconomyRows((current) => {
+      const updated = current.filter((row) => row.localId !== localId);
+      return updated.length > 0 ? updated : [makeEmptyExternalEconomyRow()];
     });
   }
 
@@ -462,7 +544,20 @@ export function DailyLogPage() {
             activityDescription: row.activityDescription ?? "",
           }));
 
-    return { internalRows: loadedInternalRows, externalRows: loadedExternalRows };
+    const loadedExternalEconomyRows: ExternalEconomyEditableRow[] =
+      !data.externalEconomyRows || data.externalEconomyRows.length === 0
+        ? []
+        : data.externalEconomyRows.map((row: any) => ({
+            localId: crypto.randomUUID(),
+            externalResourceId: row.externalResourceId ?? "",
+            externalResourceLabel: row.externalResourceLabel ?? "",
+            jobOrderId: row.jobOrderId ?? "",
+            jobOrderLabel: row.jobOrderLabel ?? "",
+            hours: row.hours?.toString() ?? "",
+            activityDescription: row.activityDescription ?? "",
+          }));
+
+    return { internalRows: loadedInternalRows, externalRows: loadedExternalRows, externalEconomyRows: loadedExternalEconomyRows };
   }
 
   async function loadRows(date: string) {
@@ -479,6 +574,11 @@ export function DailyLogPage() {
         data.externalRows.length === 0
           ? [makeEmptyExternalRow(), makeEmptyExternalRow()]
           : data.externalRows
+      );
+      setExternalEconomyRows(
+        data.externalEconomyRows.length === 0
+          ? [makeEmptyExternalEconomyRow()]
+          : data.externalEconomyRows
       );
     } finally {
       setLoadingRows(false);
@@ -550,10 +650,18 @@ export function DailyLogPage() {
             days: row.days,
             activityDescription: row.activityDescription,
           })),
+          externalEconomyRows: externalEconomyRows.map((row) => ({
+            externalResourceId: row.externalResourceId,
+            jobOrderId: row.jobOrderId,
+            hours: row.hours,
+            activityDescription: row.activityDescription,
+          })),
         }),
       });
 
-      setMessage(`Salvataggio completato. Interne: ${data.savedInternalRows}. Esterne: ${data.savedExternalRows}.`);
+      setMessage(
+        `Salvataggio completato. Interne: ${data.savedInternalRows}. Subappalto: ${data.savedExternalRows}. Economia: ${data.savedExternalEconomyRows ?? 0}.`
+      );
       await loadRows(referenceDate);
       if (redirectAfterSave) {
         router.push("/dashboard");
@@ -581,6 +689,11 @@ export function DailyLogPage() {
         data.externalRows.length === 0
           ? [makeEmptyExternalRow(), makeEmptyExternalRow()]
           : data.externalRows.map((row) => ({ ...row, localId: crypto.randomUUID() }))
+      );
+      setExternalEconomyRows(
+        data.externalEconomyRows.length === 0
+          ? [makeEmptyExternalEconomyRow()]
+          : data.externalEconomyRows.map((row) => ({ ...row, localId: crypto.randomUUID() }))
       );
       setMessage(`Righe duplicate dal ${formatItalianShortDate(previousDate)}. Ricordati di salvare il diario.`);
     } catch (err) {
@@ -625,6 +738,9 @@ export function DailyLogPage() {
       setExternalRows((current) =>
         current.map((row) => (row.externalResourceId === id ? { ...row, externalResourceId: "" } : row))
       );
+      setExternalEconomyRows((current) =>
+        current.map((row) => (row.externalResourceId === id ? { ...row, externalResourceId: "" } : row))
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nella rimozione risorsa esterna");
     }
@@ -632,6 +748,10 @@ export function DailyLogPage() {
 
   const totalInternalHours = useMemo(() => sumNumericStrings(internalRows.map((row) => row.hours)), [internalRows]);
   const totalExternalDays = useMemo(() => sumNumericStrings(externalRows.map((row) => row.days)), [externalRows]);
+  const totalExternalEconomyHours = useMemo(
+    () => sumNumericStrings(externalEconomyRows.map((row) => row.hours)),
+    [externalEconomyRows]
+  );
 
   const completedInternalRows = useMemo(
     () => internalRows.filter((row) => row.resourceValue.trim() && row.jobOrderId.trim() && row.hours.trim()).length,
@@ -641,6 +761,11 @@ export function DailyLogPage() {
   const completedExternalRows = useMemo(
     () => externalRows.filter((row) => row.externalResourceId.trim() && row.jobOrderId.trim() && row.days.trim()).length,
     [externalRows]
+  );
+
+  const completedExternalEconomyRows = useMemo(
+    () => externalEconomyRows.filter((row) => row.externalResourceId.trim() && row.jobOrderId.trim() && row.hours.trim()).length,
+    [externalEconomyRows]
   );
 
   async function buildPrintDays(options = printOptions) {
@@ -664,13 +789,16 @@ export function DailyLogPage() {
         date,
         internalRows: rows.internalRows,
         externalRows: rows.externalRows,
+        externalEconomyRows: rows.externalEconomyRows,
       };
-      if (!options.onlyCompiled || rows.internalRows.length > 0 || rows.externalRows.length > 0) {
+      if (!options.onlyCompiled || rows.internalRows.length > 0 || rows.externalRows.length > 0 || rows.externalEconomyRows.length > 0) {
         days.push(day);
       }
     }
 
-    return days.filter((day) => !options.onlyCompiled || day.internalRows.length > 0 || day.externalRows.length > 0);
+    return days.filter(
+      (day) => !options.onlyCompiled || day.internalRows.length > 0 || day.externalRows.length > 0 || day.externalEconomyRows.length > 0
+    );
   }
 
   async function refreshPrintPreview(options = printOptions) {
@@ -745,6 +873,9 @@ export function DailyLogPage() {
           completedExternalRows={completedExternalRows}
           externalRowsCount={externalRows.length}
           totalExternalDays={totalExternalDays}
+          completedExternalEconomyRows={completedExternalEconomyRows}
+          externalEconomyRowsCount={externalEconomyRows.length}
+          totalExternalEconomyHours={totalExternalEconomyHours}
         />
 
         <div className="diary-workspace-shortcuts">
@@ -770,6 +901,7 @@ export function DailyLogPage() {
 
         <ExternalResourcesSection
           rows={externalRows}
+          economyRows={externalEconomyRows}
           externalResources={externalResources}
           jobOrders={jobOrders}
           loading={loading}
@@ -778,9 +910,13 @@ export function DailyLogPage() {
           showExternalResourceManager={showExternalResourceManager}
           savingExternalResource={savingExternalResource}
           onAddRow={addExternalRow}
+          onAddEconomyRow={addExternalEconomyRow}
           onDuplicateRow={duplicateExternalRow}
+          onDuplicateEconomyRow={duplicateExternalEconomyRow}
           onRemoveRow={removeExternalRow}
+          onRemoveEconomyRow={removeExternalEconomyRow}
           onChangeRow={setExternalRowValue}
+          onChangeEconomyRow={setExternalEconomyRowValue}
           onToggleManager={() => setShowExternalResourceManager((current) => !current)}
           onDraftChange={setExternalResourceDraft}
           onAddExternalResource={handleAddExternalResource}
@@ -790,7 +926,7 @@ export function DailyLogPage() {
         <div className="diary-sticky-actions">
           <div>
             <strong>{formatItalianShortDate(referenceDate)}</strong>
-            <span>{completedInternalRows + completedExternalRows} righe compilate</span>
+            <span>{completedInternalRows + completedExternalRows + completedExternalEconomyRows} righe compilate</span>
           </div>
           <div>
             <button className="mobile-button-secondary" type="button" onClick={openPrintDialog}>Stampa PDF</button>
@@ -878,6 +1014,9 @@ function DailyLogStatsBar({
   completedExternalRows,
   externalRowsCount,
   totalExternalDays,
+  completedExternalEconomyRows,
+  externalEconomyRowsCount,
+  totalExternalEconomyHours,
 }: {
   completedInternalRows: number;
   internalRowsCount: number;
@@ -885,13 +1024,18 @@ function DailyLogStatsBar({
   completedExternalRows: number;
   externalRowsCount: number;
   totalExternalDays: number;
+  completedExternalEconomyRows: number;
+  externalEconomyRowsCount: number;
+  totalExternalEconomyHours: number;
 }) {
   return (
     <section className="diary-kpi-strip">
       <div><span>Interne</span><strong>{completedInternalRows}/{internalRowsCount}</strong></div>
       <div><span>Ore interne</span><strong>{toOneDecimal(totalInternalHours)}</strong></div>
-      <div><span>Esterne</span><strong>{completedExternalRows}/{externalRowsCount}</strong></div>
-      <div><span>Giornate esterne</span><strong>{toOneDecimal(totalExternalDays)}</strong></div>
+      <div><span>Subappalto</span><strong>{completedExternalRows}/{externalRowsCount}</strong></div>
+      <div><span>Giornate subappalto</span><strong>{toOneDecimal(totalExternalDays)}</strong></div>
+      <div><span>Economia</span><strong>{completedExternalEconomyRows}/{externalEconomyRowsCount}</strong></div>
+      <div><span>Ore economia</span><strong>{toOneDecimal(totalExternalEconomyHours)}</strong></div>
     </section>
   );
 }
@@ -978,6 +1122,7 @@ function InternalResourcesSection({
 
 function ExternalResourcesSection({
   rows,
+  economyRows,
   externalResources,
   jobOrders,
   loading,
@@ -986,15 +1131,20 @@ function ExternalResourcesSection({
   showExternalResourceManager,
   savingExternalResource,
   onAddRow,
+  onAddEconomyRow,
   onDuplicateRow,
+  onDuplicateEconomyRow,
   onRemoveRow,
+  onRemoveEconomyRow,
   onChangeRow,
+  onChangeEconomyRow,
   onToggleManager,
   onDraftChange,
   onAddExternalResource,
   onDeleteExternalResource,
 }: {
   rows: ExternalEditableRow[];
+  economyRows: ExternalEconomyEditableRow[];
   externalResources: ExternalResourceOption[];
   jobOrders: JobOrderOption[];
   loading: boolean;
@@ -1003,9 +1153,13 @@ function ExternalResourcesSection({
   showExternalResourceManager: boolean;
   savingExternalResource: boolean;
   onAddRow: () => void;
+  onAddEconomyRow: () => void;
   onDuplicateRow: (localId: string) => void;
+  onDuplicateEconomyRow: (localId: string) => void;
   onRemoveRow: (localId: string) => void;
+  onRemoveEconomyRow: (localId: string) => void;
   onChangeRow: (localId: string, patch: Partial<ExternalEditableRow>) => void;
+  onChangeEconomyRow: (localId: string, patch: Partial<ExternalEconomyEditableRow>) => void;
   onToggleManager: () => void;
   onDraftChange: (value: string) => void;
   onAddExternalResource: () => void;
@@ -1014,7 +1168,7 @@ function ExternalResourcesSection({
   return (
     <CompactDiarySection
       title="Risorse esterne"
-      subtitle="Caricamenti a giornate per collaboratori o fornitori esterni."
+      subtitle="Caricamenti separati tra subappalto a giornate ed economia a ore."
       onAddRow={onAddRow}
       extraAction={<button type="button" className="mobile-button-secondary" onClick={onToggleManager}>Modifica elenco</button>}
     >
@@ -1041,30 +1195,150 @@ function ExternalResourcesSection({
         </div>
       ) : null}
 
-      <div className="diary-compact-table">
-        <div className="diary-compact-head diary-compact-head-external">
-          <span>Risorsa</span><span>Commessa</span><span>Giornate</span><span>Descrizione</span><span>Azioni</span>
-        </div>
-        {rows.map((row, index) => (
-          <div key={row.localId} className="diary-compact-row diary-compact-row-external">
-            <select value={row.externalResourceId} onChange={(event) => onChangeRow(row.localId, { externalResourceId: event.target.value })} disabled={loading || loadingRows}>
-              <option value="">Seleziona risorsa esterna</option>
-              {externalResources.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}
-            </select>
-            <select value={row.jobOrderId} onChange={(event) => onChangeRow(row.localId, { jobOrderId: event.target.value })} disabled={loading || loadingRows}>
-              <option value="">Seleziona commessa</option>
-              {jobOrders.map((job) => <option key={job.id} value={job.id}>{job.name} ({job.type})</option>)}
-            </select>
-            <input type="number" step="0.1" min="0.1" value={row.days} onChange={(event) => onChangeRow(row.localId, { days: event.target.value })} placeholder="0.0" disabled={loadingRows} />
-            <input type="text" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
-            <div className="diary-compact-actions">
-              <button type="button" onClick={() => onDuplicateRow(row.localId)} disabled={loadingRows}>Duplica</button>
-              <button type="button" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`}>Rimuovi</button>
-            </div>
-          </div>
-        ))}
-      </div>
+      <details className="diary-resource-accordion" open>
+        <summary>
+          <span>Risorse in subappalto</span>
+          <small>{rows.length} righe · giornate</small>
+        </summary>
+        <ExternalResourceRowsTable
+          rows={rows}
+          externalResources={externalResources}
+          jobOrders={jobOrders}
+          loading={loading}
+          loadingRows={loadingRows}
+          quantityLabel="Giornate"
+          quantityKey="days"
+          onAddRow={onAddRow}
+          onDuplicateRow={onDuplicateRow}
+          onRemoveRow={onRemoveRow}
+          onChangeRow={onChangeRow}
+        />
+      </details>
+
+      <details className="diary-resource-accordion">
+        <summary>
+          <span>Risorse in economia</span>
+          <small>{economyRows.length} righe · ore</small>
+        </summary>
+        <ExternalEconomyRowsTable
+          rows={economyRows}
+          externalResources={externalResources}
+          jobOrders={jobOrders}
+          loading={loading}
+          loadingRows={loadingRows}
+          onAddRow={onAddEconomyRow}
+          onDuplicateRow={onDuplicateEconomyRow}
+          onRemoveRow={onRemoveEconomyRow}
+          onChangeRow={onChangeEconomyRow}
+        />
+      </details>
     </CompactDiarySection>
+  );
+}
+
+function ExternalResourceRowsTable({
+  rows,
+  externalResources,
+  jobOrders,
+  loading,
+  loadingRows,
+  quantityLabel,
+  quantityKey,
+  onAddRow,
+  onDuplicateRow,
+  onRemoveRow,
+  onChangeRow,
+}: {
+  rows: ExternalEditableRow[];
+  externalResources: ExternalResourceOption[];
+  jobOrders: JobOrderOption[];
+  loading: boolean;
+  loadingRows: boolean;
+  quantityLabel: string;
+  quantityKey: "days";
+  onAddRow: () => void;
+  onDuplicateRow: (localId: string) => void;
+  onRemoveRow: (localId: string) => void;
+  onChangeRow: (localId: string, patch: Partial<ExternalEditableRow>) => void;
+}) {
+  return (
+    <div className="diary-compact-table">
+      <div className="diary-compact-head diary-compact-head-external">
+        <span>Risorsa</span><span>Commessa</span><span>{quantityLabel}</span><span>Descrizione</span><span>Azioni</span>
+      </div>
+      {rows.map((row, index) => (
+        <div key={row.localId} className="diary-compact-row diary-compact-row-external">
+          <select value={row.externalResourceId} onChange={(event) => onChangeRow(row.localId, { externalResourceId: event.target.value })} disabled={loading || loadingRows}>
+            <option value="">Seleziona risorsa esterna</option>
+            {externalResources.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}
+          </select>
+          <select value={row.jobOrderId} onChange={(event) => onChangeRow(row.localId, { jobOrderId: event.target.value })} disabled={loading || loadingRows}>
+            <option value="">Seleziona commessa</option>
+            {jobOrders.map((job) => <option key={job.id} value={job.id}>{job.name} ({job.type})</option>)}
+          </select>
+          <input type="number" step="0.1" min="0.1" value={row[quantityKey]} onChange={(event) => onChangeRow(row.localId, { [quantityKey]: event.target.value })} placeholder="0.0" disabled={loadingRows} />
+          <input type="text" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
+          <div className="diary-compact-actions">
+            <button type="button" onClick={() => onDuplicateRow(row.localId)} disabled={loadingRows}>Duplica</button>
+            <button type="button" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`}>Rimuovi</button>
+          </div>
+        </div>
+      ))}
+      <div className="diary-accordion-actions">
+        <button type="button" className="mobile-button-secondary" onClick={onAddRow}>+ Aggiungi subappalto</button>
+      </div>
+    </div>
+  );
+}
+
+function ExternalEconomyRowsTable({
+  rows,
+  externalResources,
+  jobOrders,
+  loading,
+  loadingRows,
+  onAddRow,
+  onDuplicateRow,
+  onRemoveRow,
+  onChangeRow,
+}: {
+  rows: ExternalEconomyEditableRow[];
+  externalResources: ExternalResourceOption[];
+  jobOrders: JobOrderOption[];
+  loading: boolean;
+  loadingRows: boolean;
+  onAddRow: () => void;
+  onDuplicateRow: (localId: string) => void;
+  onRemoveRow: (localId: string) => void;
+  onChangeRow: (localId: string, patch: Partial<ExternalEconomyEditableRow>) => void;
+}) {
+  return (
+    <div className="diary-compact-table">
+      <div className="diary-compact-head diary-compact-head-external">
+        <span>Risorsa</span><span>Commessa</span><span>Ore</span><span>Descrizione</span><span>Azioni</span>
+      </div>
+      {rows.map((row, index) => (
+        <div key={row.localId} className="diary-compact-row diary-compact-row-external">
+          <select value={row.externalResourceId} onChange={(event) => onChangeRow(row.localId, { externalResourceId: event.target.value })} disabled={loading || loadingRows}>
+            <option value="">Seleziona risorsa esterna</option>
+            {externalResources.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}
+          </select>
+          <select value={row.jobOrderId} onChange={(event) => onChangeRow(row.localId, { jobOrderId: event.target.value })} disabled={loading || loadingRows}>
+            <option value="">Seleziona commessa</option>
+            {jobOrders.map((job) => <option key={job.id} value={job.id}>{job.name} ({job.type})</option>)}
+          </select>
+          <input type="number" step="0.1" min="0.1" value={row.hours} onChange={(event) => onChangeRow(row.localId, { hours: event.target.value })} placeholder="0.0" disabled={loadingRows} />
+          <input type="text" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
+          <div className="diary-compact-actions">
+            <button type="button" onClick={() => onDuplicateRow(row.localId)} disabled={loadingRows}>Duplica</button>
+            <button type="button" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`}>Rimuovi</button>
+          </div>
+        </div>
+      ))}
+      <div className="diary-accordion-actions">
+        <button type="button" className="mobile-button-secondary" onClick={onAddRow}>+ Aggiungi economia</button>
+      </div>
+    </div>
   );
 }
 
@@ -1165,6 +1439,7 @@ function DailyLogPrintPreview({ days, options, loading }: { days: PrintDay[]; op
       {days.map((day) => {
         const internalRows = day.internalRows.filter(isFilledInternal);
         const externalRows = day.externalRows.filter(isFilledExternal);
+        const externalEconomyRows = day.externalEconomyRows.filter(isFilledExternalEconomy);
         return (
           <article key={day.date} className="diary-print-preview-page">
             <header>
@@ -1176,12 +1451,15 @@ function DailyLogPrintPreview({ days, options, loading }: { days: PrintDay[]; op
               <div className="diary-print-preview-totals">
                 <span>Interne {internalRows.length}</span>
                 <span>Ore {toOneDecimal(sumNumericStrings(internalRows.map((row) => row.hours)))}</span>
-                <span>Esterne {externalRows.length}</span>
+                <span>Subappalto {externalRows.length}</span>
                 <span>Giornate {toOneDecimal(sumNumericStrings(externalRows.map((row) => row.days)))}</span>
+                <span>Economia {externalEconomyRows.length}</span>
+                <span>Ore economia {toOneDecimal(sumNumericStrings(externalEconomyRows.map((row) => row.hours)))}</span>
               </div>
             ) : null}
             {options.includeInternal ? <PrintPreviewRows title="Risorse interne" rows={internalRows.map((row) => row.resourceLabel || row.resourceValue)} /> : null}
-            {options.includeExternal ? <PrintPreviewRows title="Risorse esterne" rows={externalRows.map((row) => row.externalResourceLabel || row.externalResourceId)} /> : null}
+            {options.includeExternal ? <PrintPreviewRows title="Risorse in subappalto" rows={externalRows.map((row) => row.externalResourceLabel || row.externalResourceId)} /> : null}
+            {options.includeExternal ? <PrintPreviewRows title="Risorse in economia" rows={externalEconomyRows.map((row) => row.externalResourceLabel || row.externalResourceId)} /> : null}
           </article>
         );
       })}

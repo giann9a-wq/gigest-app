@@ -23,6 +23,13 @@ type ExternalBatchRowInput = {
   activityDescription?: string;
 };
 
+type ExternalEconomyBatchRowInput = {
+  externalResourceId: string;
+  jobOrderId: string;
+  hours: number | string;
+  activityDescription?: string;
+};
+
 async function getAuthorizedUser() {
   const session = await auth();
 
@@ -124,7 +131,9 @@ export async function GET(request: NextRequest) {
     activityDescription: activity.activityDescription ?? "",
   }));
 
-  const externalRows = externalActivities.map((activity) => ({
+  const externalRows = externalActivities
+    .filter((activity) => activity.activityType === "SUBCONTRACT")
+    .map((activity) => ({
     id: activity.id,
     externalResourceId: activity.externalResourceId,
     externalResourceLabel: activity.externalResource.name,
@@ -134,7 +143,19 @@ export async function GET(request: NextRequest) {
     activityDescription: activity.activityDescription ?? "",
   }));
 
-  return NextResponse.json({ internalRows, externalRows });
+  const externalEconomyRows = externalActivities
+    .filter((activity) => activity.activityType === "ECONOMY")
+    .map((activity) => ({
+      id: activity.id,
+      externalResourceId: activity.externalResourceId,
+      externalResourceLabel: activity.externalResource.name,
+      jobOrderId: activity.jobOrderId,
+      jobOrderLabel: activity.jobOrder.name,
+      hours: Number(activity.hours ?? 0),
+      activityDescription: activity.activityDescription ?? "",
+    }));
+
+  return NextResponse.json({ internalRows, externalRows, externalEconomyRows });
 }
 
 export async function POST(request: NextRequest) {
@@ -148,10 +169,12 @@ export async function POST(request: NextRequest) {
     referenceDate,
     internalRows,
     externalRows,
+    externalEconomyRows,
   }: {
     referenceDate?: string;
     internalRows?: InternalBatchRowInput[];
     externalRows?: ExternalBatchRowInput[];
+    externalEconomyRows?: ExternalEconomyBatchRowInput[];
   } = body;
 
   if (!referenceDate) {
@@ -182,6 +205,15 @@ export async function POST(request: NextRequest) {
       activityDescription: row.activityDescription?.trim() ?? "",
     }))
     .filter((row) => row.externalResourceId || row.jobOrderId || row.days || row.activityDescription);
+
+  const cleanedExternalEconomyRows = (Array.isArray(externalEconomyRows) ? externalEconomyRows : [])
+    .map((row) => ({
+      externalResourceId: row.externalResourceId?.trim() ?? "",
+      jobOrderId: row.jobOrderId?.trim() ?? "",
+      hours: row.hours,
+      activityDescription: row.activityDescription?.trim() ?? "",
+    }))
+    .filter((row) => row.externalResourceId || row.jobOrderId || row.hours || row.activityDescription);
 
   for (const row of cleanedInternalRows) {
     if (!row.resourceValue || !row.jobOrderId || row.hours === undefined || row.hours === null || row.hours === "") {
@@ -226,7 +258,29 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const externalResourceIds = [...new Set(cleanedExternalRows.map((row) => row.externalResourceId))];
+  for (const row of cleanedExternalEconomyRows) {
+    if (!row.externalResourceId || !row.jobOrderId || row.hours === undefined || row.hours === null || row.hours === "") {
+      return NextResponse.json(
+        { error: "Ogni riga in economia compilata deve avere risorsa, commessa e ore" },
+        { status: 400 }
+      );
+    }
+
+    const parsedHours = Number(row.hours);
+    if (Number.isNaN(parsedHours) || parsedHours <= 0) {
+      return NextResponse.json(
+        { error: "Le ore delle risorse in economia devono essere maggiori di zero" },
+        { status: 400 }
+      );
+    }
+  }
+
+  const externalResourceIds = [
+    ...new Set([
+      ...cleanedExternalRows.map((row) => row.externalResourceId),
+      ...cleanedExternalEconomyRows.map((row) => row.externalResourceId),
+    ]),
+  ];
   if (externalResourceIds.length > 0) {
     const existingResources = await prisma.externalResource.findMany({
       where: { id: { in: externalResourceIds } },
@@ -268,7 +322,26 @@ export async function POST(request: NextRequest) {
       referenceDate: referenceDateValue,
       externalResourceId: row.externalResourceId,
       jobOrderId: row.jobOrderId,
+      activityType: "SUBCONTRACT",
       days: new Prisma.Decimal(roundedDays),
+      hours: null,
+      activityDescription: row.activityDescription || null,
+      createdByUserId: appUser.id,
+      updatedByUserId: appUser.id,
+    };
+  });
+
+  const externalEconomyCreateData: Prisma.ExternalDiaryActivityCreateManyInput[] = cleanedExternalEconomyRows.map((row) => {
+    const parsedHours = Number(row.hours);
+    const roundedHours = Math.round(parsedHours * 10) / 10;
+
+    return {
+      referenceDate: referenceDateValue,
+      externalResourceId: row.externalResourceId,
+      jobOrderId: row.jobOrderId,
+      activityType: "ECONOMY",
+      days: new Prisma.Decimal(0),
+      hours: new Prisma.Decimal(roundedHours),
       activityDescription: row.activityDescription || null,
       createdByUserId: appUser.id,
       updatedByUserId: appUser.id,
@@ -305,11 +378,18 @@ export async function POST(request: NextRequest) {
         data: externalCreateData,
       });
     }
+
+    if (externalEconomyCreateData.length > 0) {
+      await tx.externalDiaryActivity.createMany({
+        data: externalEconomyCreateData,
+      });
+    }
   });
 
   return NextResponse.json({
     success: true,
     savedInternalRows: internalCreateData.length,
     savedExternalRows: externalCreateData.length,
+    savedExternalEconomyRows: externalEconomyCreateData.length,
   });
 }

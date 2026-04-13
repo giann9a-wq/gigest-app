@@ -102,6 +102,16 @@ export type JobOrderDashboardResponse = {
       totalEntries: number;
       details: ExternalDetailGroup[];
     };
+    externalEconomyResources: {
+      totalHours: number;
+      totalEntries: number;
+      details: Array<{
+        resourceId: string;
+        resourceLabel: string;
+        totalHours: number;
+        entryCount: number;
+      }>;
+    };
     importSources: {
       materials: string;
       professionalServices: string;
@@ -599,6 +609,49 @@ function JobSummaryTable({ categories }: { categories: DashboardCategory[] }) {
   );
 }
 
+function JobExternalEconomySummary({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
+  const rows = dashboard.actual.externalEconomyResources?.details ?? [];
+
+  return (
+    <section className="job-premium-card">
+      <div className="job-premium-section-head">
+        <div>
+          <span>Risorse esterne</span>
+          <h2>Risorse in economia</h2>
+        </div>
+        <strong>{formatQuantity(dashboard.actual.externalEconomyResources?.totalHours ?? 0, "h")}</strong>
+      </div>
+
+      <div className="job-premium-table-wrap">
+        <table className="job-premium-summary-table job-premium-economy-table">
+          <thead>
+            <tr>
+              <th>Risorsa</th>
+              <th>Movimenti</th>
+              <th>Ore totali</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={3}>Nessuna risorsa in economia associata alla commessa.</td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.resourceId}>
+                  <td><strong>{row.resourceLabel}</strong></td>
+                  <td>{row.entryCount}</td>
+                  <td>{formatQuantity(row.totalHours, "h")}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export function JobDashboardView(props: JobDashboardViewProps) {
   const categories = buildDashboardCategories(props.dashboard);
 
@@ -608,9 +661,10 @@ export function JobDashboardView(props: JobDashboardViewProps) {
       <JobKpiCards dashboard={props.dashboard} />
       <div className="job-premium-chart-grid">
         <JobCostCompositionChart categories={categories} />
-        <JobBudgetVsActualChart categories={categories} />
+      <JobBudgetVsActualChart categories={categories} />
       </div>
       <JobCostBreakdownAccordion categories={categories} />
+      <JobExternalEconomySummary dashboard={props.dashboard} />
       <JobSummaryTable categories={categories} />
     </div>
   );

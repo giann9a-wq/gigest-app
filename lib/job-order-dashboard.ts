@@ -320,6 +320,22 @@ export async function getJobOrderDashboard(jobOrderId: string) {
     }
   >();
 
+  const externalEconomyResourceMap = new Map<
+    string,
+    {
+      resourceId: string;
+      resourceLabel: string;
+      totalHours: number;
+      entryCount: number;
+      entries: {
+        id: string;
+        referenceDate: string;
+        hours: number;
+        description: string;
+      }[];
+    }
+  >();
+
   let actualPersonnelCost = 0;
   let actualEquipmentCost = 0;
   let totalExternalDays = 0;
@@ -385,6 +401,35 @@ export async function getJobOrderDashboard(jobOrderId: string) {
   }
 
   for (const activity of jobOrder.externalDiaryActivities) {
+    if (activity.activityType === "ECONOMY") {
+      const hours = roundHours(Number(activity.hours ?? 0));
+      const detailEntry = {
+        id: activity.id,
+        referenceDate: activity.referenceDate.toISOString().slice(0, 10),
+        hours,
+        description: activity.activityDescription ?? "",
+      };
+      const resourceId = activity.externalResourceId;
+      const resourceLabel = activity.externalResource.name;
+      const current = externalEconomyResourceMap.get(resourceId);
+
+      if (current) {
+        current.totalHours = roundHours(current.totalHours + hours);
+        current.entryCount += 1;
+        current.entries.push(detailEntry);
+      } else {
+        externalEconomyResourceMap.set(resourceId, {
+          resourceId,
+          resourceLabel,
+          totalHours: hours,
+          entryCount: 1,
+          entries: [detailEntry],
+        });
+      }
+
+      continue;
+    }
+
     const days = roundHours(Number(activity.days));
     totalExternalDays = roundHours(totalExternalDays + days);
 
@@ -484,8 +529,15 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       ),
       externalResources: {
         totalDays: totalExternalDays,
-        totalEntries: jobOrder._count.externalDiaryActivities,
+        totalEntries: [...externalResourceMap.values()].reduce((sum, item) => sum + item.entryCount, 0),
         details: [...externalResourceMap.values()].sort((a, b) =>
+          a.resourceLabel.localeCompare(b.resourceLabel, "it", { sensitivity: "base" })
+        ),
+      },
+      externalEconomyResources: {
+        totalHours: roundHours([...externalEconomyResourceMap.values()].reduce((sum, item) => sum + item.totalHours, 0)),
+        totalEntries: [...externalEconomyResourceMap.values()].reduce((sum, item) => sum + item.entryCount, 0),
+        details: [...externalEconomyResourceMap.values()].sort((a, b) =>
           a.resourceLabel.localeCompare(b.resourceLabel, "it", { sensitivity: "base" })
         ),
       },

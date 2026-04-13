@@ -1236,7 +1236,7 @@ a {
 
 .diary-kpi-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
   border-radius: 18px;
@@ -1359,6 +1359,52 @@ a {
 
 .diary-external-manager-compact {
   box-shadow: none;
+}
+
+.diary-resource-accordion {
+  border: 1px solid var(--diary-border);
+  border-radius: 16px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.diary-resource-accordion + .diary-resource-accordion {
+  margin-top: 0.65rem;
+}
+
+.diary-resource-accordion summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.72rem 0.85rem;
+  cursor: pointer;
+  list-style: none;
+  background: #f8fafc;
+}
+
+.diary-resource-accordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.diary-resource-accordion summary span {
+  color: var(--diary-text);
+  font-weight: 900;
+}
+
+.diary-resource-accordion summary small {
+  color: var(--diary-muted);
+  font-weight: 700;
+}
+
+.diary-resource-accordion .diary-compact-table {
+  padding: 0.65rem;
+}
+
+.diary-accordion-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
 }
 
 .diary-sticky-actions {
@@ -3131,12 +3177,15 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .diary-kpi-strip div:nth-child(2) {
+  .diary-kpi-strip div:nth-child(2),
+  .diary-kpi-strip div:nth-child(4) {
     border-right: none;
   }
 
   .diary-kpi-strip div:nth-child(1),
-  .diary-kpi-strip div:nth-child(2) {
+  .diary-kpi-strip div:nth-child(2),
+  .diary-kpi-strip div:nth-child(3),
+  .diary-kpi-strip div:nth-child(4) {
     border-bottom: 1px solid var(--diary-border);
   }
 

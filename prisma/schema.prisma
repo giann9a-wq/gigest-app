@@ -48,6 +48,11 @@ enum ResourceType {
   EQUIPMENT
 }
 
+enum ExternalDiaryActivityType {
+  SUBCONTRACT
+  ECONOMY
+}
+
 enum DeadlineOrigin {
   MANUAL
   MAINTENANCE
@@ -554,7 +559,9 @@ model ExternalDiaryActivity {
   referenceDate       DateTime
   externalResourceId  String
   jobOrderId          String
+  activityType        ExternalDiaryActivityType @default(SUBCONTRACT)
   days                Decimal  @db.Decimal(4, 1)
+  hours               Decimal? @db.Decimal(4, 1)
   activityDescription String?
   createdByUserId     String?
   updatedByUserId     String?
@@ -569,6 +576,7 @@ model ExternalDiaryActivity {
   @@index([referenceDate])
   @@index([jobOrderId])
   @@index([externalResourceId])
+  @@index([activityType])
 }
 
 model Deadline {
