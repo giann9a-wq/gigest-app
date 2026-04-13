@@ -229,8 +229,7 @@ function printRowsTable(
 }
 
 function buildPrintHtml(days: PrintDay[], options: PrintOptions) {
-  const pages = days
-    .map((day) => {
+  const dayPanels = days.map((day) => {
       const internalRows = day.internalRows.filter(isFilledInternal);
       const externalRows = day.externalRows.filter(isFilledExternal);
       const externalEconomyRows = day.externalEconomyRows.filter(isFilledExternalEconomy);
@@ -239,7 +238,7 @@ function buildPrintHtml(days: PrintDay[], options: PrintOptions) {
       const totalEconomyHours = sumNumericStrings(externalEconomyRows.map((row) => row.hours));
 
       return `
-        <article class="print-page">
+        <article class="print-day">
           <header class="print-header">
             <div>
               <div class="brand">GiGest</div>
@@ -309,8 +308,16 @@ function buildPrintHtml(days: PrintDay[], options: PrintOptions) {
               : ""
           }
         </article>`;
-    })
-    .join("");
+    });
+
+  const pages: string[] = [];
+  for (let index = 0; index < dayPanels.length; index += 2) {
+    pages.push(`
+      <section class="print-sheet">
+        ${dayPanels[index]}
+        ${dayPanels[index + 1] ?? '<article class="print-day print-day-empty"></article>'}
+      </section>`);
+  }
 
   return `<!doctype html>
     <html>
@@ -318,30 +325,34 @@ function buildPrintHtml(days: PrintDay[], options: PrintOptions) {
         <meta charset="utf-8" />
         <title>Diario del cantiere</title>
         <style>
-          @page { size: A4 portrait; margin: 12mm; }
+          @page { size: A4 landscape; margin: 8mm; }
           * { box-sizing: border-box; }
           body { margin: 0; color: #1f2937; font-family: Arial, sans-serif; background: #fff; }
-          .print-page { min-height: calc(297mm - 24mm); page-break-after: always; padding: 0; }
-          .print-page:last-child { page-break-after: auto; }
-          .print-header { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #f97316; padding-bottom: 12px; margin-bottom: 14px; }
-          .brand { color: #f97316; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
-          h1 { margin: 4px 0; font-size: 24px; }
-          h2 { margin: 0 0 8px; font-size: 16px; }
+          .print-sheet { height: calc(210mm - 16mm); page-break-after: always; display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+          .print-sheet:last-child { page-break-after: auto; }
+          .print-day { min-width: 0; overflow: hidden; padding: 0 3mm 0 0; border-right: 1px dashed #d1d5db; break-inside: avoid; }
+          .print-day:last-child { border-right: none; padding: 0 0 0 3mm; }
+          .print-day-empty { border-right: none; }
+          .print-header { display: flex; justify-content: space-between; gap: 12px; border-bottom: 2px solid #f97316; padding-bottom: 6px; margin-bottom: 7px; }
+          .brand { color: #f97316; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; font-size: 9px; }
+          h1 { margin: 2px 0; font-size: 16px; }
+          h2 { margin: 0 0 4px; font-size: 11px; }
           p { margin: 0; color: #6b7280; }
-          .print-date { align-self: start; padding: 8px 10px; border-radius: 12px; background: #fff7ed; color: #9a3412; font-weight: 800; }
-          .print-totals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 16px; }
-          .print-totals div { border: 1px solid #e5e7eb; border-radius: 12px; padding: 8px; background: #f8fafc; }
-          .print-totals span { display: block; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-          .print-totals strong { display: block; margin-top: 4px; font-size: 18px; }
-          .print-section { margin-top: 14px; }
-          table { width: 100%; border-collapse: collapse; font-size: 12px; }
-          th { background: #f8fafc; color: #6b7280; text-transform: uppercase; font-size: 10px; letter-spacing: .05em; }
-          th, td { border: 1px solid #e5e7eb; padding: 7px 8px; text-align: left; vertical-align: top; }
+          .print-header p { font-size: 10px; }
+          .print-date { align-self: start; padding: 5px 8px; border-radius: 10px; background: #fff7ed; color: #9a3412; font-size: 11px; font-weight: 800; }
+          .print-totals { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin: 7px 0 8px; }
+          .print-totals div { border: 1px solid #e5e7eb; border-radius: 9px; padding: 5px 6px; background: #f8fafc; }
+          .print-totals span { display: block; color: #6b7280; font-size: 8px; font-weight: 700; text-transform: uppercase; }
+          .print-totals strong { display: block; margin-top: 2px; font-size: 12px; }
+          .print-section { margin-top: 7px; }
+          table { width: 100%; border-collapse: collapse; font-size: 9px; table-layout: fixed; }
+          th { background: #f8fafc; color: #6b7280; text-transform: uppercase; font-size: 7px; letter-spacing: .05em; }
+          th, td { border: 1px solid #e5e7eb; padding: 3px 4px; text-align: left; vertical-align: top; }
           .num { text-align: right; font-weight: 800; white-space: nowrap; }
           .empty { text-align: center; color: #6b7280; }
         </style>
       </head>
-      <body>${pages}</body>
+      <body>${pages.join("")}</body>
     </html>`;
 }
 
@@ -770,10 +781,23 @@ export function DailyLogPage() {
 
   async function buildPrintDays(options = printOptions) {
     if (options.mode === "single") {
-      return [currentPrintDay()];
+      const selectedDate = options.selectedDates[0] ?? referenceDate;
+      if (selectedDate === referenceDate) return [currentPrintDay()];
+
+      const rows = await fetchRowsForDate(selectedDate);
+      return [
+        {
+          date: selectedDate,
+          internalRows: rows.internalRows,
+          externalRows: rows.externalRows,
+          externalEconomyRows: rows.externalEconomyRows,
+        },
+      ];
     }
 
-    const rangeDates = enumerateDateRange(options.rangeFrom, options.rangeTo);
+    const hasSelectedDates = options.selectedDates.length > 0;
+    const hasOnlyDefaultRange = options.rangeFrom === referenceDate && options.rangeTo === referenceDate;
+    const rangeDates = hasSelectedDates && hasOnlyDefaultRange ? [] : enumerateDateRange(options.rangeFrom, options.rangeTo);
     const uniqueDates = [...new Set([...options.selectedDates, ...rangeDates])].sort();
     const dates = uniqueDates.length > 0 ? uniqueDates : [referenceDate];
     const days: PrintDay[] = [];
@@ -816,7 +840,7 @@ export function DailyLogPage() {
 
   function openPrintDialog() {
     setPrintDialogOpen(true);
-    const nextOptions = { ...printOptions, rangeFrom: referenceDate, rangeTo: referenceDate };
+    const nextOptions = { ...printOptions, selectedDates: [referenceDate], rangeFrom: referenceDate, rangeTo: referenceDate };
     setPrintOptions(nextOptions);
     void refreshPrintPreview(nextOptions);
   }
@@ -828,7 +852,7 @@ export function DailyLogPage() {
       return;
     }
 
-    const printWindow = window.open("", "_blank", "width=900,height=1200");
+    const printWindow = window.open("", "_blank", "width=1200,height=900");
     if (!printWindow) {
       setError("Popup bloccato dal browser. Consenti i popup per stampare il PDF.");
       return;
@@ -843,6 +867,9 @@ export function DailyLogPage() {
 
   function updatePrintOptions(patch: Partial<PrintOptions>) {
     const nextOptions = { ...printOptions, ...patch };
+    if (patch.mode === "single" && nextOptions.selectedDates.length === 0) {
+      nextOptions.selectedDates = [referenceDate];
+    }
     setPrintOptions(nextOptions);
     void refreshPrintPreview(nextOptions);
   }
@@ -1375,6 +1402,17 @@ function DailyLogPrintDialog({
               <label><input type="radio" checked={options.mode === "single"} onChange={() => onOptionsChange({ mode: "single" })} /> Giorno singolo</label>
               <label><input type="radio" checked={options.mode === "multi"} onChange={() => onOptionsChange({ mode: "multi" })} /> Piu giorni</label>
             </div>
+
+            {options.mode === "single" ? (
+              <div className="diary-print-option-group">
+                <span>Giorno da stampare</span>
+                <input
+                  type="date"
+                  value={options.selectedDates[0] ?? ""}
+                  onChange={(event) => onOptionsChange({ selectedDates: event.target.value ? [event.target.value] : [] })}
+                />
+              </div>
+            ) : null}
 
             {options.mode === "multi" ? (
               <div className="diary-print-option-group">
