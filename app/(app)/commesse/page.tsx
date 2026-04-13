@@ -100,6 +100,15 @@ function matchesFilter(value: string, filter: string) {
   return value.toLowerCase().includes(filter.trim().toLowerCase());
 }
 
+function matchesDateRange(rowStartDate: string, rowEndDate: string, filterFrom: string, filterTo: string) {
+  const startDate = rowStartDate || rowEndDate;
+  const endDate = rowEndDate || rowStartDate;
+  if (filterFrom && endDate && endDate < filterFrom) return false;
+  if (filterTo && startDate && startDate > filterTo) return false;
+  if ((filterFrom || filterTo) && !startDate && !endDate) return false;
+  return true;
+}
+
 function compareText(a: string, b: string) {
   return a.localeCompare(b, "it", { sensitivity: "base" });
 }
@@ -226,9 +235,8 @@ export default function CommessePage() {
       return (
         matchesFilter(row.name, filters.name) &&
         (filters.type ? row.type === filters.type : true) &&
-        matchesFilter(row.startDate, filters.startDate) &&
         (filters.status ? row.status === filters.status : true) &&
-        matchesFilter(row.endDate, filters.endDate) &&
+        matchesDateRange(row.startDate, row.endDate, filters.startDate, filters.endDate) &&
         matchesFilter(row.description, filters.description)
       );
     });
@@ -284,38 +292,21 @@ export default function CommessePage() {
         {message ? <div style={{ color: "#166534", fontWeight: 700, marginBottom: 16 }}>{message}</div> : null}
         {error ? <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 16 }}>{error}</div> : null}
 
-        <div className="mobile-toolbar">
-          <div className="mobile-table-meta commesse-table-meta">
-            Righe visibili: <strong>{visibleRows.length}</strong> su {rows.length}
-          </div>
-          <div className="mobile-toolbar-actions">
-            <button
-              type="button"
-              className="mobile-button-secondary"
-              onClick={() => setFilters(getEmptyFilters())}
-            >
-              Azzera filtri
-            </button>
-          </div>
-        </div>
-
-        <div className="card mobile-filters">
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Commessa</span>
+        <div className="commesse-filter-bar">
+          <label className="report-control commesse-filter-name">
+            <span>Commessa</span>
             <input
               value={filters.name}
               onChange={(e) => setFilterValue("name", e.target.value)}
               placeholder="Filtra commessa"
-              className="mobile-data-input"
             />
           </label>
 
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Tipologia</span>
+          <label className="report-control">
+            <span>Tipologia</span>
             <select
               value={filters.type}
               onChange={(e) => setFilterValue("type", e.target.value as JobTypeValue | "")}
-              className="mobile-data-select"
             >
               <option value="">Tutte</option>
               <option value="SITE">{jobTypeLabel("SITE")}</option>
@@ -326,22 +317,11 @@ export default function CommessePage() {
             </select>
           </label>
 
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Data Inizio</span>
-            <input
-              value={filters.startDate}
-              onChange={(e) => setFilterValue("startDate", e.target.value)}
-              placeholder="AAAA-MM-GG"
-              className="mobile-data-input"
-            />
-          </label>
-
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Stato</span>
+          <label className="report-control">
+            <span>Stato</span>
             <select
               value={filters.status}
               onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")}
-              className="mobile-data-select"
             >
               <option value="">Tutti</option>
               <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
@@ -350,29 +330,51 @@ export default function CommessePage() {
             </select>
           </label>
 
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Data Fine</span>
+          <label className="report-control">
+            <span>Dal</span>
             <input
-              value={filters.endDate}
-              onChange={(e) => setFilterValue("endDate", e.target.value)}
-              placeholder="AAAA-MM-GG"
-              className="mobile-data-input"
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => setFilterValue("startDate", e.target.value)}
             />
           </label>
 
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Descrizione</span>
+          <label className="report-control">
+            <span>Al</span>
             <input
-              value={filters.description}
-              onChange={(e) => setFilterValue("description", e.target.value)}
-              placeholder="Filtra descrizione"
-              className="mobile-data-input"
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => setFilterValue("endDate", e.target.value)}
             />
           </label>
+
+          <button
+            type="button"
+            className="report-print-btn"
+            onClick={() => setFilters(getEmptyFilters())}
+          >
+            Azzera filtri
+          </button>
+        </div>
+
+        <div className="mobile-toolbar">
+          <div className="mobile-table-meta commesse-table-meta">
+            Righe visibili: <strong>{visibleRows.length}</strong> su {rows.length}
+          </div>
         </div>
 
         <div className="mobile-table-shell commesse-table-shell">
           <table className="commesse-table">
+            <colgroup>
+              <col className="commesse-col-name" />
+              <col className="commesse-col-type" />
+              <col className="commesse-col-date" />
+              <col className="commesse-col-status" />
+              <col className="commesse-col-date" />
+              <col className="commesse-col-description" />
+              <col className="commesse-col-action" />
+              <col className="commesse-col-remove" />
+            </colgroup>
             <thead>
               <tr>
                 <th className="commesse-header-cell">
@@ -415,68 +417,6 @@ export default function CommessePage() {
                 </th>
                 <th className="commesse-header-cell commesse-actions-header">Apri Scheda</th>
                 <th className="commesse-header-cell commesse-tiny-cell"></th>
-              </tr>
-              <tr>
-                <th className="commesse-filter-cell">
-                  <input
-                    value={filters.name}
-                    onChange={(e) => setFilterValue("name", e.target.value)}
-                    placeholder="Filtra commessa"
-                    className="commesse-filter-input"
-                  />
-                </th>
-                <th className="commesse-filter-cell">
-                  <select
-                    value={filters.type}
-                    onChange={(e) => setFilterValue("type", e.target.value as JobTypeValue | "")}
-                    className="commesse-filter-input"
-                  >
-                    <option value="">Tutte</option>
-                    <option value="SITE">{jobTypeLabel("SITE")}</option>
-                    <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
-                    <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
-                    <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
-                    <option value="OTHER">{jobTypeLabel("OTHER")}</option>
-                  </select>
-                </th>
-                <th className="commesse-filter-cell">
-                  <input
-                    value={filters.startDate}
-                    onChange={(e) => setFilterValue("startDate", e.target.value)}
-                    placeholder="AAAA-MM-GG"
-                    className="commesse-filter-input"
-                  />
-                </th>
-                <th className="commesse-filter-cell">
-                  <select
-                    value={filters.status}
-                    onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")}
-                    className="commesse-filter-input"
-                  >
-                    <option value="">Tutti</option>
-                    <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
-                    <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
-                    <option value="ENDED">{statusLabel("ENDED")}</option>
-                  </select>
-                </th>
-                <th className="commesse-filter-cell">
-                  <input
-                    value={filters.endDate}
-                    onChange={(e) => setFilterValue("endDate", e.target.value)}
-                    placeholder="AAAA-MM-GG"
-                    className="commesse-filter-input"
-                  />
-                </th>
-                <th className="commesse-filter-cell">
-                  <input
-                    value={filters.description}
-                    onChange={(e) => setFilterValue("description", e.target.value)}
-                    placeholder="Filtra descrizione"
-                    className="commesse-filter-input"
-                  />
-                </th>
-                <th className="commesse-filter-cell"></th>
-                <th className="commesse-filter-cell"></th>
               </tr>
             </thead>
             <tbody>
