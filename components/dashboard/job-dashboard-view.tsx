@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { formatCurrency, formatPercent, formatQuantity } from "@/lib/number-format";
 
-export type JobTypeValue = "SITE" | "TRAINING" | "LEAVE" | "SICKNESS" | "OTHER";
+export type JobTypeValue = "SITE" | "TRAINING" | "LEAVE" | "SICKNESS" | "RAIN" | "OTHER";
 export type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
 export type CostCategoryKey =
   | "MATERIE_PRIME"
@@ -182,6 +182,8 @@ function jobTypeLabel(type: JobTypeValue) {
       return "Ferie";
     case "SICKNESS":
       return "Malattia";
+    case "RAIN":
+      return "Pioggia";
     case "OTHER":
       return "Altro";
   }

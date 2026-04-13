@@ -40,6 +40,7 @@ enum JobType {
   TRAINING
   LEAVE
   SICKNESS
+  RAIN
   OTHER
 }
 

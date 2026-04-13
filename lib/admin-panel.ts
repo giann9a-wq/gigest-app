@@ -96,7 +96,6 @@ export async function hasElevatedAdminPanelAccess(userId: string) {
   });
 
   if (!session || session.userId !== userId || session.expiresAt <= new Date()) {
-    await clearAdminPanelSession();
     return false;
   }
 

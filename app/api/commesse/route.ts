@@ -13,7 +13,7 @@ type JobOrderRowInput = {
   description?: string;
 };
 
-const allowedTypes: JobType[] = ["SITE", "TRAINING", "LEAVE", "SICKNESS", "OTHER"];
+const allowedTypes: JobType[] = ["SITE", "TRAINING", "LEAVE", "SICKNESS", "RAIN", "OTHER"];
 const allowedStatuses: ResourceStatus[] = ["ACTIVE", "SUSPENDED", "ENDED"];
 
 function parseOptionalDate(value?: string | null) {

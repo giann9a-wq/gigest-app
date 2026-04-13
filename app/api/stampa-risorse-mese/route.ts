@@ -6,6 +6,7 @@ const REPORT_GROUPS = [
   { key: "WORK", label: "Ore lavorate" },
   { key: "LEAVE", label: "Ferie" },
   { key: "SICKNESS", label: "Malattia" },
+  { key: "RAIN", label: "Pioggia" },
 ] as const;
 
 type ReportGroupKey = (typeof REPORT_GROUPS)[number]["key"];
@@ -19,6 +20,7 @@ function getMonthRange(year: number, month: number) {
 function getGroupKey(jobType: string): ReportGroupKey {
   if (jobType === "LEAVE") return "LEAVE";
   if (jobType === "SICKNESS") return "SICKNESS";
+  if (jobType === "RAIN") return "RAIN";
   return "WORK";
 }
 

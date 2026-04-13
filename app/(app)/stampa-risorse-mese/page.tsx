@@ -11,7 +11,7 @@ type ReportDay = {
 };
 
 type ReportGroup = {
-  key: "WORK" | "LEAVE" | "SICKNESS";
+  key: "WORK" | "LEAVE" | "SICKNESS" | "RAIN";
   label: string;
   values: number[];
   total: number;
@@ -106,7 +106,7 @@ export default function StampaRisorseMesePage() {
         <div>
           <h1 style={{ margin: 0 }}>Stampa risorse mese</h1>
           <p className="muted" style={{ marginBottom: 0 }}>
-            Report mensile ore personale raggruppate in Ore lavorate, Ferie e Malattia.
+            Report mensile ore personale raggruppate in Ore lavorate, Ferie, Malattia e Pioggia.
           </p>
         </div>
 
