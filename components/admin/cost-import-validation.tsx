@@ -139,49 +139,51 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
     });
   }, [categoryFilter, matchFilter, session, validationFilter]);
 
-  function getRowDraft(row: SessionPayload["rows"][number]) {
-    return (
-      rowDrafts[row.id] ?? {
-        sourceAccountCode: row.sourceAccountCode ?? "",
-        sourceAccountDescription: row.sourceAccountDescription ?? "",
-        supplierCode: row.supplierCode ?? "",
-        supplierName: row.supplierName ?? "",
-        documentDate: row.documentDate ?? "",
-        registrationDate: row.registrationDate ?? "",
-        documentNumber: row.documentNumber ?? "",
-        amount: row.amount == null ? "" : String(row.amount),
-        finalDescription: row.finalDescription ?? "",
-        finalCategory: row.finalCategory ?? "",
-        validationNote: row.validationNote ?? "",
-      }
-    );
+  function createRowDraft(row: SessionPayload["rows"][number]) {
+    return {
+      sourceAccountCode: row.sourceAccountCode ?? "",
+      sourceAccountDescription: row.sourceAccountDescription ?? "",
+      supplierCode: row.supplierCode ?? "",
+      supplierName: row.supplierName ?? "",
+      documentDate: row.documentDate ?? "",
+      registrationDate: row.registrationDate ?? "",
+      documentNumber: row.documentNumber ?? "",
+      amount: row.amount == null ? "" : String(row.amount),
+      finalDescription: row.finalDescription ?? "",
+      finalCategory: row.finalCategory ?? "",
+      validationNote: row.validationNote ?? "",
+    };
   }
 
-  function updateRowDraft(rowId: string, field: string, value: string) {
+  function getRowDraft(row: SessionPayload["rows"][number]) {
+    return rowDrafts[row.id] ?? createRowDraft(row);
+  }
+
+  function getCorrectionInputClass(isMissing: boolean) {
+    return `admin-password-input${isMissing ? " cost-import-missing-field" : ""}`;
+  }
+
+  function getCorrectionSelectClass(isMissing: boolean) {
+    return `mobile-data-select${isMissing ? " cost-import-missing-field" : ""}`;
+  }
+
+  function updateRowDraft(row: SessionPayload["rows"][number], field: string, value: string) {
     setRowDrafts((current) => ({
       ...current,
-      [rowId]: {
-        ...(current[rowId] ?? {
-          sourceAccountCode: "",
-          sourceAccountDescription: "",
-          supplierCode: "",
-          supplierName: "",
-          documentDate: "",
-          registrationDate: "",
-          documentNumber: "",
-          amount: "",
-          finalDescription: "",
-          finalCategory: "",
-          validationNote: "",
-        }),
+      [row.id]: {
+        ...(current[row.id] ?? createRowDraft(row)),
         [field]: value,
       },
     }));
   }
 
-  function toggleInvalidEditor(rowId: string) {
+  function toggleInvalidEditor(row: SessionPayload["rows"][number]) {
+    setRowDrafts((current) => ({
+      ...current,
+      [row.id]: current[row.id] ?? createRowDraft(row),
+    }));
     setExpandedInvalidRows((current) =>
-      current.includes(rowId) ? current.filter((id) => id !== rowId) : [...current, rowId]
+      current.includes(row.id) ? current.filter((id) => id !== row.id) : [...current, row.id]
     );
   }
 
@@ -411,6 +413,11 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                 const isInvalid = row.matchStatus === "INVALID";
                 const isExpanded = expandedInvalidRows.includes(row.id);
                 const draft = getRowDraft(row);
+                const missingSupplier = !draft.supplierName.trim();
+                const missingDate = !draft.documentDate && !draft.registrationDate;
+                const missingDocument = !draft.documentNumber.trim();
+                const missingAmount = draft.amount === "";
+                const missingCategory = !draft.finalCategory;
 
                 return (
                   <Fragment key={row.id}>
@@ -426,7 +433,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                             type="button"
                             className="mobile-button-secondary"
                             style={{ marginTop: 8 }}
-                            onClick={() => toggleInvalidEditor(row.id)}
+                            onClick={() => toggleInvalidEditor(row)}
                           >
                             {isExpanded ? "Chiudi correzione" : "Correggi import"}
                           </button>
@@ -478,7 +485,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                               <input
                                 className="admin-password-input"
                                 value={draft.sourceAccountCode}
-                                onChange={(event) => updateRowDraft(row.id, "sourceAccountCode", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "sourceAccountCode", event.target.value)}
                               />
                             </label>
                             <label className="mobile-data-field">
@@ -486,7 +493,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                               <input
                                 className="admin-password-input"
                                 value={draft.sourceAccountDescription}
-                                onChange={(event) => updateRowDraft(row.id, "sourceAccountDescription", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "sourceAccountDescription", event.target.value)}
                               />
                             </label>
                             <label className="mobile-data-field">
@@ -494,41 +501,41 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                               <input
                                 className="admin-password-input"
                                 value={draft.supplierCode}
-                                onChange={(event) => updateRowDraft(row.id, "supplierCode", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "supplierCode", event.target.value)}
                               />
                             </label>
                             <label className="mobile-data-field">
                               <span className="mobile-data-label">Fornitore</span>
                               <input
-                                className="admin-password-input"
+                                className={getCorrectionInputClass(missingSupplier)}
                                 value={draft.supplierName}
-                                onChange={(event) => updateRowDraft(row.id, "supplierName", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "supplierName", event.target.value)}
                               />
                             </label>
                             <label className="mobile-data-field">
                               <span className="mobile-data-label">Data documento</span>
                               <input
                                 type="date"
-                                className="admin-password-input"
+                                className={getCorrectionInputClass(missingDate)}
                                 value={draft.documentDate}
-                                onChange={(event) => updateRowDraft(row.id, "documentDate", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "documentDate", event.target.value)}
                               />
                             </label>
                             <label className="mobile-data-field">
                               <span className="mobile-data-label">Data registrazione</span>
                               <input
                                 type="date"
-                                className="admin-password-input"
+                                className={getCorrectionInputClass(missingDate)}
                                 value={draft.registrationDate}
-                                onChange={(event) => updateRowDraft(row.id, "registrationDate", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "registrationDate", event.target.value)}
                               />
                             </label>
                             <label className="mobile-data-field">
                               <span className="mobile-data-label">Documento</span>
                               <input
-                                className="admin-password-input"
+                                className={getCorrectionInputClass(missingDocument)}
                                 value={draft.documentNumber}
-                                onChange={(event) => updateRowDraft(row.id, "documentNumber", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "documentNumber", event.target.value)}
                               />
                             </label>
                             <label className="mobile-data-field">
@@ -536,17 +543,17 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                               <input
                                 type="number"
                                 step="0.01"
-                                className="admin-password-input"
+                                className={getCorrectionInputClass(missingAmount)}
                                 value={draft.amount}
-                                onChange={(event) => updateRowDraft(row.id, "amount", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "amount", event.target.value)}
                               />
                             </label>
                             <label className="mobile-data-field">
                               <span className="mobile-data-label">Categoria finale</span>
                               <select
-                                className="mobile-data-select"
+                                className={getCorrectionSelectClass(missingCategory)}
                                 value={draft.finalCategory}
-                                onChange={(event) => updateRowDraft(row.id, "finalCategory", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "finalCategory", event.target.value)}
                               >
                                 <option value="">Da definire</option>
                                 {CATEGORY_OPTIONS.map((category) => (
@@ -561,7 +568,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                               <input
                                 className="admin-password-input"
                                 value={draft.finalDescription}
-                                onChange={(event) => updateRowDraft(row.id, "finalDescription", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "finalDescription", event.target.value)}
                               />
                             </label>
                             <label className="mobile-data-field">
@@ -569,7 +576,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                               <input
                                 className="admin-password-input"
                                 value={draft.validationNote}
-                                onChange={(event) => updateRowDraft(row.id, "validationNote", event.target.value)}
+                                onChange={(event) => updateRowDraft(row, "validationNote", event.target.value)}
                               />
                             </label>
                           </div>

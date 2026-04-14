@@ -41,6 +41,10 @@ type DeadlineFormState = {
 type GoogleCalendarStatus = {
   connected: boolean;
   canManage: boolean;
+  canConnect: boolean;
+  connectedCount: number;
+  activeGoogleAccountCount: number;
+  missingAccountCount: number;
   integration: {
     calendarName: string;
     connectedEmail: string | null;
@@ -50,6 +54,15 @@ type GoogleCalendarStatus = {
     syncError: string | null;
     updatedAt: string;
   } | null;
+  integrations: Array<{
+    calendarName: string;
+    connectedEmail: string | null;
+    externalCalendarId: string;
+    lastSyncedAt: string | null;
+    syncStatus: string;
+    syncError: string | null;
+    updatedAt: string;
+  }>;
 };
 
 type DeadlineTableSortKey =
@@ -261,7 +274,7 @@ export default function ScadenziarioPage() {
     const calendarMessage = params.get("calendarMessage");
 
     if (calendarParam === "connected") {
-      setSuccessMessage("Calendario Google condiviso collegato correttamente");
+      setSuccessMessage("Calendario Google GiGEST collegato e sincronizzato correttamente");
       loadCalendarStatus();
       params.delete("calendar");
       params.delete("calendarMessage");
@@ -442,7 +455,7 @@ export default function ScadenziarioPage() {
       await loadRows();
       await loadCalendarStatus();
       setSuccessMessage(
-        `Sincronizzazione completata: ${data.syncedCount} eventi riallineati, ${data.importedCount} importati da Google, ${data.deletedCount} rimossi`
+        `Sincronizzazione completata su ${data.integrationCount ?? 1} account: ${data.syncedCount} eventi riallineati, ${data.importedCount} importati da Google, ${data.deletedCount} rimossi${data.skippedAccountCount ? `, ${data.skippedAccountCount} account senza consenso Calendar` : ""}`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore imprevisto");
@@ -585,9 +598,19 @@ export default function ScadenziarioPage() {
               <div className="scad-google-status">
                 <strong>{calendarStatus.integration?.calendarName}</strong>
                 <span className="scad-muted">
-                  {calendarStatus.integration?.connectedEmail
+                  {calendarStatus.connectedCount > 1
+                    ? `${calendarStatus.connectedCount} account Google collegati`
+                    : calendarStatus.integration?.connectedEmail
                     ? `Collegato come ${calendarStatus.integration.connectedEmail}`
                     : "Collegato"}
+                </span>
+                {calendarStatus.missingAccountCount > 0 ? (
+                  <span className="scad-muted">
+                    {calendarStatus.missingAccountCount} account deve rifare l'accesso con consenso Calendar
+                  </span>
+                ) : null}
+                <span className="scad-muted">
+                  Account attivi: {calendarStatus.activeGoogleAccountCount}
                 </span>
                 <span className="scad-muted">
                   Ultima sync:{" "}
@@ -607,10 +630,15 @@ export default function ScadenziarioPage() {
                   {syncingCalendar ? "Sincronizzazione..." : "Sincronizza Google"}
                 </button>
               ) : null}
+              {calendarStatus.canConnect ? (
+                <a href="/api/google-calendar/connect" className="scad-outline-btn scad-link-btn">
+                  Ricollega il mio Google Calendar
+                </a>
+              ) : null}
             </>
-          ) : calendarStatus?.canManage ? (
+          ) : calendarStatus?.canConnect ? (
             <a href="/api/google-calendar/connect" className="scad-outline-btn scad-link-btn">
-              Collega Google Calendar
+              Collega il mio Google Calendar
             </a>
           ) : (
             <span className="scad-muted">

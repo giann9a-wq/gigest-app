@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
 import { getActiveAppUser } from "@/lib/app-user";
 import { buildGoogleCalendarAuthUrl } from "@/lib/google-calendar";
 
@@ -9,13 +8,6 @@ export async function GET(request: Request) {
 
   if (!appUser) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  }
-
-  if (appUser.role !== UserRole.ADMIN) {
-    return NextResponse.json(
-      { error: "Solo un amministratore può collegare il calendario condiviso" },
-      { status: 403 }
-    );
   }
 
   const state = randomUUID();

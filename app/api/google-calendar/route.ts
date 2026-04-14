@@ -14,22 +14,35 @@ export async function GET() {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
-  const status = await getSharedGoogleCalendarStatus();
+  const status = await getSharedGoogleCalendarStatus(appUser.id);
 
   return NextResponse.json({
-    connected: Boolean(status),
+    connected: status.currentUserConnected,
     canManage: appUser.role === UserRole.ADMIN,
-    integration: status
+    canConnect: true,
+    integration: status.primary
       ? {
-          calendarName: status.calendarName,
-          connectedEmail: status.connectedEmail,
-          externalCalendarId: status.externalCalendarId,
-          lastSyncedAt: status.lastSyncedAt?.toISOString() ?? null,
-          syncStatus: status.syncStatus,
-          syncError: status.syncError,
-          updatedAt: status.updatedAt.toISOString(),
+          calendarName: status.primary.calendarName,
+          connectedEmail: status.primary.connectedEmail,
+          externalCalendarId: status.primary.externalCalendarId,
+          lastSyncedAt: status.primary.lastSyncedAt?.toISOString() ?? null,
+          syncStatus: status.primary.syncStatus,
+          syncError: status.primary.syncError,
+          updatedAt: status.primary.updatedAt.toISOString(),
         }
       : null,
+    connectedCount: status.connectedCount,
+    activeGoogleAccountCount: status.activeGoogleAccountCount,
+    missingAccountCount: status.missingAccountCount,
+    integrations: status.integrations.map((integration) => ({
+      calendarName: integration.calendarName,
+      connectedEmail: integration.connectedEmail,
+      externalCalendarId: integration.externalCalendarId,
+      lastSyncedAt: integration.lastSyncedAt?.toISOString() ?? null,
+      syncStatus: integration.syncStatus,
+      syncError: integration.syncError,
+      updatedAt: integration.updatedAt.toISOString(),
+    })),
   });
 }
 
@@ -49,24 +62,30 @@ export async function POST() {
 
   try {
     const result = await syncDeadlinesToSharedGoogleCalendar();
-    const status = await getSharedGoogleCalendarStatus();
+    const status = await getSharedGoogleCalendarStatus(appUser.id);
 
     return NextResponse.json({
       success: true,
       syncedCount: result.syncedCount,
       importedCount: result.importedCount,
       deletedCount: result.deletedCount,
-      integration: status
+      integrationCount: result.integrationCount,
+      skippedAccountCount: result.skippedAccountCount,
+      errors: result.errors,
+      integration: status.primary
         ? {
-            calendarName: status.calendarName,
-            connectedEmail: status.connectedEmail,
-            externalCalendarId: status.externalCalendarId,
-            lastSyncedAt: status.lastSyncedAt?.toISOString() ?? null,
-            syncStatus: status.syncStatus,
-            syncError: status.syncError,
-            updatedAt: status.updatedAt.toISOString(),
+            calendarName: status.primary.calendarName,
+            connectedEmail: status.primary.connectedEmail,
+            externalCalendarId: status.primary.externalCalendarId,
+            lastSyncedAt: status.primary.lastSyncedAt?.toISOString() ?? null,
+            syncStatus: status.primary.syncStatus,
+            syncError: status.primary.syncError,
+            updatedAt: status.primary.updatedAt.toISOString(),
           }
         : null,
+      connectedCount: status.connectedCount,
+      activeGoogleAccountCount: status.activeGoogleAccountCount,
+      missingAccountCount: status.missingAccountCount,
     });
   } catch (error) {
     await markGoogleCalendarSyncError(error);

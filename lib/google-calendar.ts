@@ -1,7 +1,8 @@
-import { CalendarIntegration, DeadlineOrigin, SyncSource, type CalendarIntegration as CalendarIntegrationModel, type Deadline } from "@prisma/client";
+import { DeadlineOrigin, SyncSource, UserStatus, type CalendarIntegration as CalendarIntegrationModel, type Deadline } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const GOOGLE_PROVIDER = "GOOGLE";
+const GOOGLE_USER_PROVIDER_PREFIX = "GOOGLE_USER_";
 const DEFAULT_CALENDAR_NAME = "GiGEST";
 const DEFAULT_TIME_ZONE = "Europe/Rome";
 const GOOGLE_CALENDAR_SCOPES = [
@@ -49,6 +50,9 @@ type SyncResult = {
   importedCount: number;
   deletedCount: number;
   calendarName: string;
+  integrationCount: number;
+  skippedAccountCount: number;
+  errors: string[];
 };
 
 type SharedCalendarIntegration = CalendarIntegrationModel & {
@@ -59,6 +63,18 @@ type SharedCalendarIntegration = CalendarIntegrationModel & {
   accessTokenExpiresAt: Date | null;
   lastSyncedAt: Date | null;
   syncError: string | null;
+};
+
+type GoogleAccountWithUser = {
+  provider: string;
+  providerAccountId: string;
+  access_token: string | null;
+  refresh_token: string | null;
+  expires_at: number | null;
+  user: {
+    id: string;
+    email: string;
+  };
 };
 
 function getGoogleCredentials() {
@@ -80,6 +96,10 @@ function getRedirectUri(origin: string) {
 function buildTokenExpiry(expiresIn?: number) {
   if (!expiresIn) return null;
   return new Date(Date.now() + expiresIn * 1000);
+}
+
+function getUserCalendarProvider(userId: string) {
+  return `${GOOGLE_USER_PROVIDER_PREFIX}${userId}`;
 }
 
 function addDaysToIsoDate(isoDate: string, days: number) {
@@ -235,11 +255,7 @@ async function exchangeAuthorizationCode(code: string, origin: string) {
   return data;
 }
 
-async function refreshAccessToken(integration: SharedCalendarIntegration) {
-  if (!integration.refreshToken) {
-    throw new Error("Refresh token Google non disponibile");
-  }
-
+async function requestAccessTokenFromRefreshToken(refreshToken: string) {
   const { clientId, clientSecret } = getGoogleCredentials();
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
@@ -250,7 +266,7 @@ async function refreshAccessToken(integration: SharedCalendarIntegration) {
     body: new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
-      refresh_token: integration.refreshToken,
+      refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
     cache: "no-store",
@@ -262,8 +278,18 @@ async function refreshAccessToken(integration: SharedCalendarIntegration) {
     throw new Error(data.error_description || data.error || "Refresh token Google non riuscito");
   }
 
+  return data;
+}
+
+async function refreshAccessToken(integration: SharedCalendarIntegration) {
+  if (!integration.refreshToken) {
+    throw new Error("Refresh token Google non disponibile");
+  }
+
+  const data = await requestAccessTokenFromRefreshToken(integration.refreshToken);
+
   const updated = await prisma.calendarIntegration.update({
-    where: { provider: GOOGLE_PROVIDER },
+    where: { provider: integration.provider },
     data: {
       accessToken: data.access_token,
       accessTokenExpiresAt: buildTokenExpiry(data.expires_in),
@@ -272,6 +298,37 @@ async function refreshAccessToken(integration: SharedCalendarIntegration) {
   });
 
   return updated.accessToken!;
+}
+
+async function getValidAccountAccessToken(account: GoogleAccountWithUser) {
+  const expiresAt = account.expires_at ? account.expires_at * 1000 : 0;
+
+  if (account.access_token && expiresAt > Date.now() + 60_000) {
+    return account.access_token;
+  }
+
+  if (!account.refresh_token) {
+    throw new Error(`Refresh token Google non disponibile per ${account.user.email}`);
+  }
+
+  const data = await requestAccessTokenFromRefreshToken(account.refresh_token);
+
+  await prisma.account.update({
+    where: {
+      provider_providerAccountId: {
+        provider: account.provider,
+        providerAccountId: account.providerAccountId,
+      },
+    },
+    data: {
+      access_token: data.access_token,
+      expires_at: data.expires_in
+        ? Math.floor(Date.now() / 1000) + data.expires_in
+        : account.expires_at,
+    },
+  });
+
+  return data.access_token!;
 }
 
 async function getValidAccessToken(integration: SharedCalendarIntegration) {
@@ -406,8 +463,9 @@ export async function connectSharedGoogleCalendar(code: string, origin: string, 
   const accessToken = tokens.access_token!;
   const googleUser = await fetchGoogleUserInfo(accessToken);
 
+  const provider = getUserCalendarProvider(appUserId);
   const existing = await prisma.calendarIntegration.findUnique({
-    where: { provider: GOOGLE_PROVIDER },
+    where: { provider },
   });
 
   const refreshToken = tokens.refresh_token || existing?.refreshToken || null;
@@ -423,8 +481,8 @@ export async function connectSharedGoogleCalendar(code: string, origin: string, 
       }
     : await createSharedCalendar(accessToken);
 
-  await prisma.calendarIntegration.upsert({
-    where: { provider: GOOGLE_PROVIDER },
+  const integration = await prisma.calendarIntegration.upsert({
+    where: { provider },
     update: {
       externalCalendarId: sharedCalendar.id,
       calendarName: sharedCalendar.summary,
@@ -437,7 +495,7 @@ export async function connectSharedGoogleCalendar(code: string, origin: string, 
       syncError: null,
     },
     create: {
-      provider: GOOGLE_PROVIDER,
+      provider,
       externalCalendarId: sharedCalendar.id,
       calendarName: sharedCalendar.summary,
       connectedEmail: googleUser.email ?? null,
@@ -449,30 +507,191 @@ export async function connectSharedGoogleCalendar(code: string, origin: string, 
       syncError: null,
     },
   });
+
+  await syncSingleGoogleCalendarIntegration(integration as SharedCalendarIntegration);
 }
 
-export async function getSharedGoogleCalendarStatus() {
-  return prisma.calendarIntegration.findUnique({
+async function getActiveGoogleAccounts() {
+  return prisma.account.findMany({
+    where: {
+      provider: "google",
+      user: {
+        status: UserStatus.ACTIVE,
+      },
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+        },
+      },
+    },
+  }) as Promise<GoogleAccountWithUser[]>;
+}
+
+async function getExistingIntegrationForAccount(account: GoogleAccountWithUser) {
+  const provider = getUserCalendarProvider(account.user.id);
+  const existingUserIntegration = await prisma.calendarIntegration.findUnique({
+    where: { provider },
+  });
+
+  if (existingUserIntegration) {
+    return existingUserIntegration as SharedCalendarIntegration;
+  }
+
+  const legacyIntegration = await prisma.calendarIntegration.findUnique({
     where: { provider: GOOGLE_PROVIDER },
-    select: {
-      id: true,
-      calendarName: true,
-      connectedEmail: true,
-      externalCalendarId: true,
-      lastSyncedAt: true,
-      syncStatus: true,
-      syncError: true,
-      createdAt: true,
-      updatedAt: true,
+  });
+
+  if (legacyIntegration?.connectedByUserId === account.user.id) {
+    return legacyIntegration as SharedCalendarIntegration;
+  }
+
+  return null;
+}
+
+async function ensureGoogleCalendarIntegrationForAccount(account: GoogleAccountWithUser) {
+  if (!account.refresh_token) {
+    return null;
+  }
+
+  const existing = await getExistingIntegrationForAccount(account);
+  const accessToken = await getValidAccountAccessToken(account);
+
+  const calendar = existing?.externalCalendarId
+    ? {
+        id: existing.externalCalendarId,
+        summary: existing.calendarName,
+      }
+    : await createSharedCalendar(accessToken);
+
+  const provider = existing?.provider ?? getUserCalendarProvider(account.user.id);
+  const integration = await prisma.calendarIntegration.upsert({
+    where: { provider },
+    update: {
+      externalCalendarId: calendar.id,
+      calendarName: calendar.summary,
+      connectedEmail: account.user.email,
+      refreshToken: account.refresh_token,
+      accessToken,
+      accessTokenExpiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
+      connectedByUserId: account.user.id,
+      syncStatus: "ACTIVE",
+      syncError: null,
+    },
+    create: {
+      provider,
+      externalCalendarId: calendar.id,
+      calendarName: calendar.summary,
+      connectedEmail: account.user.email,
+      refreshToken: account.refresh_token,
+      accessToken,
+      accessTokenExpiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
+      connectedByUserId: account.user.id,
+      syncStatus: "ACTIVE",
+      syncError: null,
     },
   });
+
+  return integration as SharedCalendarIntegration;
 }
 
-export async function syncDeadlinesToSharedGoogleCalendar(): Promise<SyncResult> {
-  const integration = await prisma.calendarIntegration.findUnique({
-    where: { provider: GOOGLE_PROVIDER },
-  }) as SharedCalendarIntegration | null;
+async function prepareGoogleCalendarIntegrationsForActiveAccounts() {
+  const accounts = await getActiveGoogleAccounts();
+  const integrations: SharedCalendarIntegration[] = [];
+  let skippedAccountCount = 0;
 
+  for (const account of accounts) {
+    const integration = await ensureGoogleCalendarIntegrationForAccount(account);
+
+    if (integration) {
+      integrations.push(integration);
+    } else {
+      skippedAccountCount += 1;
+    }
+  }
+
+  const existingIntegrations = await prisma.calendarIntegration.findMany({
+    where: {
+      OR: [
+        { provider: GOOGLE_PROVIDER },
+        { provider: { startsWith: GOOGLE_USER_PROVIDER_PREFIX } },
+      ],
+    },
+  });
+
+  for (const integration of existingIntegrations) {
+    if (!integrations.some((current) => current.id === integration.id)) {
+      integrations.push(integration as SharedCalendarIntegration);
+    }
+  }
+
+  return {
+    integrations,
+    activeGoogleAccountCount: accounts.length,
+    skippedAccountCount,
+  };
+}
+
+export async function getSharedGoogleCalendarStatus(appUserId?: string) {
+  const currentUserProvider = appUserId ? getUserCalendarProvider(appUserId) : null;
+  const [integrations, activeGoogleAccountCount] = await Promise.all([
+    prisma.calendarIntegration.findMany({
+      where: {
+        OR: [
+          { provider: GOOGLE_PROVIDER },
+          { provider: { startsWith: GOOGLE_USER_PROVIDER_PREFIX } },
+        ],
+      },
+      select: {
+        id: true,
+        provider: true,
+        calendarName: true,
+        connectedEmail: true,
+        externalCalendarId: true,
+        connectedByUserId: true,
+        lastSyncedAt: true,
+        syncStatus: true,
+        syncError: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: [{ connectedEmail: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.account.count({
+      where: {
+        provider: "google",
+        user: {
+          status: UserStatus.ACTIVE,
+        },
+      },
+    }),
+  ]);
+
+  const currentUserIntegration = currentUserProvider
+    ? integrations.find((integration) => integration.provider === currentUserProvider) ?? null
+    : null;
+  const legacyIntegrationForCurrentUser = appUserId
+    ? integrations.find(
+        (integration) =>
+          integration.provider === GOOGLE_PROVIDER && integration.connectedByUserId === appUserId
+      ) ?? null
+    : null;
+  const primary = currentUserIntegration ?? legacyIntegrationForCurrentUser ?? integrations[0] ?? null;
+  const currentUserConnected = Boolean(currentUserIntegration ?? legacyIntegrationForCurrentUser);
+
+  return {
+    primary,
+    integrations,
+    connectedCount: integrations.length,
+    activeGoogleAccountCount,
+    missingAccountCount: Math.max(activeGoogleAccountCount - integrations.length, 0),
+    currentUserConnected,
+  };
+}
+
+async function syncSingleGoogleCalendarIntegration(integration: SharedCalendarIntegration) {
   if (!integration || !integration.externalCalendarId) {
     throw new Error("Calendario Google condiviso non collegato");
   }
@@ -690,7 +909,7 @@ export async function syncDeadlinesToSharedGoogleCalendar(): Promise<SyncResult>
   }
 
   await prisma.calendarIntegration.update({
-    where: { provider: GOOGLE_PROVIDER },
+    where: { provider: integration.provider },
     data: {
       lastSyncedAt: new Date(),
       syncStatus: "ACTIVE",
@@ -703,23 +922,82 @@ export async function syncDeadlinesToSharedGoogleCalendar(): Promise<SyncResult>
     importedCount,
     deletedCount,
     calendarName: integration.calendarName,
+    integrationCount: 1,
+    skippedAccountCount: 0,
+    errors: [],
   };
+}
+
+export async function syncDeadlinesToSharedGoogleCalendar(): Promise<SyncResult> {
+  const prepared = await prepareGoogleCalendarIntegrationsForActiveAccounts();
+
+  if (prepared.integrations.length === 0) {
+    throw new Error(
+      "Nessun account Google con permesso Calendar disponibile. Fai accedere gli utenti con consenso Google Calendar e riprova."
+    );
+  }
+
+  const result: SyncResult = {
+    syncedCount: 0,
+    importedCount: 0,
+    deletedCount: 0,
+    calendarName: DEFAULT_CALENDAR_NAME,
+    integrationCount: 0,
+    skippedAccountCount: prepared.skippedAccountCount,
+    errors: [],
+  };
+
+  for (const integration of prepared.integrations) {
+    try {
+      const integrationResult = await syncSingleGoogleCalendarIntegration(integration);
+      result.syncedCount += integrationResult.syncedCount;
+      result.importedCount += integrationResult.importedCount;
+      result.deletedCount += integrationResult.deletedCount;
+      result.integrationCount += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Errore Google Calendar sconosciuto";
+      result.errors.push(`${integration.connectedEmail ?? integration.provider}: ${message}`);
+
+      await prisma.calendarIntegration.update({
+        where: { provider: integration.provider },
+        data: {
+          syncStatus: "ERROR",
+          syncError: message,
+        },
+      });
+    }
+  }
+
+  if (result.integrationCount === 0) {
+    throw new Error(result.errors.join("; ") || "Sincronizzazione Google Calendar non riuscita");
+  }
+
+  return result;
 }
 
 export async function markGoogleCalendarSyncError(error: unknown) {
   const message = error instanceof Error ? error.message : "Errore Google Calendar sconosciuto";
 
-  const existing = await prisma.calendarIntegration.findUnique({
-    where: { provider: GOOGLE_PROVIDER },
+  const existing = await prisma.calendarIntegration.findMany({
+    where: {
+      OR: [
+        { provider: GOOGLE_PROVIDER },
+        { provider: { startsWith: GOOGLE_USER_PROVIDER_PREFIX } },
+      ],
+    },
     select: { id: true },
   });
 
-  if (!existing) {
+  if (existing.length === 0) {
     return;
   }
 
-  await prisma.calendarIntegration.update({
-    where: { provider: GOOGLE_PROVIDER },
+  await prisma.calendarIntegration.updateMany({
+    where: {
+      id: {
+        in: existing.map((integration) => integration.id),
+      },
+    },
     data: {
       syncStatus: "ERROR",
       syncError: message,
@@ -728,28 +1006,39 @@ export async function markGoogleCalendarSyncError(error: unknown) {
 }
 
 export async function deleteDeadlineFromSharedGoogleCalendar(deadlineId: string) {
-  const integration = (await prisma.calendarIntegration.findUnique({
-    where: { provider: GOOGLE_PROVIDER },
-  })) as SharedCalendarIntegration | null;
-
-  if (!integration || !integration.externalCalendarId) {
-    return;
-  }
-
-  const mapping = await prisma.calendarEventMapping.findFirst({
+  const integrations = (await prisma.calendarIntegration.findMany({
     where: {
-      deadlineId,
-      calendarIntegrationId: integration.id,
+      OR: [
+        { provider: GOOGLE_PROVIDER },
+        { provider: { startsWith: GOOGLE_USER_PROVIDER_PREFIX } },
+      ],
     },
-  });
+  })) as SharedCalendarIntegration[];
 
-  if (!mapping) {
+  if (integrations.length === 0) {
     return;
   }
 
-  const accessToken = await getValidAccessToken(integration);
-  await deleteEvent(integration.externalCalendarId, accessToken, mapping.externalEventId);
-  await prisma.calendarEventMapping.delete({
-    where: { id: mapping.id },
-  });
+  for (const integration of integrations) {
+    if (!integration.externalCalendarId) {
+      continue;
+    }
+
+    const mapping = await prisma.calendarEventMapping.findFirst({
+      where: {
+        deadlineId,
+        calendarIntegrationId: integration.id,
+      },
+    });
+
+    if (!mapping) {
+      continue;
+    }
+
+    const accessToken = await getValidAccessToken(integration);
+    await deleteEvent(integration.externalCalendarId, accessToken, mapping.externalEventId);
+    await prisma.calendarEventMapping.delete({
+      where: { id: mapping.id },
+    });
+  }
 }

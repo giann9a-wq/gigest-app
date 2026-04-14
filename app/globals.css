@@ -676,6 +676,12 @@ a {
   color: #b91c1c;
 }
 
+.cost-import-missing-field {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
+  background: #fffafa;
+}
+
 .admin-functions-card {
   margin-bottom: 1rem;
 }

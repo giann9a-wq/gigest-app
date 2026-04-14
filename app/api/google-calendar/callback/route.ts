@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
 import { getActiveAppUser } from "@/lib/app-user";
 import { connectSharedGoogleCalendar } from "@/lib/google-calendar";
 
@@ -9,12 +8,6 @@ export async function GET(request: Request) {
 
   if (!appUser) {
     return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  if (appUser.role !== UserRole.ADMIN) {
-    return NextResponse.redirect(
-      new URL("/scadenziario?calendar=forbidden", request.url)
-    );
   }
 
   const code = url.searchParams.get("code");

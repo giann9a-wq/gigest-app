@@ -5,6 +5,18 @@ const authConfig = {
   providers: [
     Google({
       allowDangerousEmailAccountLinking: true,
+      authorization: {
+        params: {
+          access_type: "offline",
+          prompt: "consent",
+          scope: [
+            "openid",
+            "email",
+            "profile",
+            "https://www.googleapis.com/auth/calendar",
+          ].join(" "),
+        },
+      },
     }),
   ],
   session: {
