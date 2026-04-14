@@ -127,32 +127,34 @@ enum InvoiceImportAssignmentSource {
 }
 
 model User {
-  id            String           @id @default(cuid())
-  googleSub     String?          @unique
-  firstName     String?
-  lastName      String?
-  email         String           @unique
-  role          UserRole         @default(OPERATOR)
-  status        UserStatus       @default(PENDING)
-  lastLoginAt   DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id          String     @id @default(cuid())
+  googleSub   String?    @unique
+  firstName   String?
+  lastName    String?
+  email       String     @unique
+  role        UserRole   @default(OPERATOR)
+  status      UserStatus @default(PENDING)
+  lastLoginAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  managedAccessRequests AccessRequest[] @relation("ManagedBy")
-  createdActivities     DiaryActivity[] @relation("ActivityCreatedBy")
-  updatedActivities     DiaryActivity[] @relation("ActivityUpdatedBy")
-  createdExternalActivities ExternalDiaryActivity[] @relation("ExternalActivityCreatedBy")
-  updatedExternalActivities ExternalDiaryActivity[] @relation("ExternalActivityUpdatedBy")
-  createdDeadlines      Deadline[]      @relation("DeadlineCreatedBy")
-  updatedDeadlines      Deadline[]      @relation("DeadlineUpdatedBy")
-  createdMaintenances   Maintenance[]   @relation("MaintenanceCreatedBy")
-  connectedCalendars    CalendarIntegration[] @relation("CalendarIntegrationConnectedBy")
-  adminPanelSessions    AdminPanelSession[]
-  uploadedCostImportSessions CostImportSession[] @relation("CostImportSessionUploadedBy")
-  uploadedInvoiceImportSessions InvoiceImportSession[] @relation("InvoiceImportSessionUploadedBy")
+  managedAccessRequests         AccessRequest[]         @relation("ManagedBy")
+  createdActivities             DiaryActivity[]         @relation("ActivityCreatedBy")
+  updatedActivities             DiaryActivity[]         @relation("ActivityUpdatedBy")
+  createdExternalActivities     ExternalDiaryActivity[] @relation("ExternalActivityCreatedBy")
+  updatedExternalActivities     ExternalDiaryActivity[] @relation("ExternalActivityUpdatedBy")
+  createdMaterialUsages         MaterialUsage[]         @relation("MaterialUsageCreatedBy")
+  updatedMaterialUsages         MaterialUsage[]         @relation("MaterialUsageUpdatedBy")
+  createdDeadlines              Deadline[]              @relation("DeadlineCreatedBy")
+  updatedDeadlines              Deadline[]              @relation("DeadlineUpdatedBy")
+  createdMaintenances           Maintenance[]           @relation("MaintenanceCreatedBy")
+  connectedCalendars            CalendarIntegration[]   @relation("CalendarIntegrationConnectedBy")
+  adminPanelSessions            AdminPanelSession[]
+  uploadedCostImportSessions    CostImportSession[]     @relation("CostImportSessionUploadedBy")
+  uploadedInvoiceImportSessions InvoiceImportSession[]  @relation("InvoiceImportSessionUploadedBy")
 
-  accounts      Account[]
-  sessions      Session[]
+  accounts Account[]
+  sessions Session[]
 }
 
 model AccessRequest {
@@ -178,11 +180,11 @@ model AdminPanelCredential {
 }
 
 model AdminPanelSession {
-  id        String   @id @default(cuid())
-  tokenHash String   @unique
-  userId    String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
   lastUsedAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -191,27 +193,27 @@ model AdminPanelSession {
 }
 
 model Person {
-  id              String       @id @default(cuid())
+  id              String         @id @default(cuid())
   fullName        String
   roleDescription String?
   hireDate        DateTime?
   contacts        String?
   status          ResourceStatus @default(ACTIVE)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   costHistory     PersonCost[]
   diaryActivities DiaryActivity[]
 }
 
 model PersonCost {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   personId   String
-  hourlyCost Decimal  @db.Decimal(10, 2)
+  hourlyCost Decimal   @db.Decimal(10, 2)
   validFrom  DateTime
   validTo    DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
@@ -233,13 +235,13 @@ model Equipment {
 }
 
 model EquipmentCost {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   equipmentId String
-  hourlyCost  Decimal  @db.Decimal(10, 2)
+  hourlyCost  Decimal   @db.Decimal(10, 2)
   validFrom   DateTime
   validTo     DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
 
@@ -247,88 +249,89 @@ model EquipmentCost {
 }
 
 model Maintenance {
-  id                String      @id @default(cuid())
-  equipmentId       String
-  interventionType  String
-  interventionDate  DateTime
-  nextIntervention  DateTime?
-  cost              Decimal?    @db.Decimal(10, 2)
-  notes             String?
-  createdByUserId   String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id               String    @id @default(cuid())
+  equipmentId      String
+  interventionType String
+  interventionDate DateTime
+  nextIntervention DateTime?
+  cost             Decimal?  @db.Decimal(10, 2)
+  notes            String?
+  createdByUserId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  equipment   Equipment              @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  createdBy   User?                  @relation("MaintenanceCreatedBy", fields: [createdByUserId], references: [id])
-  documents   MaintenanceDocument[]
-  deadline    Deadline?
+  equipment Equipment             @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  createdBy User?                 @relation("MaintenanceCreatedBy", fields: [createdByUserId], references: [id])
+  documents MaintenanceDocument[]
+  deadline  Deadline?
 }
 
 model MaintenanceDocument {
-  id             String      @id @default(cuid())
-  maintenanceId  String
-  fileName       String
-  filePath       String
-  mimeType       String?
-  sizeBytes      Int?
-  createdAt      DateTime    @default(now())
+  id            String   @id @default(cuid())
+  maintenanceId String
+  fileName      String
+  filePath      String
+  mimeType      String?
+  sizeBytes     Int?
+  createdAt     DateTime @default(now())
 
   maintenance Maintenance @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
 }
 
 model JobOrder {
-  id                               String         @id @default(cuid())
-  name                             String
-  type                             JobType
-  startDate                        DateTime?
-  endDate                          DateTime?
-  status                           ResourceStatus @default(ACTIVE)
-  description                      String?
-  budgetPersonnelCost              Decimal?       @db.Decimal(12, 2)
-  budgetEquipmentCost              Decimal?       @db.Decimal(12, 2)
-  budgetMaterialsCost              Decimal?       @db.Decimal(12, 2)
-  budgetProfessionalServicesCost   Decimal?       @db.Decimal(12, 2)
-  budgetThirdPartyServicesCost     Decimal?       @db.Decimal(12, 2)
-  budgetMiscCost                   Decimal?       @db.Decimal(12, 2)
-  budgetExpectedRevenue            Decimal?       @db.Decimal(12, 2)
-  actualMaterialsCost              Decimal?       @db.Decimal(12, 2)
-  actualProfessionalServicesCost   Decimal?       @db.Decimal(12, 2)
-  actualThirdPartyServicesCost     Decimal?       @db.Decimal(12, 2)
-  actualMiscCost                   Decimal?       @db.Decimal(12, 2)
-  actualRevenue                    Decimal?       @db.Decimal(12, 2)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id                             String         @id @default(cuid())
+  name                           String
+  type                           JobType
+  startDate                      DateTime?
+  endDate                        DateTime?
+  status                         ResourceStatus @default(ACTIVE)
+  description                    String?
+  budgetPersonnelCost            Decimal?       @db.Decimal(12, 2)
+  budgetEquipmentCost            Decimal?       @db.Decimal(12, 2)
+  budgetMaterialsCost            Decimal?       @db.Decimal(12, 2)
+  budgetProfessionalServicesCost Decimal?       @db.Decimal(12, 2)
+  budgetThirdPartyServicesCost   Decimal?       @db.Decimal(12, 2)
+  budgetMiscCost                 Decimal?       @db.Decimal(12, 2)
+  budgetExpectedRevenue          Decimal?       @db.Decimal(12, 2)
+  actualMaterialsCost            Decimal?       @db.Decimal(12, 2)
+  actualProfessionalServicesCost Decimal?       @db.Decimal(12, 2)
+  actualThirdPartyServicesCost   Decimal?       @db.Decimal(12, 2)
+  actualMiscCost                 Decimal?       @db.Decimal(12, 2)
+  actualRevenue                  Decimal?       @db.Decimal(12, 2)
+  createdAt                      DateTime       @default(now())
+  updatedAt                      DateTime       @updatedAt
 
-  diaryActivities DiaryActivity[]
-  externalDiaryActivities ExternalDiaryActivity[]
-  costImportSessions CostImportSession[]
-  costImportRows CostImportRowStaging[]
-  costActualEntries CostActualEntry[]
-  costImportCorrectionRules CostImportCorrectionRule[]
-  invoiceImportRows InvoiceImportRowStaging[]
-  issuedInvoiceActuals IssuedInvoiceActual[]
-  suggestedInvoiceImportRows InvoiceImportRowStaging[] @relation("InvoiceImportRowSuggestedJobOrder")
+  diaryActivities            DiaryActivity[]
+  externalDiaryActivities    ExternalDiaryActivity[]
+  materialUsages             MaterialUsage[]
+  costImportSessions         CostImportSession[]
+  costImportRows             CostImportRowStaging[]
+  costActualEntries          CostActualEntry[]
+  costImportCorrectionRules  CostImportCorrectionRule[]
+  invoiceImportRows          InvoiceImportRowStaging[]
+  issuedInvoiceActuals       IssuedInvoiceActual[]
+  suggestedInvoiceImportRows InvoiceImportRowStaging[]  @relation("InvoiceImportRowSuggestedJobOrder")
 }
 
 model CostImportSession {
-  id             String                  @id @default(cuid())
-  jobOrderId     String
-  fileName       String
-  fileHash       String?
-  fileSizeBytes  Int?
-  storagePath    String?
-  sourceType     CostImportSourceType
-  uploadedById   String?
-  uploadedAt     DateTime                @default(now())
-  status         CostImportSessionStatus @default(PARSED)
-  parseSummary   Json?
-  appliedAt      DateTime?
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
+  id            String                  @id @default(cuid())
+  jobOrderId    String
+  fileName      String
+  fileHash      String?
+  fileSizeBytes Int?
+  storagePath   String?
+  sourceType    CostImportSourceType
+  uploadedById  String?
+  uploadedAt    DateTime                @default(now())
+  status        CostImportSessionStatus @default(PARSED)
+  parseSummary  Json?
+  appliedAt     DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
 
-  jobOrder       JobOrder                @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
-  uploadedBy     User?                   @relation("CostImportSessionUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
-  rows           CostImportRowStaging[]
+  jobOrder          JobOrder               @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  uploadedBy        User?                  @relation("CostImportSessionUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  rows              CostImportRowStaging[]
   costActualEntries CostActualEntry[]
 
   @@index([jobOrderId, uploadedAt])
@@ -337,38 +340,38 @@ model CostImportSession {
 }
 
 model CostImportRowStaging {
-  id                       String                     @id @default(cuid())
-  importSessionId          String
-  jobOrderId               String
-  rowIndex                 Int
-  rawData                  Json
-  sourceAccountCode        String?
-  sourceAccountDescription String?
-  supplierCode             String?
-  supplierName             String?
-  documentDate             DateTime?
-  registrationDate         DateTime?
-  documentNumber           String?
-  descriptionOriginal      String?
-  descriptionNormalized    String?
-  amount                   Decimal?                   @db.Decimal(12, 2)
-  quantity                 Decimal?                   @db.Decimal(12, 2)
-  suggestedCategory        CostActualCategory?
-  sourceRowFingerprint     String?
+  id                         String                     @id @default(cuid())
+  importSessionId            String
+  jobOrderId                 String
+  rowIndex                   Int
+  rawData                    Json
+  sourceAccountCode          String?
+  sourceAccountDescription   String?
+  supplierCode               String?
+  supplierName               String?
+  documentDate               DateTime?
+  registrationDate           DateTime?
+  documentNumber             String?
+  descriptionOriginal        String?
+  descriptionNormalized      String?
+  amount                     Decimal?                   @db.Decimal(12, 2)
+  quantity                   Decimal?                   @db.Decimal(12, 2)
+  suggestedCategory          CostActualCategory?
+  sourceRowFingerprint       String?
   sourceRowFingerprintSource String?
-  fingerprint              String?
-  fingerprintSource        String?
-  matchStatus              CostImportMatchStatus      @default(NEW)
-  validationStatus         CostImportValidationStatus @default(PENDING)
-  validationNote           String?
-  finalCategory            CostActualCategory?
-  finalDescription         String?
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime                   @updatedAt
+  fingerprint                String?
+  fingerprintSource          String?
+  matchStatus                CostImportMatchStatus      @default(NEW)
+  validationStatus           CostImportValidationStatus @default(PENDING)
+  validationNote             String?
+  finalCategory              CostActualCategory?
+  finalDescription           String?
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
 
-  importSession            CostImportSession          @relation(fields: [importSessionId], references: [id], onDelete: Cascade)
-  jobOrder                 JobOrder                   @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
-  costActualEntries        CostActualEntry[]
+  importSession     CostImportSession @relation(fields: [importSessionId], references: [id], onDelete: Cascade)
+  jobOrder          JobOrder          @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  costActualEntries CostActualEntry[]
 
   @@index([importSessionId, validationStatus])
   @@index([jobOrderId, fingerprint])
@@ -395,56 +398,56 @@ model CostActualEntry {
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
-  jobOrder                 JobOrder           @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
-  sourceImportSession      CostImportSession? @relation(fields: [sourceImportSessionId], references: [id], onDelete: SetNull)
-  sourceImportRow          CostImportRowStaging? @relation(fields: [sourceImportRowId], references: [id], onDelete: SetNull)
+  jobOrder            JobOrder              @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  sourceImportSession CostImportSession?    @relation(fields: [sourceImportSessionId], references: [id], onDelete: SetNull)
+  sourceImportRow     CostImportRowStaging? @relation(fields: [sourceImportRowId], references: [id], onDelete: SetNull)
 
-  @@index([jobOrderId, category])
   @@unique([jobOrderId, fingerprint])
+  @@index([jobOrderId, category])
 }
 
 model CostImportCorrectionRule {
-  id                          String   @id @default(cuid())
-  jobOrderId                  String
-  sourceRowFingerprint        String
-  sourceRowFingerprintSource  String?
-  sourceAccountCode           String?
-  sourceAccountDescription    String?
-  supplierCode                String?
-  supplierName                String?
-  documentDate                DateTime?
-  registrationDate            DateTime?
-  documentNumber              String?
-  amount                      Decimal? @db.Decimal(12, 2)
-  finalCategory               CostActualCategory?
-  finalDescription            String?
-  finalFingerprint            String?
-  finalFingerprintSource      String?
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  id                         String              @id @default(cuid())
+  jobOrderId                 String
+  sourceRowFingerprint       String
+  sourceRowFingerprintSource String?
+  sourceAccountCode          String?
+  sourceAccountDescription   String?
+  supplierCode               String?
+  supplierName               String?
+  documentDate               DateTime?
+  registrationDate           DateTime?
+  documentNumber             String?
+  amount                     Decimal?            @db.Decimal(12, 2)
+  finalCategory              CostActualCategory?
+  finalDescription           String?
+  finalFingerprint           String?
+  finalFingerprintSource     String?
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
 
-  jobOrder                    JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  jobOrder JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
 
   @@unique([jobOrderId, sourceRowFingerprint])
   @@index([jobOrderId, updatedAt])
 }
 
 model InvoiceImportSession {
-  id             String                     @id @default(cuid())
-  fileName       String
-  fileHash       String?
-  fileSizeBytes  Int?
-  storagePath    String?
-  sourceType     InvoiceImportSourceType
-  uploadedById   String?
-  uploadedAt     DateTime                   @default(now())
-  status         InvoiceImportSessionStatus @default(PARSED)
-  parseSummary   Json?
-  appliedAt      DateTime?
-  createdAt      DateTime                   @default(now())
-  updatedAt      DateTime                   @updatedAt
+  id            String                     @id @default(cuid())
+  fileName      String
+  fileHash      String?
+  fileSizeBytes Int?
+  storagePath   String?
+  sourceType    InvoiceImportSourceType
+  uploadedById  String?
+  uploadedAt    DateTime                   @default(now())
+  status        InvoiceImportSessionStatus @default(PARSED)
+  parseSummary  Json?
+  appliedAt     DateTime?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
 
-  uploadedBy     User?                      @relation("InvoiceImportSessionUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedBy     User?                     @relation("InvoiceImportSessionUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
   rows           InvoiceImportRowStaging[]
   issuedInvoices IssuedInvoiceActual[]
 
@@ -453,7 +456,7 @@ model InvoiceImportSession {
 }
 
 model InvoiceImportRowStaging {
-  id                       String                        @id @default(cuid())
+  id                       String                         @id @default(cuid())
   importSessionId          String
   rowIndexStart            Int
   rowIndexEnd              Int
@@ -466,27 +469,27 @@ model InvoiceImportRowStaging {
   invoiceNumber            String?
   customerCode             String?
   customerName             String?
-  netAmount                Decimal?                      @db.Decimal(12, 2)
-  vatAmount                Decimal?                      @db.Decimal(12, 2)
-  grossAmount              Decimal?                      @db.Decimal(12, 2)
+  netAmount                Decimal?                       @db.Decimal(12, 2)
+  vatAmount                Decimal?                       @db.Decimal(12, 2)
+  grossAmount              Decimal?                       @db.Decimal(12, 2)
   extraLinesJson           Json?
   rawDataJson              Json
   fingerprint              String?
   fingerprintSource        String?
-  matchStatus              InvoiceImportMatchStatus      @default(NEW)
-  validationStatus         InvoiceImportValidationStatus @default(PENDING)
+  matchStatus              InvoiceImportMatchStatus       @default(NEW)
+  validationStatus         InvoiceImportValidationStatus  @default(PENDING)
   jobOrderId               String?
   suggestedJobOrderId      String?
   suggestedJobOrderReason  String?
   assignmentSource         InvoiceImportAssignmentSource?
   validationNote           String?
-  createdAt                DateTime                      @default(now())
-  updatedAt                DateTime                      @updatedAt
+  createdAt                DateTime                       @default(now())
+  updatedAt                DateTime                       @updatedAt
 
-  importSession            InvoiceImportSession          @relation(fields: [importSessionId], references: [id], onDelete: Cascade)
-  jobOrder                 JobOrder?                     @relation(fields: [jobOrderId], references: [id], onDelete: SetNull)
-  suggestedJobOrder        JobOrder?                     @relation("InvoiceImportRowSuggestedJobOrder", fields: [suggestedJobOrderId], references: [id], onDelete: SetNull)
-  issuedInvoices           IssuedInvoiceActual[]
+  importSession     InvoiceImportSession  @relation(fields: [importSessionId], references: [id], onDelete: Cascade)
+  jobOrder          JobOrder?             @relation(fields: [jobOrderId], references: [id], onDelete: SetNull)
+  suggestedJobOrder JobOrder?             @relation("InvoiceImportRowSuggestedJobOrder", fields: [suggestedJobOrderId], references: [id], onDelete: SetNull)
+  issuedInvoices    IssuedInvoiceActual[]
 
   @@index([importSessionId, validationStatus])
   @@index([jobOrderId, matchStatus])
@@ -494,7 +497,7 @@ model InvoiceImportRowStaging {
 }
 
 model IssuedInvoiceActual {
-  id                       String               @id @default(cuid())
+  id                       String    @id @default(cuid())
   jobOrderId               String
   sourceImportSessionId    String?
   sourceImportRowId        String?
@@ -506,40 +509,40 @@ model IssuedInvoiceActual {
   invoiceNumber            String?
   customerCode             String?
   customerName             String?
-  netAmount                Decimal              @db.Decimal(12, 2)
-  vatAmount                Decimal?             @db.Decimal(12, 2)
-  grossAmount              Decimal?             @db.Decimal(12, 2)
-  fingerprint              String               @unique
-  createdAt                DateTime             @default(now())
-  updatedAt                DateTime             @updatedAt
+  netAmount                Decimal   @db.Decimal(12, 2)
+  vatAmount                Decimal?  @db.Decimal(12, 2)
+  grossAmount              Decimal?  @db.Decimal(12, 2)
+  fingerprint              String    @unique
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  jobOrder                 JobOrder             @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
-  sourceImportSession      InvoiceImportSession? @relation(fields: [sourceImportSessionId], references: [id], onDelete: SetNull)
-  sourceImportRow          InvoiceImportRowStaging? @relation(fields: [sourceImportRowId], references: [id], onDelete: SetNull)
+  jobOrder            JobOrder                 @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  sourceImportSession InvoiceImportSession?    @relation(fields: [sourceImportSessionId], references: [id], onDelete: SetNull)
+  sourceImportRow     InvoiceImportRowStaging? @relation(fields: [sourceImportRowId], references: [id], onDelete: SetNull)
 
   @@index([jobOrderId, documentDate])
   @@index([jobOrderId, customerName])
 }
 
 model DiaryActivity {
-  id                String       @id @default(cuid())
-  referenceDate     DateTime
-  resourceType      ResourceType
-  personId          String?
-  equipmentId       String?
-  jobOrderId        String
-  hours             Decimal      @db.Decimal(4, 1)
+  id                  String       @id @default(cuid())
+  referenceDate       DateTime
+  resourceType        ResourceType
+  personId            String?
+  equipmentId         String?
+  jobOrderId          String
+  hours               Decimal      @db.Decimal(4, 1)
   activityDescription String?
-  createdByUserId   String?
-  updatedByUserId   String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  createdByUserId     String?
+  updatedByUserId     String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  person      Person?   @relation(fields: [personId], references: [id])
-  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
-  jobOrder    JobOrder  @relation(fields: [jobOrderId], references: [id])
-  createdBy   User?     @relation("ActivityCreatedBy", fields: [createdByUserId], references: [id])
-  updatedBy   User?     @relation("ActivityUpdatedBy", fields: [updatedByUserId], references: [id])
+  person    Person?    @relation(fields: [personId], references: [id])
+  equipment Equipment? @relation(fields: [equipmentId], references: [id])
+  jobOrder  JobOrder   @relation(fields: [jobOrderId], references: [id])
+  createdBy User?      @relation("ActivityCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy User?      @relation("ActivityUpdatedBy", fields: [updatedByUserId], references: [id])
 
   @@index([referenceDate])
   @@index([jobOrderId])
@@ -557,23 +560,23 @@ model ExternalResource {
 }
 
 model ExternalDiaryActivity {
-  id                  String   @id @default(cuid())
+  id                  String                    @id @default(cuid())
   referenceDate       DateTime
   externalResourceId  String
   jobOrderId          String
   activityType        ExternalDiaryActivityType @default(SUBCONTRACT)
-  days                Decimal  @db.Decimal(4, 1)
-  hours               Decimal? @db.Decimal(4, 1)
+  days                Decimal                   @db.Decimal(4, 1)
+  hours               Decimal?                  @db.Decimal(4, 1)
   activityDescription String?
   createdByUserId     String?
   updatedByUserId     String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
 
   externalResource ExternalResource @relation(fields: [externalResourceId], references: [id], onDelete: Cascade)
-  jobOrder          JobOrder         @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
-  createdBy         User?            @relation("ExternalActivityCreatedBy", fields: [createdByUserId], references: [id])
-  updatedBy         User?            @relation("ExternalActivityUpdatedBy", fields: [updatedByUserId], references: [id])
+  jobOrder         JobOrder         @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  createdBy        User?            @relation("ExternalActivityCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy        User?            @relation("ExternalActivityUpdatedBy", fields: [updatedByUserId], references: [id])
 
   @@index([referenceDate])
   @@index([jobOrderId])
@@ -581,62 +584,82 @@ model ExternalDiaryActivity {
   @@index([activityType])
 }
 
-model Deadline {
-  id                String         @id @default(cuid())
-  title             String
-  description       String?
-  eventDate         DateTime
-  isAllDay          Boolean        @default(true)
-  startTime         String?
-  endTime           String?
-  recurrenceRule    String?
-  origin            DeadlineOrigin @default(MANUAL)
-  maintenanceId     String?        @unique
-  createdByUserId   String?
-  updatedByUserId   String?
-  lastSource        SyncSource     @default(GIGEST)
-  lastModifiedAt    DateTime       @default(now())
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+model MaterialUsage {
+  id              String   @id @default(cuid())
+  jobOrderId      String
+  description     String
+  unitOfMeasure   String
+  quantity        Decimal  @db.Decimal(12, 3)
+  usageDate       DateTime
+  createdByUserId String?
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  maintenance Maintenance? @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
-  createdBy   User?        @relation("DeadlineCreatedBy", fields: [createdByUserId], references: [id])
-  updatedBy   User?        @relation("DeadlineUpdatedBy", fields: [updatedByUserId], references: [id])
+  jobOrder  JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("MaterialUsageCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy User?    @relation("MaterialUsageUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  @@index([jobOrderId, usageDate])
+  @@index([description])
+}
+
+model Deadline {
+  id              String         @id @default(cuid())
+  title           String
+  description     String?
+  eventDate       DateTime
+  isAllDay        Boolean        @default(true)
+  startTime       String?
+  endTime         String?
+  recurrenceRule  String?
+  origin          DeadlineOrigin @default(MANUAL)
+  maintenanceId   String?        @unique
+  createdByUserId String?
+  updatedByUserId String?
+  lastSource      SyncSource     @default(GIGEST)
+  lastModifiedAt  DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  maintenance Maintenance?           @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+  createdBy   User?                  @relation("DeadlineCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy   User?                  @relation("DeadlineUpdatedBy", fields: [updatedByUserId], references: [id])
   mappings    CalendarEventMapping[]
 
   @@index([eventDate, startTime])
 }
 
 model CalendarIntegration {
-  id                  String   @id @default(cuid())
-  provider            String   @default("GOOGLE") @unique
-  externalCalendarId  String   @unique
-  calendarName        String   @default("GiGEST")
-  connectedEmail      String?
-  refreshToken        String?  @db.Text
-  accessToken         String?  @db.Text
+  id                   String    @id @default(cuid())
+  provider             String    @unique @default("GOOGLE")
+  externalCalendarId   String    @unique
+  calendarName         String    @default("GiGEST")
+  connectedEmail       String?
+  refreshToken         String?   @db.Text
+  accessToken          String?   @db.Text
   accessTokenExpiresAt DateTime?
-  connectedByUserId   String?
-  lastSyncedAt        DateTime?
-  syncStatus          String   @default("ACTIVE")
-  syncError           String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  connectedByUserId    String?
+  lastSyncedAt         DateTime?
+  syncStatus           String    @default("ACTIVE")
+  syncError            String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  connectedBy User? @relation("CalendarIntegrationConnectedBy", fields: [connectedByUserId], references: [id])
-  mappings CalendarEventMapping[]
+  connectedBy User?                  @relation("CalendarIntegrationConnectedBy", fields: [connectedByUserId], references: [id])
+  mappings    CalendarEventMapping[]
 }
 
 model CalendarEventMapping {
-  id                     String   @id @default(cuid())
-  deadlineId             String
-  calendarIntegrationId  String
-  externalEventId        String
-  externalRecurringId    String?
-  lastSyncedAt           DateTime?
-  externalUpdatedAt      DateTime?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                    String    @id @default(cuid())
+  deadlineId            String
+  calendarIntegrationId String
+  externalEventId       String
+  externalRecurringId   String?
+  lastSyncedAt          DateTime?
+  externalUpdatedAt     DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   deadline            Deadline            @relation(fields: [deadlineId], references: [id], onDelete: Cascade)
   calendarIntegration CalendarIntegration @relation(fields: [calendarIntegrationId], references: [id], onDelete: Cascade)
@@ -646,17 +669,17 @@ model CalendarEventMapping {
 
 // Auth.js models
 model Account {
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String? @db.Text
-  access_token       String? @db.Text
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String? @db.Text
-  session_state      String?
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

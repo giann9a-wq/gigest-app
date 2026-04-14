@@ -21,6 +21,24 @@ type ExternalResourceOption = {
   name: string;
 };
 
+type MaterialUsageRow = {
+  id: string;
+  jobOrderId: string;
+  description: string;
+  unitOfMeasure: string;
+  quantity: number;
+  usageDate: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type MaterialFormState = {
+  description: string;
+  usageDate: string;
+  unitOfMeasure: string;
+  quantity: string;
+};
+
 type InternalEditableRow = {
   localId: string;
   resourceValue: string;
@@ -378,6 +396,26 @@ export function DailyLogPage() {
   const [externalResourceDraft, setExternalResourceDraft] = useState("");
   const [showExternalResourceManager, setShowExternalResourceManager] = useState(false);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [materialsDialogOpen, setMaterialsDialogOpen] = useState(false);
+  const [selectedMaterialJobOrderId, setSelectedMaterialJobOrderId] = useState("");
+  const [materialRows, setMaterialRows] = useState<MaterialUsageRow[]>([]);
+  const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
+  const [materialUnitSuggestions, setMaterialUnitSuggestions] = useState<string[]>([]);
+  const [materialForm, setMaterialForm] = useState<MaterialFormState>({
+    description: "",
+    usageDate: todayAsInputValue(),
+    unitOfMeasure: "",
+    quantity: "",
+  });
+  const [editingMaterialId, setEditingMaterialId] = useState("");
+  const [materialEditForm, setMaterialEditForm] = useState<MaterialFormState>({
+    description: "",
+    usageDate: todayAsInputValue(),
+    unitOfMeasure: "",
+    quantity: "",
+  });
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [materialsSaving, setMaterialsSaving] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
   const [printPreviewDays, setPrintPreviewDays] = useState<PrintDay[]>([]);
   const printPreviewRequestRef = useRef(0);
@@ -760,6 +798,117 @@ export function DailyLogPage() {
     }
   }
 
+  async function loadMaterialRows(jobOrderId: string) {
+    setMaterialsLoading(true);
+    setError("");
+
+    try {
+      const data = await safeJsonFetch(`/api/diario/materiali${jobOrderId ? `?jobOrderId=${jobOrderId}` : ""}`);
+      setMaterialRows(data.rows ?? []);
+      setMaterialSuggestions(data.suggestions ?? []);
+      setMaterialUnitSuggestions(data.unitSuggestions ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel caricamento materiali");
+    } finally {
+      setMaterialsLoading(false);
+    }
+  }
+
+  function openMaterialsDialog() {
+    const initialJobOrderId = selectedMaterialJobOrderId || jobOrders[0]?.id || "";
+    setMaterialsDialogOpen(true);
+    setSelectedMaterialJobOrderId(initialJobOrderId);
+    setMaterialForm({
+      description: "",
+      usageDate: todayAsInputValue(),
+      unitOfMeasure: "",
+      quantity: "",
+    });
+    setEditingMaterialId("");
+    void loadMaterialRows(initialJobOrderId);
+  }
+
+  function changeMaterialJobOrder(jobOrderId: string) {
+    setSelectedMaterialJobOrderId(jobOrderId);
+    setEditingMaterialId("");
+    void loadMaterialRows(jobOrderId);
+  }
+
+  async function handleSaveMaterial() {
+    if (!selectedMaterialJobOrderId) {
+      setError("Seleziona una commessa per registrare il materiale.");
+      return;
+    }
+
+    setMaterialsSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await safeJsonFetch("/api/diario/materiali", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jobOrderId: selectedMaterialJobOrderId,
+          ...materialForm,
+        }),
+      });
+
+      setMaterialForm({
+        description: "",
+        usageDate: todayAsInputValue(),
+        unitOfMeasure: materialForm.unitOfMeasure,
+        quantity: "",
+      });
+      setMessage("Materiale salvato nel diario.");
+      await loadMaterialRows(selectedMaterialJobOrderId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel salvataggio materiale");
+    } finally {
+      setMaterialsSaving(false);
+    }
+  }
+
+  function startEditMaterial(row: MaterialUsageRow) {
+    setEditingMaterialId(row.id);
+    setMaterialEditForm({
+      description: row.description,
+      usageDate: row.usageDate,
+      unitOfMeasure: row.unitOfMeasure,
+      quantity: row.quantity.toString(),
+    });
+  }
+
+  async function handleUpdateMaterial() {
+    if (!editingMaterialId || !selectedMaterialJobOrderId) return;
+
+    setMaterialsSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await safeJsonFetch(`/api/diario/materiali/${editingMaterialId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jobOrderId: selectedMaterialJobOrderId,
+          ...materialEditForm,
+        }),
+      });
+      setEditingMaterialId("");
+      setMessage("Materiale aggiornato.");
+      await loadMaterialRows(selectedMaterialJobOrderId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nell'aggiornamento materiale");
+    } finally {
+      setMaterialsSaving(false);
+    }
+  }
+
   const totalInternalHours = useMemo(() => sumNumericStrings(internalRows.map((row) => row.hours)), [internalRows]);
   const totalExternalDays = useMemo(() => sumNumericStrings(externalRows.map((row) => row.days)), [externalRows]);
   const totalExternalEconomyHours = useMemo(
@@ -925,6 +1074,7 @@ export function DailyLogPage() {
         />
 
         <div className="diary-workspace-shortcuts">
+          <button className="button" type="button" onClick={openMaterialsDialog}>Diario dei Materiali</button>
           <button className="mobile-button-secondary" type="button" onClick={() => router.push("/risorse")}>Risorse</button>
           <button className="mobile-button-secondary" type="button" onClick={() => router.push("/commesse")}>Commesse</button>
           <button className="mobile-button-secondary" type="button" onClick={() => router.push("/dashboard-commessa")}>Dashboard commessa</button>
@@ -1002,6 +1152,206 @@ export function DailyLogPage() {
           onPrint={() => void handlePrint()}
         />
       ) : null}
+
+      {materialsDialogOpen ? (
+        <MaterialDiaryDialog
+          jobOrders={jobOrders}
+          selectedJobOrderId={selectedMaterialJobOrderId}
+          rows={materialRows}
+          form={materialForm}
+          editForm={materialEditForm}
+          editingId={editingMaterialId}
+          materialSuggestions={materialSuggestions}
+          unitSuggestions={materialUnitSuggestions}
+          loading={materialsLoading}
+          saving={materialsSaving}
+          onClose={() => setMaterialsDialogOpen(false)}
+          onJobOrderChange={changeMaterialJobOrder}
+          onFormChange={(patch) => setMaterialForm((current) => ({ ...current, ...patch }))}
+          onEditFormChange={(patch) => setMaterialEditForm((current) => ({ ...current, ...patch }))}
+          onSave={() => void handleSaveMaterial()}
+          onStartEdit={startEditMaterial}
+          onCancelEdit={() => setEditingMaterialId("")}
+          onUpdate={() => void handleUpdateMaterial()}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function formatMaterialQuantity(value: number) {
+  return value.toLocaleString("it-IT", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  });
+}
+
+function MaterialDiaryDialog({
+  jobOrders,
+  selectedJobOrderId,
+  rows,
+  form,
+  editForm,
+  editingId,
+  materialSuggestions,
+  unitSuggestions,
+  loading,
+  saving,
+  onClose,
+  onJobOrderChange,
+  onFormChange,
+  onEditFormChange,
+  onSave,
+  onStartEdit,
+  onCancelEdit,
+  onUpdate,
+}: {
+  jobOrders: JobOrderOption[];
+  selectedJobOrderId: string;
+  rows: MaterialUsageRow[];
+  form: MaterialFormState;
+  editForm: MaterialFormState;
+  editingId: string;
+  materialSuggestions: string[];
+  unitSuggestions: string[];
+  loading: boolean;
+  saving: boolean;
+  onClose: () => void;
+  onJobOrderChange: (jobOrderId: string) => void;
+  onFormChange: (patch: Partial<MaterialFormState>) => void;
+  onEditFormChange: (patch: Partial<MaterialFormState>) => void;
+  onSave: () => void;
+  onStartEdit: (row: MaterialUsageRow) => void;
+  onCancelEdit: () => void;
+  onUpdate: () => void;
+}) {
+  return (
+    <div className="diary-print-backdrop" role="dialog" aria-modal="true">
+      <section className="diary-print-dialog material-diary-dialog">
+        <header className="diary-print-dialog-head">
+          <div>
+            <p className="dashboard-kicker">Diario materiali</p>
+            <h2>Materiali utilizzati</h2>
+            <p>Registra materiali liberi e riusa le descrizioni gia inserite.</p>
+          </div>
+          <button type="button" className="mobile-button-secondary" onClick={onClose}>Chiudi</button>
+        </header>
+
+        <div className="material-diary-body">
+          <label className="material-diary-field material-diary-field-wide">
+            <span>Commessa</span>
+            <select value={selectedJobOrderId} onChange={(event) => onJobOrderChange(event.target.value)}>
+              <option value="">Seleziona commessa</option>
+              {jobOrders.map((jobOrder) => (
+                <option key={jobOrder.id} value={jobOrder.id}>
+                  {jobOrder.name} ({jobOrder.type})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selectedJobOrderId ? (
+            <>
+              <div className="material-diary-form">
+                <label className="material-diary-field material-diary-field-wide">
+                  <span>Descrizione Materiale</span>
+                  <input
+                    list="material-diary-suggestions"
+                    type="text"
+                    value={form.description}
+                    onChange={(event) => onFormChange({ description: event.target.value })}
+                    placeholder="Es. cemento, ferro, tubazioni"
+                  />
+                </label>
+                <label className="material-diary-field">
+                  <span>Data</span>
+                  <input type="date" value={form.usageDate} onChange={(event) => onFormChange({ usageDate: event.target.value })} />
+                </label>
+                <label className="material-diary-field">
+                  <span>Unita di Misura</span>
+                  <input
+                    list="material-unit-suggestions"
+                    type="text"
+                    value={form.unitOfMeasure}
+                    onChange={(event) => onFormChange({ unitOfMeasure: event.target.value })}
+                    placeholder="kg, m, pz"
+                  />
+                </label>
+                <label className="material-diary-field">
+                  <span>Quantita</span>
+                  <input type="number" min="0" step="0.001" value={form.quantity} onChange={(event) => onFormChange({ quantity: event.target.value })} placeholder="0" />
+                </label>
+                <div className="material-diary-save">
+                  <button type="button" className="button" onClick={onSave} disabled={saving}>
+                    {saving ? "Salvataggio..." : "Salva materiale"}
+                  </button>
+                </div>
+              </div>
+
+              <datalist id="material-diary-suggestions">
+                {materialSuggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
+              </datalist>
+              <datalist id="material-unit-suggestions">
+                {unitSuggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
+              </datalist>
+
+              <div className="material-diary-table-wrap">
+                <table className="material-diary-table">
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Materiale</th>
+                      <th>Unita</th>
+                      <th>Quantita</th>
+                      <th>Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={5}>Caricamento materiali...</td></tr>
+                    ) : rows.length === 0 ? (
+                      <tr><td colSpan={5}>Nessun materiale inserito per questa commessa.</td></tr>
+                    ) : (
+                      rows.map((row) => (
+                        <tr key={row.id}>
+                          {editingId === row.id ? (
+                            <>
+                              <td><input type="date" value={editForm.usageDate} onChange={(event) => onEditFormChange({ usageDate: event.target.value })} /></td>
+                              <td><input list="material-diary-suggestions" value={editForm.description} onChange={(event) => onEditFormChange({ description: event.target.value })} /></td>
+                              <td><input list="material-unit-suggestions" value={editForm.unitOfMeasure} onChange={(event) => onEditFormChange({ unitOfMeasure: event.target.value })} /></td>
+                              <td><input type="number" min="0" step="0.001" value={editForm.quantity} onChange={(event) => onEditFormChange({ quantity: event.target.value })} /></td>
+                              <td>
+                                <div className="material-diary-row-actions">
+                                  <button type="button" onClick={onUpdate} disabled={saving}>Salva</button>
+                                  <button type="button" onClick={onCancelEdit}>Annulla</button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td>{formatItalianShortDate(row.usageDate)}</td>
+                              <td><strong>{row.description}</strong></td>
+                              <td>{row.unitOfMeasure}</td>
+                              <td>{formatMaterialQuantity(row.quantity)}</td>
+                              <td>
+                                <button type="button" className="material-diary-edit-button" onClick={() => onStartEdit(row)}>
+                                  Modifica
+                                </button>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="job-premium-empty-state">Scegli una commessa per inserire e consultare i materiali usati.</div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

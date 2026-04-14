@@ -57,6 +57,19 @@ type ExternalDetailGroup = {
   entries: ExternalDetailEntry[];
 };
 
+type MaterialUsageDetail = {
+  key: string;
+  description: string;
+  unitOfMeasure: string;
+  totalQuantity: number;
+  entryCount: number;
+  entries: Array<{
+    id: string;
+    usageDate: string;
+    quantity: number;
+  }>;
+};
+
 type ImportedCostMovement = {
   id: string;
   documentDate: string;
@@ -76,6 +89,7 @@ export type JobOrderDashboardResponse = {
     description: string;
     activityCount: number;
     externalActivityCount: number;
+    materialUsageCount: number;
     createdAt: string;
     updatedAt: string;
   };
@@ -118,6 +132,10 @@ export type JobOrderDashboardResponse = {
         totalHours: number;
         entryCount: number;
       }>;
+    };
+    materialUsages: {
+      totalEntries: number;
+      details: MaterialUsageDetail[];
     };
     importSources: {
       materials: string;
@@ -665,6 +683,58 @@ function JobExternalResourcesSummary({ dashboard }: { dashboard: JobOrderDashboa
   );
 }
 
+function JobMaterialsSummary({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
+  const rows = dashboard.actual.materialUsages?.details ?? [];
+  const totalEntries = dashboard.actual.materialUsages?.totalEntries ?? 0;
+
+  return (
+    <section className="job-premium-card">
+      <div className="job-premium-section-head">
+        <div>
+          <span>Diario materiali</span>
+          <h2>Materiali utilizzati</h2>
+        </div>
+        <strong>{totalEntries} movimenti</strong>
+      </div>
+
+      <div className="job-premium-table-wrap">
+        <table className="job-premium-summary-table job-premium-materials-table">
+          <thead>
+            <tr>
+              <th>Materiale</th>
+              <th>Movimenti</th>
+              <th>Quantita totale</th>
+              <th>Ultimi inserimenti</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={4}>Nessun materiale registrato per questa commessa.</td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.key}>
+                  <td><strong>{row.description}</strong></td>
+                  <td>{row.entryCount}</td>
+                  <td>{formatQuantity(row.totalQuantity, row.unitOfMeasure)}</td>
+                  <td>
+                    {row.entries.slice(0, 3).map((entry) => (
+                      <span key={entry.id} className="job-premium-material-chip">
+                        {formatDate(entry.usageDate)} - {formatQuantity(entry.quantity, row.unitOfMeasure)}
+                      </span>
+                    ))}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function ExternalResourceSummaryTable({
   title,
   emptyText,
@@ -726,6 +796,7 @@ export function JobDashboardView(props: JobDashboardViewProps) {
       <JobBudgetVsActualChart categories={categories} />
       </div>
       <JobCostBreakdownAccordion categories={categories} />
+      <JobMaterialsSummary dashboard={props.dashboard} />
       <JobExternalResourcesSummary dashboard={props.dashboard} />
       <JobSummaryTable categories={categories} />
     </div>

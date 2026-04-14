@@ -32,6 +32,10 @@ function roundHours(value: number) {
   return Number(value.toFixed(1));
 }
 
+function roundQuantity(value: number) {
+  return Number(value.toFixed(3));
+}
+
 function toRatio(costs: number, revenue: number) {
   if (!revenue) return 0;
   return Number((((revenue - costs) / revenue) * 100).toFixed(2));
@@ -215,6 +219,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         select: {
           diaryActivities: true,
           externalDiaryActivities: true,
+          materialUsages: true,
         },
       },
       diaryActivities: {
@@ -260,6 +265,9 @@ export async function getJobOrderDashboard(jobOrderId: string) {
             },
           },
         },
+      },
+      materialUsages: {
+        orderBy: [{ usageDate: "desc" }, { createdAt: "desc" }],
       },
     },
   });
@@ -332,6 +340,22 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         referenceDate: string;
         hours: number;
         description: string;
+      }[];
+    }
+  >();
+
+  const materialUsageMap = new Map<
+    string,
+    {
+      key: string;
+      description: string;
+      unitOfMeasure: string;
+      totalQuantity: number;
+      entryCount: number;
+      entries: {
+        id: string;
+        usageDate: string;
+        quantity: number;
       }[];
     }
   >();
@@ -459,6 +483,34 @@ export async function getJobOrderDashboard(jobOrderId: string) {
     }
   }
 
+  for (const material of jobOrder.materialUsages) {
+    const description = material.description;
+    const unitOfMeasure = material.unitOfMeasure;
+    const quantity = roundQuantity(Number(material.quantity));
+    const key = `${description.toLocaleLowerCase("it")}::${unitOfMeasure.toLocaleLowerCase("it")}`;
+    const current = materialUsageMap.get(key);
+    const entry = {
+      id: material.id,
+      usageDate: material.usageDate.toISOString().slice(0, 10),
+      quantity,
+    };
+
+    if (current) {
+      current.totalQuantity = roundQuantity(current.totalQuantity + quantity);
+      current.entryCount += 1;
+      current.entries.push(entry);
+    } else {
+      materialUsageMap.set(key, {
+        key,
+        description,
+        unitOfMeasure,
+        totalQuantity: quantity,
+        entryCount: 1,
+        entries: [entry],
+      });
+    }
+  }
+
   const budget = {
     personnel: toAmount(jobOrder.budgetPersonnelCost),
     equipment: toAmount(jobOrder.budgetEquipmentCost),
@@ -507,6 +559,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       description: jobOrder.description ?? "",
       activityCount: jobOrder._count.diaryActivities,
       externalActivityCount: jobOrder._count.externalDiaryActivities,
+      materialUsageCount: jobOrder._count.materialUsages,
       createdAt: jobOrder.createdAt.toISOString(),
       updatedAt: jobOrder.updatedAt.toISOString(),
     },
@@ -539,6 +592,12 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         totalEntries: [...externalEconomyResourceMap.values()].reduce((sum, item) => sum + item.entryCount, 0),
         details: [...externalEconomyResourceMap.values()].sort((a, b) =>
           a.resourceLabel.localeCompare(b.resourceLabel, "it", { sensitivity: "base" })
+        ),
+      },
+      materialUsages: {
+        totalEntries: jobOrder._count.materialUsages,
+        details: [...materialUsageMap.values()].sort((a, b) =>
+          a.description.localeCompare(b.description, "it", { sensitivity: "base" })
         ),
       },
       importSources: {

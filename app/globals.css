@@ -1760,6 +1760,117 @@ a {
   font-weight: 800;
 }
 
+.material-diary-dialog {
+  width: min(1180px, 100%);
+}
+
+.material-diary-body {
+  display: grid;
+  gap: 0.9rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.material-diary-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(150px, 0.75fr) minmax(140px, 0.7fr) minmax(140px, 0.7fr) auto;
+  gap: 0.65rem;
+  align-items: end;
+  padding: 0.8rem;
+  border: 1px solid var(--diary-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.material-diary-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.material-diary-field span {
+  color: var(--diary-muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.material-diary-field select,
+.material-diary-field input,
+.material-diary-table input {
+  min-height: 40px;
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--diary-text);
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+}
+
+.material-diary-field-wide {
+  min-width: 0;
+}
+
+.material-diary-save {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.material-diary-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--diary-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.material-diary-table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+}
+
+.material-diary-table th {
+  background: var(--diary-primary);
+  color: #ffffff;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.material-diary-table th,
+.material-diary-table td {
+  border-bottom: 1px solid var(--diary-border);
+  padding: 0.7rem 0.75rem;
+  vertical-align: middle;
+}
+
+.material-diary-table tr:last-child td {
+  border-bottom: none;
+}
+
+.material-diary-row-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.material-diary-edit-button,
+.material-diary-row-actions button {
+  min-height: 34px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0.4rem 0.6rem;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border-soft);
@@ -3369,6 +3480,25 @@ a {
   width: 26%;
 }
 
+.job-premium-materials-table td:last-child {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.job-premium-material-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .job-premium-external-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -3523,6 +3653,15 @@ a {
   .diary-day-hero,
   .diary-print-grid {
     grid-template-columns: 1fr;
+  }
+
+  .material-diary-form {
+    grid-template-columns: 1fr;
+  }
+
+  .material-diary-save,
+  .material-diary-save .button {
+    width: 100%;
   }
 
   .diary-kpi-strip {
