@@ -4,9 +4,10 @@ import { prisma } from "@/lib/prisma";
 
 const REPORT_GROUPS = [
   { key: "WORK", label: "Ore lavorate" },
-  { key: "LEAVE", label: "Ferie" },
-  { key: "SICKNESS", label: "Malattia" },
   { key: "RAIN", label: "Pioggia" },
+  { key: "LEAVE", label: "Ferie" },
+  { key: "NATIONAL_HOLIDAY", label: "Festività" },
+  { key: "SICKNESS", label: "Malattia" },
 ] as const;
 
 type ReportGroupKey = (typeof REPORT_GROUPS)[number]["key"];
@@ -21,6 +22,7 @@ function getGroupKey(jobType: string): ReportGroupKey {
   if (jobType === "LEAVE") return "LEAVE";
   if (jobType === "SICKNESS") return "SICKNESS";
   if (jobType === "RAIN") return "RAIN";
+  if (jobType === "NATIONAL_HOLIDAY") return "NATIONAL_HOLIDAY";
   return "WORK";
 }
 

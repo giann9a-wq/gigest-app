@@ -4,7 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { JobOrderTabs } from "@/components/layout/job-order-tabs";
 
-type JobTypeValue = "SITE" | "TRAINING" | "LEAVE" | "SICKNESS" | "RAIN" | "OTHER";
+type JobTypeValue =
+  | "SITE"
+  | "TRAINING"
+  | "LEAVE"
+  | "SICKNESS"
+  | "RAIN"
+  | "NATIONAL_HOLIDAY"
+  | "OTHER";
 type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
 type JobSortKey = "name" | "type" | "startDate" | "status" | "endDate" | "description";
 type SortDirection = "asc" | "desc";
@@ -82,6 +89,8 @@ function jobTypeLabel(type: JobTypeValue) {
       return "Malattia";
     case "RAIN":
       return "Pioggia";
+    case "NATIONAL_HOLIDAY":
+      return "Festività Nazionale";
     case "OTHER":
       return "Altro";
   }
@@ -316,6 +325,7 @@ export default function CommessePage() {
               <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
               <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
               <option value="RAIN">{jobTypeLabel("RAIN")}</option>
+              <option value="NATIONAL_HOLIDAY">{jobTypeLabel("NATIONAL_HOLIDAY")}</option>
               <option value="OTHER">{jobTypeLabel("OTHER")}</option>
             </select>
           </label>
@@ -448,6 +458,7 @@ export default function CommessePage() {
                       <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
                       <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
                       <option value="RAIN">{jobTypeLabel("RAIN")}</option>
+                      <option value="NATIONAL_HOLIDAY">{jobTypeLabel("NATIONAL_HOLIDAY")}</option>
                       <option value="OTHER">{jobTypeLabel("OTHER")}</option>
                     </select>
                   </td>
@@ -563,6 +574,7 @@ export default function CommessePage() {
                     <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
                     <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
                     <option value="RAIN">{jobTypeLabel("RAIN")}</option>
+                    <option value="NATIONAL_HOLIDAY">{jobTypeLabel("NATIONAL_HOLIDAY")}</option>
                     <option value="OTHER">{jobTypeLabel("OTHER")}</option>
                   </select>
                 </label>

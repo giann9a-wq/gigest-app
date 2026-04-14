@@ -5,7 +5,14 @@ import type { Route } from "next";
 import { useParams, useRouter } from "next/navigation";
 import { formatCurrency, formatPercent } from "@/lib/number-format";
 
-type JobTypeValue = "SITE" | "TRAINING" | "LEAVE" | "SICKNESS" | "RAIN" | "OTHER";
+type JobTypeValue =
+  | "SITE"
+  | "TRAINING"
+  | "LEAVE"
+  | "SICKNESS"
+  | "RAIN"
+  | "NATIONAL_HOLIDAY"
+  | "OTHER";
 type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
 
 type BudgetForm = {
@@ -113,6 +120,8 @@ function jobTypeLabel(type: JobTypeValue) {
       return "Malattia";
     case "RAIN":
       return "Pioggia";
+    case "NATIONAL_HOLIDAY":
+      return "Festività Nazionale";
     case "OTHER":
       return "Altro";
   }
@@ -318,6 +327,7 @@ export default function SchedaCommessaPage() {
                   <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
                   <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
                   <option value="RAIN">{jobTypeLabel("RAIN")}</option>
+                  <option value="NATIONAL_HOLIDAY">{jobTypeLabel("NATIONAL_HOLIDAY")}</option>
                   <option value="OTHER">{jobTypeLabel("OTHER")}</option>
                 </select>
               </label>

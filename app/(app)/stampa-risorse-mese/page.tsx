@@ -11,7 +11,7 @@ type ReportDay = {
 };
 
 type ReportGroup = {
-  key: "WORK" | "LEAVE" | "SICKNESS" | "RAIN";
+  key: "WORK" | "RAIN" | "LEAVE" | "NATIONAL_HOLIDAY" | "SICKNESS";
   label: string;
   values: number[];
   total: number;
@@ -72,6 +72,8 @@ export default function StampaRisorseMesePage() {
   const [month, setMonth] = useState(current.month);
   const [year, setYear] = useState(current.year);
   const [report, setReport] = useState<MonthlyReportResponse | null>(null);
+  const [selectedResourceIds, setSelectedResourceIds] = useState<string[] | null>(null);
+  const [isResourceFilterOpen, setIsResourceFilterOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -96,9 +98,67 @@ export default function StampaRisorseMesePage() {
   }, []);
 
   const visibleResources = useMemo(
+    () => {
+      const resourcesWithHours = (report?.resources ?? []).filter((resource) => resource.hasHours);
+
+      if (selectedResourceIds === null) {
+        return resourcesWithHours;
+      }
+
+      const selectedIds = new Set(selectedResourceIds);
+      return resourcesWithHours.filter((resource) => selectedIds.has(resource.id));
+    },
+    [report, selectedResourceIds]
+  );
+
+  const filterableResources = useMemo(
     () => (report?.resources ?? []).filter((resource) => resource.hasHours),
     [report]
   );
+
+  const selectedResourceSummary = useMemo(() => {
+    if (selectedResourceIds === null) {
+      return "Tutte le risorse";
+    }
+
+    if (selectedResourceIds.length === 0) {
+      return "Nessuna risorsa selezionata";
+    }
+
+    if (selectedResourceIds.length === 1) {
+      const selected = filterableResources.find((resource) => resource.id === selectedResourceIds[0]);
+      return selected?.fullName ?? "1 risorsa selezionata";
+    }
+
+    return `${selectedResourceIds.length} risorse selezionate`;
+  }, [filterableResources, selectedResourceIds]);
+
+  function toggleResource(resourceId: string) {
+    setSelectedResourceIds((current) =>
+      (current ?? filterableResources.map((resource) => resource.id)).includes(resourceId)
+        ? (current ?? filterableResources.map((resource) => resource.id)).filter(
+            (selectedId) => selectedId !== resourceId
+          )
+        : [...(current ?? []), resourceId]
+    );
+  }
+
+  function selectAllResources() {
+    setSelectedResourceIds(null);
+    setIsResourceFilterOpen(false);
+  }
+
+  function clearSelectedResources() {
+    setSelectedResourceIds([]);
+    setIsResourceFilterOpen(false);
+  }
+
+  function isResourceSelected(resourceId: string) {
+    return selectedResourceIds === null || selectedResourceIds.includes(resourceId);
+  }
+
+  const selectedResourceCount =
+    selectedResourceIds === null ? filterableResources.length : visibleResources.length;
 
   return (
     <div className="report-page">
@@ -106,7 +166,8 @@ export default function StampaRisorseMesePage() {
         <div>
           <h1 style={{ margin: 0 }}>Stampa risorse mese</h1>
           <p className="muted" style={{ marginBottom: 0 }}>
-            Report mensile ore personale raggruppate in Ore lavorate, Ferie, Malattia e Pioggia.
+            Report mensile ore personale raggruppate in Ore lavorate, Pioggia, Ferie,
+            Festività e Malattia.
           </p>
         </div>
 
@@ -144,6 +205,56 @@ export default function StampaRisorseMesePage() {
 
       {error ? <div className="scad-error">{error}</div> : null}
 
+      {filterableResources.length > 0 ? (
+        <div className="card report-filter-card">
+          <div className="stats-multi report-resource-filter">
+            <span>Risorse da inserire nella stampa</span>
+            <button
+              type="button"
+              className="stats-multi-trigger"
+              onClick={() => setIsResourceFilterOpen((current) => !current)}
+              aria-expanded={isResourceFilterOpen}
+            >
+              <span className="stats-multi-summary">{selectedResourceSummary}</span>
+              <span className="stats-multi-caret">v</span>
+            </button>
+
+            {isResourceFilterOpen ? (
+              <div className="stats-multi-menu">
+                <button
+                  type="button"
+                  className="report-resource-filter-action"
+                  onClick={selectAllResources}
+                >
+                  Seleziona tutte
+                </button>
+                <button
+                  type="button"
+                  className="report-resource-filter-action"
+                  onClick={clearSelectedResources}
+                >
+                  Deseleziona tutte
+                </button>
+
+                {filterableResources.map((resource) => (
+                  <label key={resource.id} className="stats-multi-option">
+                    <input
+                      type="checkbox"
+                      checked={isResourceSelected(resource.id)}
+                      onChange={() => toggleResource(resource.id)}
+                    />
+                    <span>{resource.fullName}</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <span className="muted">
+            {selectedResourceCount} su {filterableResources.length} risorse incluse
+          </span>
+        </div>
+      ) : null}
+
       <div className="card report-sheet">
         <div className="report-sheet-header">
           <div className="report-title-block">
@@ -160,7 +271,11 @@ export default function StampaRisorseMesePage() {
         {loading ? (
           <div className="muted">Caricamento report...</div>
         ) : !report || visibleResources.length === 0 ? (
-          <div className="muted">Nessuna attività personale trovata per il periodo selezionato.</div>
+          <div className="muted">
+            {filterableResources.length > 0
+              ? "Nessuna risorsa selezionata per la stampa."
+              : "Nessuna attività personale trovata per il periodo selezionato."}
+          </div>
         ) : (
           <div className="report-table-wrap">
             <table className="report-table">

@@ -41,6 +41,7 @@ enum JobType {
   LEAVE
   SICKNESS
   RAIN
+  NATIONAL_HOLIDAY
   OTHER
 }
 
