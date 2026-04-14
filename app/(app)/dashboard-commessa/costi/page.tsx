@@ -8,6 +8,8 @@ import { formatCurrency } from "@/lib/number-format";
 type JobOrderOption = {
   id: string;
   name: string;
+  type?: string;
+  status?: string;
 };
 
 type CostCategoryKey =
@@ -23,6 +25,8 @@ type CostActualViewResponse = {
     type: string;
     status: string;
   };
+  canReassignCosts?: boolean;
+  allJobOrders?: JobOrderOption[];
   categories: Array<{
     key: CostCategoryKey;
     label: string;
@@ -54,6 +58,17 @@ async function jsonFetch<T>(url: string) {
   return data as T;
 }
 
+async function jsonMutation<T>(url: string, options: RequestInit) {
+  const response = await fetch(url, options);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Errore server");
+  }
+
+  return data as T;
+}
+
 function formatDate(value: string) {
   if (!value) return "-";
   const [year, month, day] = value.split("-");
@@ -68,7 +83,14 @@ export default function DashboardCommessaCostiPage() {
   const [selectedJobOrderId, setSelectedJobOrderId] = useState(initialJobOrderId);
   const [view, setView] = useState<CostActualViewResponse | null>(null);
   const [activeTab, setActiveTab] = useState<CostCategoryKey>("MATERIE_PRIME");
+  const [moveCost, setMoveCost] = useState<{
+    id: string;
+    description: string;
+    amount: number;
+    targetJobOrderId: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [movingCost, setMovingCost] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -115,10 +137,40 @@ export default function DashboardCommessaCostiPage() {
     loadView();
   }, [selectedJobOrderId]);
 
+  async function moveCostToJobOrder() {
+    if (!view || !moveCost || !moveCost.targetJobOrderId) return;
+
+    setMovingCost(true);
+    setError("");
+
+    try {
+      await jsonMutation<{ success: boolean }>(`/api/commesse/${view.jobOrder.id}/costi`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          costEntryId: moveCost.id,
+          targetJobOrderId: moveCost.targetJobOrderId,
+        }),
+      });
+
+      setMoveCost(null);
+      const data = await jsonFetch<CostActualViewResponse>(`/api/commesse/${view.jobOrder.id}/costi`);
+      setView(data);
+    } catch (moveError) {
+      setError(moveError instanceof Error ? moveError.message : "Errore spostando la spesa");
+    } finally {
+      setMovingCost(false);
+    }
+  }
+
   const activeCategory = useMemo(
     () => view?.categories.find((category) => category.key === activeTab) ?? null,
     [activeTab, view]
   );
+  const canReassignCosts = Boolean(view?.canReassignCosts);
+  const reassignJobOrders = view?.allJobOrders ?? [];
 
   return (
     <div className="cost-view-page">
@@ -195,12 +247,13 @@ export default function DashboardCommessaCostiPage() {
                       <th>Descrizione</th>
                       <th>Conto sorgente</th>
                       <th>Importo</th>
+                      {canReassignCosts ? <th>Azioni</th> : null}
                     </tr>
                   </thead>
                   <tbody>
                     {activeCategory.rows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="stats-empty-cell">
+                        <td colSpan={canReassignCosts ? 7 : 6} className="stats-empty-cell">
                           Nessun costo validato in questa categoria.
                         </td>
                       </tr>
@@ -219,6 +272,26 @@ export default function DashboardCommessaCostiPage() {
                             <div>{row.sourceAccountDescription || "-"}</div>
                           </td>
                           <td>{formatCurrency(row.amount)}</td>
+                          {canReassignCosts ? (
+                            <td>
+                              <button
+                                type="button"
+                                className="cost-view-reassign-btn"
+                                onClick={() =>
+                                  setMoveCost({
+                                    id: row.id,
+                                    description: row.description || row.documentNumber || "Spesa",
+                                    amount: row.amount,
+                                    targetJobOrderId: "",
+                                  })
+                                }
+                                title="Cambia commessa"
+                                aria-label="Cambia commessa"
+                              >
+                                Cambia
+                              </button>
+                            </td>
+                          ) : null}
                         </tr>
                       ))
                     )}
@@ -228,6 +301,82 @@ export default function DashboardCommessaCostiPage() {
             </>
           ) : null}
         </section>
+      ) : null}
+
+      {view && moveCost ? (
+        <div className="cost-view-modal-backdrop" role="presentation">
+          <div className="cost-view-modal" role="dialog" aria-modal="true" aria-labelledby="move-cost-title">
+            <div className="cost-view-modal-head">
+              <div>
+                <p className="dashboard-kicker">Cambia commessa</p>
+                <h2 id="move-cost-title">Sposta spesa</h2>
+              </div>
+              <button
+                type="button"
+                className="cost-view-modal-close"
+                onClick={() => setMoveCost(null)}
+                aria-label="Chiudi popup"
+              >
+                x
+              </button>
+            </div>
+
+            <div className="cost-view-modal-body">
+              <div className="cost-view-modal-summary">
+                <span>Spesa</span>
+                <strong>{moveCost.description}</strong>
+                <small>{formatCurrency(moveCost.amount)}</small>
+              </div>
+
+              <label className="mobile-data-field">
+                <span className="mobile-data-label">Commessa attuale</span>
+                <input className="mobile-data-input" value={view.jobOrder.name} readOnly />
+              </label>
+
+              <label className="mobile-data-field">
+                <span className="mobile-data-label">Sposta in</span>
+                <select
+                  className="mobile-data-select"
+                  value={moveCost.targetJobOrderId}
+                  onChange={(event) =>
+                    setMoveCost((current) =>
+                      current ? { ...current, targetJobOrderId: event.target.value } : current
+                    )
+                  }
+                  disabled={movingCost}
+                >
+                  <option value="">Seleziona commessa</option>
+                  {reassignJobOrders
+                    .filter((jobOrder) => jobOrder.id !== view.jobOrder.id)
+                    .map((jobOrder) => (
+                      <option key={jobOrder.id} value={jobOrder.id}>
+                        {jobOrder.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="cost-view-modal-actions">
+              <button
+                type="button"
+                className="mobile-button-secondary"
+                onClick={() => setMoveCost(null)}
+                disabled={movingCost}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="button"
+                onClick={moveCostToJobOrder}
+                disabled={movingCost || !moveCost.targetJobOrderId}
+              >
+                {movingCost ? "Spostamento..." : "Sposta spesa"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
