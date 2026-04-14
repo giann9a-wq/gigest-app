@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getActiveAppUser } from "@/lib/app-user";
+import { UserRole } from "@prisma/client";
 
 export async function GET() {
-  const session = await auth();
+  const appUser = await getActiveAppUser();
 
-  if (!session?.user?.email) {
+  if (!appUser) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
@@ -39,6 +40,7 @@ export async function GET() {
   ]);
 
   return NextResponse.json({
+    canManageLoadings: appUser.role === UserRole.ADMIN,
     resources: [
       ...people.map((person) => ({
         value: `PERSON:${person.id}`,

@@ -39,6 +39,9 @@ type EditableLoadingRow = LoadingRow & {
   isDeleting?: boolean;
 };
 
+type SortKey = "referenceDate" | "jobOrderLabel" | "hours" | "activityDescription" | "updatedAt";
+type SortDirection = "asc" | "desc";
+
 async function safeJsonFetch(url: string, options?: RequestInit) {
   const response = await fetch(url, options);
   const contentType = response.headers.get("content-type") || "";
@@ -67,14 +70,33 @@ function formatDateTime(value: string) {
   });
 }
 
+function formatDate(value: string) {
+  if (!value) return "-";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
+function compareText(a: string, b: string) {
+  return a.localeCompare(b, "it", { sensitivity: "base" });
+}
+
+function sortArrow(direction: SortDirection) {
+  return direction === "asc" ? "↑" : "↓";
+}
+
 export default function CaricamentiPage() {
   const [resources, setResources] = useState<ResourceOption[]>([]);
   const [jobOrders, setJobOrders] = useState<JobOrderOption[]>([]);
   const [rows, setRows] = useState<EditableLoadingRow[]>([]);
+  const [editingRowId, setEditingRowId] = useState("");
+  const [canManageLoadings, setCanManageLoadings] = useState(false);
   const [selectedResourceValue, setSelectedResourceValue] = useState("");
   const [selectedJobOrderId, setSelectedJobOrderId] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("referenceDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [message, setMessage] = useState("");
@@ -89,6 +111,7 @@ export default function CaricamentiPage() {
         const data = await safeJsonFetch("/api/caricamenti/options");
         setResources(data.resources ?? []);
         setJobOrders(data.jobOrders ?? []);
+        setCanManageLoadings(Boolean(data.canManageLoadings));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Errore caricamento opzioni");
       } finally {
@@ -118,6 +141,7 @@ export default function CaricamentiPage() {
     try {
       const data = await safeJsonFetch(`/api/caricamenti?${params.toString()}`);
       setRows((data.rows ?? []) as EditableLoadingRow[]);
+      setEditingRowId("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore caricamento caricamenti");
     } finally {
@@ -153,6 +177,7 @@ export default function CaricamentiPage() {
           currentRow.id === row.id ? ({ ...(data.row as EditableLoadingRow), isSaving: false }) : currentRow
         )
       );
+      setEditingRowId("");
       setMessage("Caricamento aggiornato correttamente.");
     } catch (err) {
       setRowValue(row.id, { isSaving: false });
@@ -171,6 +196,7 @@ export default function CaricamentiPage() {
       });
 
       setRows((current) => current.filter((row) => row.id !== id));
+      setEditingRowId("");
       setMessage("Caricamento eliminato correttamente.");
     } catch (err) {
       setRowValue(id, { isDeleting: false });
@@ -182,6 +208,50 @@ export default function CaricamentiPage() {
     () => resources.find((item) => item.value === selectedResourceValue)?.label ?? "",
     [resources, selectedResourceValue]
   );
+
+  const visibleRows = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      let result = 0;
+
+      switch (sortKey) {
+        case "referenceDate":
+          result = compareText(a.referenceDate, b.referenceDate);
+          break;
+        case "jobOrderLabel":
+          result = compareText(a.jobOrderLabel, b.jobOrderLabel);
+          break;
+        case "hours":
+          result = a.hours - b.hours;
+          break;
+        case "activityDescription":
+          result = compareText(a.activityDescription, b.activityDescription);
+          break;
+        case "updatedAt":
+          result = compareText(a.updatedAt, b.updatedAt);
+          break;
+      }
+
+      return sortDirection === "asc" ? result : -result;
+    });
+  }, [rows, sortDirection, sortKey]);
+
+  function toggleSort(nextKey: SortKey) {
+    if (sortKey === nextKey) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(nextKey);
+    setSortDirection(nextKey === "referenceDate" || nextKey === "updatedAt" ? "desc" : "asc");
+  }
+
+  function renderSortHeader(label: string, key: SortKey) {
+    return (
+      <button type="button" className="caricamenti-sort-button" onClick={() => toggleSort(key)}>
+        {label} {sortKey === key ? sortArrow(sortDirection) : ""}
+      </button>
+    );
+  }
 
   function handleExportExcel() {
     if (!selectedResourceValue) return;
@@ -274,6 +344,7 @@ export default function CaricamentiPage() {
               setFromDate("");
               setToDate("");
               setRows([]);
+              setEditingRowId("");
               setMessage("");
               setError("");
             }}
@@ -293,7 +364,7 @@ export default function CaricamentiPage() {
 
         <div className="scad-table-tools" style={{ marginTop: 18 }}>
           <div className="muted">
-            Righe visibili: <strong>{rows.length}</strong>
+            Righe visibili: <strong>{visibleRows.length}</strong>
           </div>
           <button
             type="button"
@@ -306,110 +377,150 @@ export default function CaricamentiPage() {
         </div>
 
         <div className="scad-table-wrap">
-          <table className="scad-table">
+          <table className="scad-table caricamenti-table">
             <thead>
               <tr>
-                <th>Data</th>
-                <th>Commessa</th>
-                <th>Ore</th>
-                <th>Descrizione lavoro</th>
-                <th>Ultimo aggiornamento</th>
-                <th>Azioni</th>
+                <th>{renderSortHeader("Data", "referenceDate")}</th>
+                <th>{renderSortHeader("Commessa", "jobOrderLabel")}</th>
+                <th>{renderSortHeader("Ore", "hours")}</th>
+                <th>{renderSortHeader("Descrizione lavoro", "activityDescription")}</th>
+                <th>{renderSortHeader("Ultimo aggiornamento", "updatedAt")}</th>
+                {canManageLoadings ? <th>Azioni</th> : null}
               </tr>
             </thead>
             <tbody>
               {loadingRows ? (
                 <tr>
-                  <td colSpan={6} className="stats-empty-cell">
+                  <td colSpan={canManageLoadings ? 6 : 5} className="stats-empty-cell">
                     Caricamento...
                   </td>
                 </tr>
               ) : !selectedResourceValue ? (
                 <tr>
-                  <td colSpan={6} className="stats-empty-cell">
+                  <td colSpan={canManageLoadings ? 6 : 5} className="stats-empty-cell">
                     Seleziona una risorsa e premi Applica filtri per visualizzare i caricamenti
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="stats-empty-cell">
+                  <td colSpan={canManageLoadings ? 6 : 5} className="stats-empty-cell">
                     Nessun caricamento trovato per i filtri selezionati
                   </td>
                 </tr>
               ) : (
-                rows.map((row, index) => (
+                visibleRows.map((row, index) => (
                   <tr key={row.id} className={index % 2 === 0 ? "row-dark" : "row-light"}>
                     <td>
-                      <input
-                        className="scad-table-filter-input"
-                        type="date"
-                        value={row.referenceDate}
-                        onChange={(e) => setRowValue(row.id, { referenceDate: e.target.value })}
-                        disabled={row.isSaving || row.isDeleting}
-                      />
+                      {editingRowId === row.id ? (
+                        <input
+                          className="scad-table-filter-input"
+                          type="date"
+                          value={row.referenceDate}
+                          onChange={(e) => setRowValue(row.id, { referenceDate: e.target.value })}
+                          disabled={row.isSaving || row.isDeleting}
+                        />
+                      ) : (
+                        formatDate(row.referenceDate)
+                      )}
                     </td>
                     <td>
-                      <select
-                        className="scad-table-filter-input"
-                        value={row.jobOrderId}
-                        onChange={(e) =>
-                          setRowValue(row.id, {
-                            jobOrderId: e.target.value,
-                            jobOrderLabel: jobOrders.find((item) => item.id === e.target.value)?.name ?? "",
-                            jobOrderType: jobOrders.find((item) => item.id === e.target.value)?.type ?? "",
-                          })
-                        }
-                        disabled={row.isSaving || row.isDeleting}
-                      >
-                        <option value="">Seleziona commessa</option>
-                        {jobOrders.map((jobOrder) => (
-                          <option key={jobOrder.id} value={jobOrder.id}>
-                            {jobOrder.name} ({jobOrder.type})
-                          </option>
-                        ))}
-                      </select>
+                      {editingRowId === row.id ? (
+                        <select
+                          className="scad-table-filter-input"
+                          value={row.jobOrderId}
+                          onChange={(e) =>
+                            setRowValue(row.id, {
+                              jobOrderId: e.target.value,
+                              jobOrderLabel: jobOrders.find((item) => item.id === e.target.value)?.name ?? "",
+                              jobOrderType: jobOrders.find((item) => item.id === e.target.value)?.type ?? "",
+                            })
+                          }
+                          disabled={row.isSaving || row.isDeleting}
+                        >
+                          <option value="">Seleziona commessa</option>
+                          {jobOrders.map((jobOrder) => (
+                            <option key={jobOrder.id} value={jobOrder.id}>
+                              {jobOrder.name} ({jobOrder.type})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span>{row.jobOrderLabel}</span>
+                      )}
                     </td>
                     <td>
-                      <input
-                        className="scad-table-filter-input"
-                        type="number"
-                        step="0.1"
-                        min="0.1"
-                        value={String(row.hours)}
-                        onChange={(e) => setRowValue(row.id, { hours: Number(e.target.value) })}
-                        disabled={row.isSaving || row.isDeleting}
-                      />
+                      {editingRowId === row.id ? (
+                        <input
+                          className="scad-table-filter-input"
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          value={String(row.hours)}
+                          onChange={(e) => setRowValue(row.id, { hours: Number(e.target.value) })}
+                          disabled={row.isSaving || row.isDeleting}
+                        />
+                      ) : (
+                        row.hours
+                      )}
                     </td>
                     <td>
-                      <input
-                        className="scad-table-filter-input"
-                        type="text"
-                        value={row.activityDescription}
-                        onChange={(e) => setRowValue(row.id, { activityDescription: e.target.value })}
-                        disabled={row.isSaving || row.isDeleting}
-                      />
+                      {editingRowId === row.id ? (
+                        <input
+                          className="scad-table-filter-input"
+                          type="text"
+                          value={row.activityDescription}
+                          onChange={(e) => setRowValue(row.id, { activityDescription: e.target.value })}
+                          disabled={row.isSaving || row.isDeleting}
+                        />
+                      ) : (
+                        row.activityDescription || "-"
+                      )}
                     </td>
                     <td>{formatDateTime(row.updatedAt)}</td>
-                    <td>
-                      <div className="scad-table-actions">
-                        <button
-                          type="button"
-                          className="scad-small-btn"
-                          onClick={() => handleSaveRow(row)}
-                          disabled={row.isSaving || row.isDeleting}
-                        >
-                          {row.isSaving ? "Salvataggio..." : "Salva"}
-                        </button>
-                        <button
-                          type="button"
-                          className="scad-danger-btn"
-                          onClick={() => handleDeleteRow(row.id)}
-                          disabled={row.isSaving || row.isDeleting}
-                        >
-                          {row.isDeleting ? "Eliminazione..." : "Elimina"}
-                        </button>
-                      </div>
-                    </td>
+                    {canManageLoadings ? (
+                      <td>
+                        <div className="scad-table-actions">
+                          {editingRowId === row.id ? (
+                            <>
+                              <button
+                                type="button"
+                                className="scad-small-btn"
+                                onClick={() => handleSaveRow(row)}
+                                disabled={row.isSaving || row.isDeleting}
+                              >
+                                {row.isSaving ? "Salvataggio..." : "Salva"}
+                              </button>
+                              <button
+                                type="button"
+                                className="scad-danger-btn"
+                                onClick={() => handleDeleteRow(row.id)}
+                                disabled={row.isSaving || row.isDeleting}
+                              >
+                                {row.isDeleting ? "Eliminazione..." : "Elimina"}
+                              </button>
+                              <button
+                                type="button"
+                                className="scad-small-btn"
+                                onClick={() => loadRows()}
+                                disabled={row.isSaving || row.isDeleting}
+                              >
+                                Annulla
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className="caricamenti-edit-button"
+                              onClick={() => setEditingRowId(row.id)}
+                              aria-label="Modifica caricamento"
+                              title="Modifica caricamento"
+                            >
+                              Modifica
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}

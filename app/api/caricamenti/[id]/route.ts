@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma, UserStatus } from "@prisma/client";
+import { Prisma, UserRole, UserStatus } from "@prisma/client";
 
 function parseRequiredDate(value: string) {
   const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -20,7 +20,7 @@ async function getAuthorizedUser() {
 
   const appUser = await prisma.user.findUnique({
     where: { email: session.user.email.toLowerCase() },
-    select: { id: true, status: true },
+    select: { id: true, status: true, role: true },
   });
 
   if (!appUser || appUser.status !== UserStatus.ACTIVE) {
@@ -36,6 +36,10 @@ export async function PATCH(
 ) {
   const authResult = await getAuthorizedUser();
   if (authResult.error) return authResult.error;
+
+  if (authResult.appUser.role !== UserRole.ADMIN) {
+    return NextResponse.json({ error: "Funzione riservata agli admin" }, { status: 403 });
+  }
 
   const { id } = await context.params;
   const body = await request.json();
@@ -141,6 +145,10 @@ export async function DELETE(
 ) {
   const authResult = await getAuthorizedUser();
   if (authResult.error) return authResult.error;
+
+  if (authResult.appUser.role !== UserRole.ADMIN) {
+    return NextResponse.json({ error: "Funzione riservata agli admin" }, { status: 403 });
+  }
 
   const { id } = await context.params;
 
