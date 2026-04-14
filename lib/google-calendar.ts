@@ -6,7 +6,7 @@ const GOOGLE_USER_PROVIDER_PREFIX = "GOOGLE_USER_";
 const DEFAULT_CALENDAR_NAME = "GiGEST";
 const DEFAULT_TIME_ZONE = "Europe/Rome";
 const GOOGLE_CALENDAR_SCOPES = [
-  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.app.created",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
