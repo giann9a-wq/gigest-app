@@ -90,6 +90,14 @@ function getGoogleCredentials() {
 }
 
 function getRedirectUri(origin: string) {
+  const explicitRedirectUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI?.trim();
+  if (explicitRedirectUri) return explicitRedirectUri;
+
+  const configuredOrigin = process.env.GOOGLE_CALENDAR_BASE_URL?.trim() || process.env.AUTH_URL?.trim();
+  if (configuredOrigin) {
+    return `${configuredOrigin.replace(/\/$/, "")}/api/google-calendar/callback`;
+  }
+
   return `${origin}/api/google-calendar/callback`;
 }
 
