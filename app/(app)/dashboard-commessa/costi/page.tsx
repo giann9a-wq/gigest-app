@@ -77,7 +77,7 @@ export default function DashboardCommessaCostiPage() {
       setError("");
 
       try {
-        const data = await jsonFetch<{ rows: JobOrderOption[] }>("/api/commesse");
+        const data = await jsonFetch<{ rows: JobOrderOption[] }>("/api/commesse?dashboardOnly=true");
         setJobOrders(data.rows);
         if (!selectedJobOrderId && data.rows[0]?.id) {
           setSelectedJobOrderId(data.rows[0].id);

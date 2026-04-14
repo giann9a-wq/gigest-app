@@ -40,7 +40,7 @@ export default function DashboardCommessaPage() {
       setError("");
 
       try {
-        const data = await safeJsonFetch("/api/commesse");
+        const data = await safeJsonFetch("/api/commesse?dashboardOnly=true");
         const rows = (Array.isArray(data.rows) ? data.rows : []) as JobOrderOption[];
         setJobOrders(rows);
       } catch (err) {

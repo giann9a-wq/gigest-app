@@ -59,14 +59,17 @@ function serializeBudget(row: {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await auth();
 
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
+  const dashboardOnly = request.nextUrl.searchParams.get("dashboardOnly") === "true";
+
   const rows = await prisma.jobOrder.findMany({
+    where: dashboardOnly ? { type: { in: ["SITE", "OTHER"] } } : undefined,
     orderBy: { createdAt: "asc" },
   });
 
