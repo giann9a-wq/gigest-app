@@ -4021,6 +4021,13 @@ a {
   align-items: flex-end;
   gap: 1rem;
   flex-wrap: wrap;
+  overflow: visible;
+  position: relative;
+  z-index: 12;
+}
+
+.report-filter-card-open {
+  margin-bottom: 12rem;
 }
 
 .report-resource-filter {
@@ -4028,7 +4035,7 @@ a {
 }
 
 .report-resource-filter .stats-multi-menu {
-  z-index: 25;
+  z-index: 60;
 }
 
 .report-resource-filter-action {
@@ -4097,6 +4104,8 @@ a {
 
 .report-sheet {
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 .report-sheet-header {

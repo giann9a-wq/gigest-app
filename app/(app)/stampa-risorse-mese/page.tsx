@@ -206,7 +206,11 @@ export default function StampaRisorseMesePage() {
       {error ? <div className="scad-error">{error}</div> : null}
 
       {filterableResources.length > 0 ? (
-        <div className="card report-filter-card">
+        <div
+          className={`card report-filter-card ${
+            isResourceFilterOpen ? "report-filter-card-open" : ""
+          }`}
+        >
           <div className="stats-multi report-resource-filter">
             <span>Risorse da inserire nella stampa</span>
             <button
