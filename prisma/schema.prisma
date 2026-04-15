@@ -145,6 +145,8 @@ model User {
   updatedExternalActivities     ExternalDiaryActivity[] @relation("ExternalActivityUpdatedBy")
   createdMaterialUsages         MaterialUsage[]         @relation("MaterialUsageCreatedBy")
   updatedMaterialUsages         MaterialUsage[]         @relation("MaterialUsageUpdatedBy")
+  createdDeliveryNotes          DeliveryNoteUsage[]     @relation("DeliveryNoteUsageCreatedBy")
+  updatedDeliveryNotes          DeliveryNoteUsage[]     @relation("DeliveryNoteUsageUpdatedBy")
   createdDeadlines              Deadline[]              @relation("DeadlineCreatedBy")
   updatedDeadlines              Deadline[]              @relation("DeadlineUpdatedBy")
   createdMaintenances           Maintenance[]           @relation("MaintenanceCreatedBy")
@@ -304,6 +306,7 @@ model JobOrder {
   diaryActivities            DiaryActivity[]
   externalDiaryActivities    ExternalDiaryActivity[]
   materialUsages             MaterialUsage[]
+  deliveryNoteUsages         DeliveryNoteUsage[]
   costImportSessions         CostImportSession[]
   costImportRows             CostImportRowStaging[]
   costActualEntries          CostActualEntry[]
@@ -601,6 +604,26 @@ model MaterialUsage {
   updatedBy User?    @relation("MaterialUsageUpdatedBy", fields: [updatedByUserId], references: [id])
 
   @@index([jobOrderId, usageDate])
+  @@index([description])
+}
+
+model DeliveryNoteUsage {
+  id              String   @id @default(cuid())
+  jobOrderId      String
+  supplier        String
+  description     String
+  usageDate       DateTime
+  createdByUserId String?
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  jobOrder  JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("DeliveryNoteUsageCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy User?    @relation("DeliveryNoteUsageUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  @@index([jobOrderId, usageDate])
+  @@index([supplier])
   @@index([description])
 }
 

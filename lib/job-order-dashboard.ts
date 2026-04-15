@@ -220,6 +220,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
           diaryActivities: true,
           externalDiaryActivities: true,
           materialUsages: true,
+          deliveryNoteUsages: true,
         },
       },
       diaryActivities: {
@@ -267,6 +268,9 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         },
       },
       materialUsages: {
+        orderBy: [{ usageDate: "desc" }, { createdAt: "desc" }],
+      },
+      deliveryNoteUsages: {
         orderBy: [{ usageDate: "desc" }, { createdAt: "desc" }],
       },
     },
@@ -356,6 +360,19 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         id: string;
         usageDate: string;
         quantity: number;
+      }[];
+    }
+  >();
+  const deliveryNoteUsageMap = new Map<
+    string,
+    {
+      key: string;
+      supplier: string;
+      entryCount: number;
+      entries: {
+        id: string;
+        usageDate: string;
+        description: string;
       }[];
     }
   >();
@@ -511,6 +528,29 @@ export async function getJobOrderDashboard(jobOrderId: string) {
     }
   }
 
+  for (const deliveryNote of jobOrder.deliveryNoteUsages) {
+    const supplier = deliveryNote.supplier;
+    const key = supplier.toLocaleLowerCase("it");
+    const current = deliveryNoteUsageMap.get(key);
+    const entry = {
+      id: deliveryNote.id,
+      usageDate: deliveryNote.usageDate.toISOString().slice(0, 10),
+      description: deliveryNote.description,
+    };
+
+    if (current) {
+      current.entryCount += 1;
+      current.entries.push(entry);
+    } else {
+      deliveryNoteUsageMap.set(key, {
+        key,
+        supplier,
+        entryCount: 1,
+        entries: [entry],
+      });
+    }
+  }
+
   const budget = {
     personnel: toAmount(jobOrder.budgetPersonnelCost),
     equipment: toAmount(jobOrder.budgetEquipmentCost),
@@ -560,6 +600,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       activityCount: jobOrder._count.diaryActivities,
       externalActivityCount: jobOrder._count.externalDiaryActivities,
       materialUsageCount: jobOrder._count.materialUsages,
+      deliveryNoteUsageCount: jobOrder._count.deliveryNoteUsages,
       createdAt: jobOrder.createdAt.toISOString(),
       updatedAt: jobOrder.updatedAt.toISOString(),
     },
@@ -598,6 +639,12 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         totalEntries: jobOrder._count.materialUsages,
         details: [...materialUsageMap.values()].sort((a, b) =>
           a.description.localeCompare(b.description, "it", { sensitivity: "base" })
+        ),
+      },
+      deliveryNoteUsages: {
+        totalEntries: jobOrder._count.deliveryNoteUsages,
+        details: [...deliveryNoteUsageMap.values()].sort((a, b) =>
+          a.supplier.localeCompare(b.supplier, "it", { sensitivity: "base" })
         ),
       },
       importSources: {

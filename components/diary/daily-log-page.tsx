@@ -39,6 +39,22 @@ type MaterialFormState = {
   quantity: string;
 };
 
+type DeliveryNoteRow = {
+  id: string;
+  jobOrderId: string;
+  supplier: string;
+  description: string;
+  usageDate: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type DeliveryNoteFormState = {
+  supplier: string;
+  description: string;
+  usageDate: string;
+};
+
 type InternalEditableRow = {
   localId: string;
   resourceValue: string;
@@ -397,25 +413,43 @@ export function DailyLogPage() {
   const [showExternalResourceManager, setShowExternalResourceManager] = useState(false);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [materialsDialogOpen, setMaterialsDialogOpen] = useState(false);
+  const [deliveryNotesDialogOpen, setDeliveryNotesDialogOpen] = useState(false);
   const [selectedMaterialJobOrderId, setSelectedMaterialJobOrderId] = useState("");
+  const [selectedDeliveryNoteJobOrderId, setSelectedDeliveryNoteJobOrderId] = useState("");
   const [materialRows, setMaterialRows] = useState<MaterialUsageRow[]>([]);
   const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
   const [materialUnitSuggestions, setMaterialUnitSuggestions] = useState<string[]>([]);
+  const [deliveryNoteRows, setDeliveryNoteRows] = useState<DeliveryNoteRow[]>([]);
+  const [deliveryNoteSupplierSuggestions, setDeliveryNoteSupplierSuggestions] = useState<string[]>([]);
+  const [deliveryNoteDescriptionSuggestions, setDeliveryNoteDescriptionSuggestions] = useState<string[]>([]);
   const [materialForm, setMaterialForm] = useState<MaterialFormState>({
     description: "",
     usageDate: todayAsInputValue(),
     unitOfMeasure: "",
     quantity: "",
   });
+  const [deliveryNoteForm, setDeliveryNoteForm] = useState<DeliveryNoteFormState>({
+    supplier: "",
+    description: "",
+    usageDate: todayAsInputValue(),
+  });
   const [editingMaterialId, setEditingMaterialId] = useState("");
+  const [editingDeliveryNoteId, setEditingDeliveryNoteId] = useState("");
   const [materialEditForm, setMaterialEditForm] = useState<MaterialFormState>({
     description: "",
     usageDate: todayAsInputValue(),
     unitOfMeasure: "",
     quantity: "",
   });
+  const [deliveryNoteEditForm, setDeliveryNoteEditForm] = useState<DeliveryNoteFormState>({
+    supplier: "",
+    description: "",
+    usageDate: todayAsInputValue(),
+  });
   const [materialsLoading, setMaterialsLoading] = useState(false);
   const [materialsSaving, setMaterialsSaving] = useState(false);
+  const [deliveryNotesLoading, setDeliveryNotesLoading] = useState(false);
+  const [deliveryNotesSaving, setDeliveryNotesSaving] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
   const [printPreviewDays, setPrintPreviewDays] = useState<PrintDay[]>([]);
   const printPreviewRequestRef = useRef(0);
@@ -815,7 +849,7 @@ export function DailyLogPage() {
   }
 
   function openMaterialsDialog() {
-    const initialJobOrderId = selectedMaterialJobOrderId || jobOrders[0]?.id || "";
+    const initialJobOrderId = selectedMaterialJobOrderId || "";
     setMaterialsDialogOpen(true);
     setSelectedMaterialJobOrderId(initialJobOrderId);
     setMaterialForm({
@@ -906,6 +940,114 @@ export function DailyLogPage() {
       setError(err instanceof Error ? err.message : "Errore nell'aggiornamento materiale");
     } finally {
       setMaterialsSaving(false);
+    }
+  }
+
+  async function loadDeliveryNoteRows(jobOrderId: string) {
+    setDeliveryNotesLoading(true);
+    setError("");
+
+    try {
+      const data = await safeJsonFetch(`/api/diario/bolle${jobOrderId ? `?jobOrderId=${jobOrderId}` : ""}`);
+      setDeliveryNoteRows(data.rows ?? []);
+      setDeliveryNoteSupplierSuggestions(data.supplierSuggestions ?? []);
+      setDeliveryNoteDescriptionSuggestions(data.descriptionSuggestions ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel caricamento bolle");
+    } finally {
+      setDeliveryNotesLoading(false);
+    }
+  }
+
+  function openDeliveryNotesDialog() {
+    const initialJobOrderId = selectedDeliveryNoteJobOrderId || "";
+    setDeliveryNotesDialogOpen(true);
+    setSelectedDeliveryNoteJobOrderId(initialJobOrderId);
+    setDeliveryNoteForm({
+      supplier: "",
+      description: "",
+      usageDate: todayAsInputValue(),
+    });
+    setEditingDeliveryNoteId("");
+    void loadDeliveryNoteRows(initialJobOrderId);
+  }
+
+  function changeDeliveryNoteJobOrder(jobOrderId: string) {
+    setSelectedDeliveryNoteJobOrderId(jobOrderId);
+    setEditingDeliveryNoteId("");
+    void loadDeliveryNoteRows(jobOrderId);
+  }
+
+  async function handleSaveDeliveryNote() {
+    if (!selectedDeliveryNoteJobOrderId) {
+      setError("Seleziona una commessa per registrare la bolla.");
+      return;
+    }
+
+    setDeliveryNotesSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await safeJsonFetch("/api/diario/bolle", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jobOrderId: selectedDeliveryNoteJobOrderId,
+          ...deliveryNoteForm,
+        }),
+      });
+
+      setDeliveryNoteForm({
+        supplier: "",
+        description: "",
+        usageDate: todayAsInputValue(),
+      });
+      setMessage("Bolla di cantiere salvata.");
+      await loadDeliveryNoteRows(selectedDeliveryNoteJobOrderId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel salvataggio bolla");
+    } finally {
+      setDeliveryNotesSaving(false);
+    }
+  }
+
+  function startEditDeliveryNote(row: DeliveryNoteRow) {
+    setEditingDeliveryNoteId(row.id);
+    setDeliveryNoteEditForm({
+      supplier: row.supplier,
+      description: row.description,
+      usageDate: row.usageDate,
+    });
+  }
+
+  async function handleUpdateDeliveryNote() {
+    if (!editingDeliveryNoteId || !selectedDeliveryNoteJobOrderId) return;
+
+    setDeliveryNotesSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await safeJsonFetch(`/api/diario/bolle/${editingDeliveryNoteId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jobOrderId: selectedDeliveryNoteJobOrderId,
+          ...deliveryNoteEditForm,
+        }),
+      });
+      setEditingDeliveryNoteId("");
+      setMessage("Bolla di cantiere aggiornata.");
+      await loadDeliveryNoteRows(selectedDeliveryNoteJobOrderId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nell'aggiornamento bolla");
+    } finally {
+      setDeliveryNotesSaving(false);
     }
   }
 
@@ -1075,6 +1217,7 @@ export function DailyLogPage() {
 
         <div className="diary-workspace-shortcuts">
           <button className="button" type="button" onClick={openMaterialsDialog}>Diario dei Materiali</button>
+          <button className="button" type="button" onClick={openDeliveryNotesDialog}>Diario Bolle di Cantiere</button>
           <button className="mobile-button-secondary" type="button" onClick={() => router.push("/risorse")}>Risorse</button>
           <button className="mobile-button-secondary" type="button" onClick={() => router.push("/commesse")}>Commesse</button>
           <button className="mobile-button-secondary" type="button" onClick={() => router.push("/dashboard-commessa")}>Dashboard commessa</button>
@@ -1173,6 +1316,29 @@ export function DailyLogPage() {
           onStartEdit={startEditMaterial}
           onCancelEdit={() => setEditingMaterialId("")}
           onUpdate={() => void handleUpdateMaterial()}
+        />
+      ) : null}
+
+      {deliveryNotesDialogOpen ? (
+        <DeliveryNotesDiaryDialog
+          jobOrders={jobOrders}
+          selectedJobOrderId={selectedDeliveryNoteJobOrderId}
+          rows={deliveryNoteRows}
+          form={deliveryNoteForm}
+          editForm={deliveryNoteEditForm}
+          editingId={editingDeliveryNoteId}
+          supplierSuggestions={deliveryNoteSupplierSuggestions}
+          descriptionSuggestions={deliveryNoteDescriptionSuggestions}
+          loading={deliveryNotesLoading}
+          saving={deliveryNotesSaving}
+          onClose={() => setDeliveryNotesDialogOpen(false)}
+          onJobOrderChange={changeDeliveryNoteJobOrder}
+          onFormChange={(patch) => setDeliveryNoteForm((current) => ({ ...current, ...patch }))}
+          onEditFormChange={(patch) => setDeliveryNoteEditForm((current) => ({ ...current, ...patch }))}
+          onSave={() => void handleSaveDeliveryNote()}
+          onStartEdit={startEditDeliveryNote}
+          onCancelEdit={() => setEditingDeliveryNoteId("")}
+          onUpdate={() => void handleUpdateDeliveryNote()}
         />
       ) : null}
     </div>
@@ -1349,6 +1515,169 @@ function MaterialDiaryDialog({
             </>
           ) : (
             <div className="job-premium-empty-state">Scegli una commessa per inserire e consultare i materiali usati.</div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DeliveryNotesDiaryDialog({
+  jobOrders,
+  selectedJobOrderId,
+  rows,
+  form,
+  editForm,
+  editingId,
+  supplierSuggestions,
+  descriptionSuggestions,
+  loading,
+  saving,
+  onClose,
+  onJobOrderChange,
+  onFormChange,
+  onEditFormChange,
+  onSave,
+  onStartEdit,
+  onCancelEdit,
+  onUpdate,
+}: {
+  jobOrders: JobOrderOption[];
+  selectedJobOrderId: string;
+  rows: DeliveryNoteRow[];
+  form: DeliveryNoteFormState;
+  editForm: DeliveryNoteFormState;
+  editingId: string;
+  supplierSuggestions: string[];
+  descriptionSuggestions: string[];
+  loading: boolean;
+  saving: boolean;
+  onClose: () => void;
+  onJobOrderChange: (jobOrderId: string) => void;
+  onFormChange: (patch: Partial<DeliveryNoteFormState>) => void;
+  onEditFormChange: (patch: Partial<DeliveryNoteFormState>) => void;
+  onSave: () => void;
+  onStartEdit: (row: DeliveryNoteRow) => void;
+  onCancelEdit: () => void;
+  onUpdate: () => void;
+}) {
+  return (
+    <div className="diary-print-backdrop" role="dialog" aria-modal="true">
+      <section className="diary-print-dialog material-diary-dialog">
+        <header className="diary-print-dialog-head">
+          <div>
+            <p className="dashboard-kicker">Diario bolle</p>
+            <h2>Bolle di cantiere</h2>
+            <p>Registra bolle per commessa e riusa fornitore e descrizione gia inseriti.</p>
+          </div>
+          <button type="button" className="mobile-button-secondary" onClick={onClose}>Chiudi</button>
+        </header>
+
+        <div className="material-diary-body">
+          <label className="material-diary-field material-diary-field-wide">
+            <span>Commessa</span>
+            <select value={selectedJobOrderId} onChange={(event) => onJobOrderChange(event.target.value)}>
+              <option value="">Seleziona commessa</option>
+              {jobOrders.map((jobOrder) => (
+                <option key={jobOrder.id} value={jobOrder.id}>
+                  {jobOrder.name} ({jobOrder.type})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selectedJobOrderId ? (
+            <>
+              <div className="material-diary-form delivery-note-diary-form">
+                <label className="material-diary-field">
+                  <span>Fornitore</span>
+                  <input
+                    list="delivery-note-supplier-suggestions"
+                    type="text"
+                    value={form.supplier}
+                    onChange={(event) => onFormChange({ supplier: event.target.value })}
+                    placeholder="Es. Rossi Srl"
+                  />
+                </label>
+                <label className="material-diary-field">
+                  <span>Data</span>
+                  <input type="date" value={form.usageDate} onChange={(event) => onFormChange({ usageDate: event.target.value })} />
+                </label>
+                <label className="material-diary-field material-diary-field-wide">
+                  <span>Descrizione</span>
+                  <input
+                    list="delivery-note-description-suggestions"
+                    type="text"
+                    value={form.description}
+                    onChange={(event) => onFormChange({ description: event.target.value })}
+                    placeholder="Es. Bolla DDt materiali elettrici"
+                  />
+                </label>
+                <div className="material-diary-save">
+                  <button type="button" className="button" onClick={onSave} disabled={saving}>
+                    {saving ? "Salvataggio..." : "Salva bolla"}
+                  </button>
+                </div>
+              </div>
+
+              <datalist id="delivery-note-supplier-suggestions">
+                {supplierSuggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
+              </datalist>
+              <datalist id="delivery-note-description-suggestions">
+                {descriptionSuggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
+              </datalist>
+
+              <div className="material-diary-table-wrap">
+                <table className="material-diary-table delivery-note-diary-table">
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Fornitore</th>
+                      <th>Descrizione</th>
+                      <th>Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={4}>Caricamento bolle...</td></tr>
+                    ) : rows.length === 0 ? (
+                      <tr><td colSpan={4}>Nessuna bolla inserita per questa commessa.</td></tr>
+                    ) : (
+                      rows.map((row) => (
+                        <tr key={row.id}>
+                          {editingId === row.id ? (
+                            <>
+                              <td><input type="date" value={editForm.usageDate} onChange={(event) => onEditFormChange({ usageDate: event.target.value })} /></td>
+                              <td><input list="delivery-note-supplier-suggestions" value={editForm.supplier} onChange={(event) => onEditFormChange({ supplier: event.target.value })} /></td>
+                              <td><input list="delivery-note-description-suggestions" value={editForm.description} onChange={(event) => onEditFormChange({ description: event.target.value })} /></td>
+                              <td>
+                                <div className="material-diary-row-actions">
+                                  <button type="button" onClick={onUpdate} disabled={saving}>Salva</button>
+                                  <button type="button" onClick={onCancelEdit}>Annulla</button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td>{formatItalianShortDate(row.usageDate)}</td>
+                              <td><strong>{row.supplier}</strong></td>
+                              <td>{row.description}</td>
+                              <td>
+                                <button type="button" className="material-diary-edit-button" onClick={() => onStartEdit(row)}>
+                                  Modifica
+                                </button>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="job-premium-empty-state">Scegli una commessa per inserire e consultare le bolle registrate.</div>
           )}
         </div>
       </section>
