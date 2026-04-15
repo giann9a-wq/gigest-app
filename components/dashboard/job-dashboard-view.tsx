@@ -70,6 +70,17 @@ type MaterialUsageDetail = {
   }>;
 };
 
+type DeliveryNoteUsageDetail = {
+  key: string;
+  supplier: string;
+  entryCount: number;
+  entries: Array<{
+    id: string;
+    usageDate: string;
+    description: string;
+  }>;
+};
+
 type ImportedCostMovement = {
   id: string;
   documentDate: string;
@@ -90,6 +101,7 @@ export type JobOrderDashboardResponse = {
     activityCount: number;
     externalActivityCount: number;
     materialUsageCount: number;
+    deliveryNoteUsageCount: number;
     createdAt: string;
     updatedAt: string;
   };
@@ -136,6 +148,10 @@ export type JobOrderDashboardResponse = {
     materialUsages: {
       totalEntries: number;
       details: MaterialUsageDetail[];
+    };
+    deliveryNoteUsages: {
+      totalEntries: number;
+      details: DeliveryNoteUsageDetail[];
     };
     importSources: {
       materials: string;
@@ -735,6 +751,76 @@ function JobMaterialsSummary({ dashboard }: { dashboard: JobOrderDashboardRespon
   );
 }
 
+function JobDeliveryNotesSummary({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
+  const rows = dashboard.actual.deliveryNoteUsages?.details ?? [];
+  const totalEntries = dashboard.actual.deliveryNoteUsages?.totalEntries ?? 0;
+
+  return (
+    <section className="job-premium-card">
+      <div className="job-premium-section-head">
+        <div>
+          <span>Diario bolle</span>
+          <h2>Bolle di cantiere</h2>
+        </div>
+        <strong>{totalEntries} movimenti</strong>
+      </div>
+
+      <div className="job-premium-table-wrap">
+        <table className="job-premium-summary-table">
+          <thead>
+            <tr>
+              <th>Fornitore</th>
+              <th>Movimenti</th>
+              <th>Ultime bolle</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={3}>Nessuna bolla registrata per questa commessa.</td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.key}>
+                  <td><strong>{row.supplier}</strong></td>
+                  <td>{row.entryCount}</td>
+                  <td>
+                    {row.entries.slice(0, 3).map((entry) => (
+                      <span key={entry.id} className="job-premium-material-chip">
+                        {formatDate(entry.usageDate)} - {entry.description || "Senza descrizione"}
+                      </span>
+                    ))}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function JobDiaryAccordion({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
+  return (
+    <section className="job-premium-card">
+      <details className="job-premium-diary-accordion">
+        <summary>
+          <span className="job-premium-expand">+</span>
+          <div>
+            <span>Diari commessa</span>
+            <h2>Materiali e bolle di cantiere</h2>
+          </div>
+        </summary>
+        <div className="job-premium-diary-accordion-content">
+          <JobMaterialsSummary dashboard={dashboard} />
+          <JobDeliveryNotesSummary dashboard={dashboard} />
+        </div>
+      </details>
+    </section>
+  );
+}
+
 function ExternalResourceSummaryTable({
   title,
   emptyText,
@@ -796,7 +882,7 @@ export function JobDashboardView(props: JobDashboardViewProps) {
       <JobBudgetVsActualChart categories={categories} />
       </div>
       <JobCostBreakdownAccordion categories={categories} />
-      <JobMaterialsSummary dashboard={props.dashboard} />
+      <JobDiaryAccordion dashboard={props.dashboard} />
       <JobExternalResourcesSummary dashboard={props.dashboard} />
       <JobSummaryTable categories={categories} />
     </div>

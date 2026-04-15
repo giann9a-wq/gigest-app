@@ -1783,6 +1783,10 @@ a {
   background: #f8fafc;
 }
 
+.delivery-note-diary-form {
+  grid-template-columns: minmax(220px, 1fr) minmax(170px, 0.75fr) minmax(260px, 1.4fr) auto;
+}
+
 .material-diary-field {
   display: grid;
   gap: 0.3rem;
@@ -3497,6 +3501,45 @@ a {
   color: #9a3412;
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.job-premium-diary-accordion {
+  border: 1px solid var(--job-premium-border);
+  border-radius: 18px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.job-premium-diary-accordion summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.9rem 1rem;
+}
+
+.job-premium-diary-accordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.job-premium-diary-accordion summary span:nth-child(2) {
+  color: var(--job-premium-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.job-premium-diary-accordion summary h2 {
+  margin: 0.18rem 0 0;
+}
+
+.job-premium-diary-accordion-content {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.2rem 0.9rem 0.95rem;
 }
 
 .job-premium-external-grid {
