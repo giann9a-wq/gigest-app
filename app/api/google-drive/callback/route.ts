@@ -1,0 +1,74 @@
+import { NextResponse } from "next/server";
+
+const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
+
+type GoogleTokenResponse = {
+  access_token?: string;
+  expires_in?: number;
+  refresh_token?: string;
+  scope?: string;
+  token_type?: string;
+  error?: string;
+  error_description?: string;
+};
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
+  const oauthError = url.searchParams.get("error");
+
+  if (oauthError) {
+    return NextResponse.json({ error: oauthError }, { status: 400 });
+  }
+
+  if (!code) {
+    return NextResponse.json({ error: "Parametro code mancante" }, { status: 400 });
+  }
+
+  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+  const redirectUri = process.env.GOOGLE_DRIVE_REDIRECT_URI;
+
+  if (!clientId || !clientSecret || !redirectUri) {
+    return NextResponse.json(
+      { error: "Configurazione Google Drive OAuth mancante" },
+      { status: 500 }
+    );
+  }
+
+  const tokenResponse = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+    }),
+  });
+
+  const tokenData = (await tokenResponse.json()) as GoogleTokenResponse;
+
+  if (!tokenResponse.ok) {
+    console.error("Google Drive OAuth token exchange failed", tokenData);
+    return NextResponse.json(
+      {
+        error: tokenData.error ?? "Token exchange fallito",
+        errorDescription: tokenData.error_description,
+      },
+      { status: 500 }
+    );
+  }
+
+  console.log("Google Drive access_token:", tokenData.access_token);
+  console.log("Google Drive refresh_token:", tokenData.refresh_token);
+
+  return NextResponse.json({
+    success: true,
+    message: "Token ricevuti. Controlla la console server per access_token e refresh_token.",
+    hasRefreshToken: Boolean(tokenData.refresh_token),
+  });
+}
