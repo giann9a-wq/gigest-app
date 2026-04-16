@@ -69,12 +69,14 @@ export async function GET(request: Request) {
     );
   }
 
-  console.log("Google Drive access_token:", tokenData.access_token);
-  console.log("Google Drive refresh_token:", tokenData.refresh_token);
+  console.log("Google Drive OAuth completed", {
+    hasAccessToken: Boolean(tokenData.access_token),
+    hasRefreshToken: Boolean(tokenData.refresh_token),
+  });
 
   return NextResponse.json({
     success: true,
-    message: "Token ricevuti. Controlla la console server per access_token e refresh_token.",
+    message: "Token ricevuti.",
     hasRefreshToken: Boolean(tokenData.refresh_token),
   });
 }
