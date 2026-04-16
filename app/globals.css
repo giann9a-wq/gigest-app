@@ -1542,6 +1542,35 @@ a {
   padding: 0.45rem 0.55rem;
 }
 
+.diary-compact-actions .diary-icon-action {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.diary-icon-action svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.diary-compact-actions .diary-icon-action-copy {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.diary-compact-actions .diary-icon-action-delete {
+  border-color: #fed7aa;
+  background: var(--diary-primary-soft);
+  color: #9a3412;
+}
+
 .diary-external-manager-compact {
   box-shadow: none;
 }

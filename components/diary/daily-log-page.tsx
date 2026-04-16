@@ -1897,9 +1897,13 @@ function InternalResourcesSection({
             <textarea rows={1} className="diary-description-textarea" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione lavoro" disabled={loadingRows} />
             <div className="diary-compact-actions">
               {index > 0 ? (
-                <button type="button" onClick={() => onCopyPreviousDescription(index)} disabled={loadingRows}>Copia des. riga precedente</button>
+                <button type="button" className="diary-icon-action diary-icon-action-copy" onClick={() => onCopyPreviousDescription(index)} disabled={loadingRows} title="Copia descrizione riga precedente" aria-label="Copia descrizione riga precedente">
+                  <CopyDescriptionIcon />
+                </button>
               ) : null}
-              <button type="button" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`}>Rimuovi</button>
+              <button type="button" className="diary-icon-action diary-icon-action-delete" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`} aria-label={`Rimuovi riga ${index + 1}`}>
+                <TrashIcon />
+              </button>
             </div>
           </div>
         ))}
@@ -2068,9 +2072,13 @@ function ExternalResourceRowsTable({
           <textarea rows={1} className="diary-description-textarea" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
           <div className="diary-compact-actions">
             {index > 0 ? (
-              <button type="button" onClick={() => onCopyPreviousDescription(index)} disabled={loadingRows}>Copia des. riga precedente</button>
+              <button type="button" className="diary-icon-action diary-icon-action-copy" onClick={() => onCopyPreviousDescription(index)} disabled={loadingRows} title="Copia descrizione riga precedente" aria-label="Copia descrizione riga precedente">
+                <CopyDescriptionIcon />
+              </button>
             ) : null}
-            <button type="button" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`}>Rimuovi</button>
+            <button type="button" className="diary-icon-action diary-icon-action-delete" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`} aria-label={`Rimuovi riga ${index + 1}`}>
+              <TrashIcon />
+            </button>
           </div>
         </div>
       ))}
@@ -2121,9 +2129,13 @@ function ExternalEconomyRowsTable({
           <textarea rows={1} className="diary-description-textarea" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
           <div className="diary-compact-actions">
             {index > 0 ? (
-              <button type="button" onClick={() => onCopyPreviousDescription(index)} disabled={loadingRows}>Copia des. riga precedente</button>
+              <button type="button" className="diary-icon-action diary-icon-action-copy" onClick={() => onCopyPreviousDescription(index)} disabled={loadingRows} title="Copia descrizione riga precedente" aria-label="Copia descrizione riga precedente">
+                <CopyDescriptionIcon />
+              </button>
             ) : null}
-            <button type="button" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`}>Rimuovi</button>
+            <button type="button" className="diary-icon-action diary-icon-action-delete" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`} aria-label={`Rimuovi riga ${index + 1}`}>
+              <TrashIcon />
+            </button>
           </div>
         </div>
       ))}
@@ -2277,5 +2289,26 @@ function PrintPreviewRows({ title, rows }: { title: string; rows: string[] }) {
       {rows.length === 0 ? <p>Nessuna riga.</p> : rows.slice(0, 5).map((row, index) => <p key={`${row}-${index}`}>{row || "-"}</p>)}
       {rows.length > 5 ? <p>+ {rows.length - 5} righe</p> : null}
     </section>
+  );
+}
+
+function CopyDescriptionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M8 8h10v12H8z" />
+      <path d="M6 16H4V4h10v2" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M5 7h14" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M8 7l1-3h6l1 3" />
+      <path d="M7 7l1 13h8l1-13" />
+    </svg>
   );
 }
