@@ -95,3 +95,31 @@ export async function PATCH(
     row: serializeDeliveryNote(row),
   });
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const appUser = await getActiveAppUser();
+
+  if (!appUser) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
+  const { id } = await context.params;
+
+  const existing = await prisma.deliveryNoteUsage.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Bolla non trovata" }, { status: 404 });
+  }
+
+  await prisma.deliveryNoteUsage.delete({
+    where: { id },
+  });
+
+  return NextResponse.json({ success: true });
+}

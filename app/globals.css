@@ -1874,6 +1874,7 @@ a {
 }
 
 .material-diary-edit-button,
+.material-diary-delete-button,
 .material-diary-row-actions button {
   min-height: 34px;
   border: 1px solid #fed7aa;
@@ -1885,6 +1886,12 @@ a {
   font-size: 0.82rem;
   font-weight: 800;
   padding: 0.4rem 0.6rem;
+}
+
+.material-diary-delete-button {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .card {

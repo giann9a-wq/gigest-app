@@ -946,6 +946,29 @@ export function DailyLogPage() {
     }
   }
 
+  async function handleDeleteMaterial(row: MaterialUsageRow) {
+    if (!selectedMaterialJobOrderId) return;
+    const confirmed = window.confirm(`Eliminare il materiale "${row.description}" del ${formatItalianShortDate(row.usageDate)}?`);
+    if (!confirmed) return;
+
+    setMaterialsSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await safeJsonFetch(`/api/diario/materiali/${row.id}`, { method: "DELETE" });
+      if (editingMaterialId === row.id) {
+        setEditingMaterialId("");
+      }
+      setMessage("Materiale eliminato.");
+      await loadMaterialRows(selectedMaterialJobOrderId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nell'eliminazione materiale");
+    } finally {
+      setMaterialsSaving(false);
+    }
+  }
+
   async function loadDeliveryNoteRows(jobOrderId: string) {
     setDeliveryNotesLoading(true);
     setError("");
@@ -1049,6 +1072,29 @@ export function DailyLogPage() {
       await loadDeliveryNoteRows(selectedDeliveryNoteJobOrderId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nell'aggiornamento bolla");
+    } finally {
+      setDeliveryNotesSaving(false);
+    }
+  }
+
+  async function handleDeleteDeliveryNote(row: DeliveryNoteRow) {
+    if (!selectedDeliveryNoteJobOrderId) return;
+    const confirmed = window.confirm(`Eliminare la bolla di "${row.supplier}" del ${formatItalianShortDate(row.usageDate)}?`);
+    if (!confirmed) return;
+
+    setDeliveryNotesSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await safeJsonFetch(`/api/diario/bolle/${row.id}`, { method: "DELETE" });
+      if (editingDeliveryNoteId === row.id) {
+        setEditingDeliveryNoteId("");
+      }
+      setMessage("Bolla di cantiere eliminata.");
+      await loadDeliveryNoteRows(selectedDeliveryNoteJobOrderId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nell'eliminazione bolla");
     } finally {
       setDeliveryNotesSaving(false);
     }
@@ -1319,6 +1365,7 @@ export function DailyLogPage() {
           onStartEdit={startEditMaterial}
           onCancelEdit={() => setEditingMaterialId("")}
           onUpdate={() => void handleUpdateMaterial()}
+          onDelete={(row) => void handleDeleteMaterial(row)}
         />
       ) : null}
 
@@ -1342,6 +1389,7 @@ export function DailyLogPage() {
           onStartEdit={startEditDeliveryNote}
           onCancelEdit={() => setEditingDeliveryNoteId("")}
           onUpdate={() => void handleUpdateDeliveryNote()}
+          onDelete={(row) => void handleDeleteDeliveryNote(row)}
         />
       ) : null}
     </div>
@@ -1374,6 +1422,7 @@ function MaterialDiaryDialog({
   onStartEdit,
   onCancelEdit,
   onUpdate,
+  onDelete,
 }: {
   jobOrders: JobOrderOption[];
   selectedJobOrderId: string;
@@ -1393,6 +1442,7 @@ function MaterialDiaryDialog({
   onStartEdit: (row: MaterialUsageRow) => void;
   onCancelEdit: () => void;
   onUpdate: () => void;
+  onDelete: (row: MaterialUsageRow) => void;
 }) {
   return (
     <div className="diary-print-backdrop" role="dialog" aria-modal="true">
@@ -1493,6 +1543,7 @@ function MaterialDiaryDialog({
                                 <div className="material-diary-row-actions">
                                   <button type="button" onClick={onUpdate} disabled={saving}>Salva</button>
                                   <button type="button" onClick={onCancelEdit}>Annulla</button>
+                                  <button type="button" className="material-diary-delete-button" onClick={() => onDelete(row)} disabled={saving}>Elimina</button>
                                 </div>
                               </td>
                             </>
@@ -1503,9 +1554,14 @@ function MaterialDiaryDialog({
                               <td>{row.unitOfMeasure}</td>
                               <td>{formatMaterialQuantity(row.quantity)}</td>
                               <td>
-                                <button type="button" className="material-diary-edit-button" onClick={() => onStartEdit(row)}>
-                                  Modifica
-                                </button>
+                                <div className="material-diary-row-actions">
+                                  <button type="button" className="material-diary-edit-button" onClick={() => onStartEdit(row)}>
+                                    Modifica
+                                  </button>
+                                  <button type="button" className="material-diary-delete-button" onClick={() => onDelete(row)} disabled={saving}>
+                                    Elimina
+                                  </button>
+                                </div>
                               </td>
                             </>
                           )}
@@ -1544,6 +1600,7 @@ function DeliveryNotesDiaryDialog({
   onStartEdit,
   onCancelEdit,
   onUpdate,
+  onDelete,
 }: {
   jobOrders: JobOrderOption[];
   selectedJobOrderId: string;
@@ -1563,6 +1620,7 @@ function DeliveryNotesDiaryDialog({
   onStartEdit: (row: DeliveryNoteRow) => void;
   onCancelEdit: () => void;
   onUpdate: () => void;
+  onDelete: (row: DeliveryNoteRow) => void;
 }) {
   return (
     <div className="diary-print-backdrop" role="dialog" aria-modal="true">
@@ -1657,6 +1715,7 @@ function DeliveryNotesDiaryDialog({
                                 <div className="material-diary-row-actions">
                                   <button type="button" onClick={onUpdate} disabled={saving}>Salva</button>
                                   <button type="button" onClick={onCancelEdit}>Annulla</button>
+                                  <button type="button" className="material-diary-delete-button" onClick={() => onDelete(row)} disabled={saving}>Elimina</button>
                                 </div>
                               </td>
                             </>
@@ -1666,9 +1725,14 @@ function DeliveryNotesDiaryDialog({
                               <td><strong>{row.supplier}</strong></td>
                               <td>{row.description}</td>
                               <td>
-                                <button type="button" className="material-diary-edit-button" onClick={() => onStartEdit(row)}>
-                                  Modifica
-                                </button>
+                                <div className="material-diary-row-actions">
+                                  <button type="button" className="material-diary-edit-button" onClick={() => onStartEdit(row)}>
+                                    Modifica
+                                  </button>
+                                  <button type="button" className="material-diary-delete-button" onClick={() => onDelete(row)} disabled={saving}>
+                                    Elimina
+                                  </button>
+                                </div>
                               </td>
                             </>
                           )}

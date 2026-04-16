@@ -111,3 +111,31 @@ export async function PATCH(
     row: serializeMaterial(row),
   });
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const appUser = await getActiveAppUser();
+
+  if (!appUser) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
+  const { id } = await context.params;
+
+  const existing = await prisma.materialUsage.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Materiale non trovato" }, { status: 404 });
+  }
+
+  await prisma.materialUsage.delete({
+    where: { id },
+  });
+
+  return NextResponse.json({ success: true });
+}
