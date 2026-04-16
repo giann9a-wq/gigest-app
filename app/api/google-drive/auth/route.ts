@@ -6,6 +6,7 @@ const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 export async function GET() {
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
   const redirectUri = process.env.GOOGLE_DRIVE_REDIRECT_URI;
+  const setupKey = process.env.GOOGLE_DRIVE_SETUP_KEY;
 
   if (!clientId || !redirectUri) {
     return NextResponse.json(
@@ -21,6 +22,9 @@ export async function GET() {
   authUrl.searchParams.set("scope", GOOGLE_DRIVE_SCOPE);
   authUrl.searchParams.set("access_type", "offline");
   authUrl.searchParams.set("prompt", "consent");
+  if (setupKey) {
+    authUrl.searchParams.set("state", setupKey);
+  }
 
   return NextResponse.redirect(authUrl);
 }

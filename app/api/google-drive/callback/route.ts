@@ -15,6 +15,7 @@ type GoogleTokenResponse = {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error");
 
   if (oauthError) {
@@ -28,12 +29,17 @@ export async function GET(request: Request) {
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
   const redirectUri = process.env.GOOGLE_DRIVE_REDIRECT_URI;
+  const setupKey = process.env.GOOGLE_DRIVE_SETUP_KEY;
 
   if (!clientId || !clientSecret || !redirectUri) {
     return NextResponse.json(
       { error: "Configurazione Google Drive OAuth mancante" },
       { status: 500 }
     );
+  }
+
+  if (setupKey && state !== setupKey) {
+    return NextResponse.json({ error: "State OAuth non valido" }, { status: 400 });
   }
 
   const tokenResponse = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
