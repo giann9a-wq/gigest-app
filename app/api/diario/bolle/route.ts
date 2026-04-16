@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
   const jobOrderId = request.nextUrl.searchParams.get("jobOrderId")?.trim() || "";
 
-  const [rows, supplierSuggestions, descriptionSuggestions] = await Promise.all([
+  const [rows, deliveryNoteSuppliers, costSuppliers, descriptionSuggestions] = await Promise.all([
     jobOrderId
       ? prisma.deliveryNoteUsage.findMany({
           where: { jobOrderId },
@@ -48,16 +48,36 @@ export async function GET(request: NextRequest) {
       orderBy: { supplier: "asc" },
       select: { supplier: true },
     }),
+    prisma.costActualEntry.findMany({
+      distinct: ["supplierName"],
+      where: {
+        supplierName: {
+          not: null,
+        },
+      },
+      orderBy: { supplierName: "asc" },
+      select: { supplierName: true },
+    }),
     prisma.deliveryNoteUsage.findMany({
       distinct: ["description"],
       orderBy: { description: "asc" },
       select: { description: true },
     }),
   ]);
+  const supplierSuggestions = [
+    ...new Set(
+      [
+        ...costSuppliers.map((item) => item.supplierName ?? ""),
+        ...deliveryNoteSuppliers.map((item) => item.supplier),
+      ]
+        .map((value) => value.trim())
+        .filter(Boolean)
+    ),
+  ].sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" }));
 
   return NextResponse.json({
     rows: rows.map(serializeDeliveryNote),
-    supplierSuggestions: supplierSuggestions.map((item) => item.supplier).filter(Boolean),
+    supplierSuggestions,
     descriptionSuggestions: descriptionSuggestions.map((item) => item.description).filter(Boolean),
   });
 }

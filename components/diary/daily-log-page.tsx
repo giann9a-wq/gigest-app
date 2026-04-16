@@ -549,27 +549,30 @@ export function DailyLogPage() {
     setExternalEconomyRows((current) => [...current, makeEmptyExternalEconomyRow()]);
   }
 
-  function duplicateInternalRow(localId: string) {
+  function copyInternalDescriptionFromPrevious(index: number) {
     setInternalRows((current) => {
-      const sourceRow = current.find((row) => row.localId === localId);
-      if (!sourceRow) return current;
-      return [...current, { ...sourceRow, localId: crypto.randomUUID() }];
+      const previousDescription = current[index - 1]?.activityDescription ?? "";
+      return current.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, activityDescription: previousDescription } : row
+      );
     });
   }
 
-  function duplicateExternalRow(localId: string) {
+  function copyExternalDescriptionFromPrevious(index: number) {
     setExternalRows((current) => {
-      const sourceRow = current.find((row) => row.localId === localId);
-      if (!sourceRow) return current;
-      return [...current, { ...sourceRow, localId: crypto.randomUUID() }];
+      const previousDescription = current[index - 1]?.activityDescription ?? "";
+      return current.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, activityDescription: previousDescription } : row
+      );
     });
   }
 
-  function duplicateExternalEconomyRow(localId: string) {
+  function copyExternalEconomyDescriptionFromPrevious(index: number) {
     setExternalEconomyRows((current) => {
-      const sourceRow = current.find((row) => row.localId === localId);
-      if (!sourceRow) return current;
-      return [...current, { ...sourceRow, localId: crypto.randomUUID() }];
+      const previousDescription = current[index - 1]?.activityDescription ?? "";
+      return current.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, activityDescription: previousDescription } : row
+      );
     });
   }
 
@@ -1233,7 +1236,7 @@ export function DailyLogPage() {
           loading={loading}
           loadingRows={loadingRows}
           onAddRow={addInternalRow}
-          onDuplicateRow={duplicateInternalRow}
+          onCopyPreviousDescription={copyInternalDescriptionFromPrevious}
           onRemoveRow={removeInternalRow}
           onChangeRow={setInternalRowValue}
         />
@@ -1250,8 +1253,8 @@ export function DailyLogPage() {
           savingExternalResource={savingExternalResource}
           onAddRow={addExternalRow}
           onAddEconomyRow={addExternalEconomyRow}
-          onDuplicateRow={duplicateExternalRow}
-          onDuplicateEconomyRow={duplicateExternalEconomyRow}
+          onCopyPreviousDescription={copyExternalDescriptionFromPrevious}
+          onCopyPreviousEconomyDescription={copyExternalEconomyDescriptionFromPrevious}
           onRemoveRow={removeExternalRow}
           onRemoveEconomyRow={removeExternalEconomyRow}
           onChangeRow={setExternalRowValue}
@@ -1796,7 +1799,7 @@ function InternalResourcesSection({
   loading,
   loadingRows,
   onAddRow,
-  onDuplicateRow,
+  onCopyPreviousDescription,
   onRemoveRow,
   onChangeRow,
 }: {
@@ -1806,7 +1809,7 @@ function InternalResourcesSection({
   loading: boolean;
   loadingRows: boolean;
   onAddRow: () => void;
-  onDuplicateRow: (localId: string) => void;
+  onCopyPreviousDescription: (index: number) => void;
   onRemoveRow: (localId: string) => void;
   onChangeRow: (localId: string, patch: Partial<InternalEditableRow>) => void;
 }) {
@@ -1827,9 +1830,11 @@ function InternalResourcesSection({
               {jobOrders.map((job) => <option key={job.id} value={job.id}>{job.name} ({job.type})</option>)}
             </select>
             <input type="number" step="0.1" min="0.1" value={row.hours} onChange={(event) => onChangeRow(row.localId, { hours: event.target.value })} placeholder="0.0" disabled={loadingRows} />
-            <input type="text" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione lavoro" disabled={loadingRows} />
+            <textarea rows={1} className="diary-description-textarea" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione lavoro" disabled={loadingRows} />
             <div className="diary-compact-actions">
-              <button type="button" onClick={() => onDuplicateRow(row.localId)} disabled={loadingRows}>Duplica</button>
+              {index > 0 ? (
+                <button type="button" onClick={() => onCopyPreviousDescription(index)} disabled={loadingRows}>Copia des. riga precedente</button>
+              ) : null}
               <button type="button" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`}>Rimuovi</button>
             </div>
           </div>
@@ -1851,8 +1856,8 @@ function ExternalResourcesSection({
   savingExternalResource,
   onAddRow,
   onAddEconomyRow,
-  onDuplicateRow,
-  onDuplicateEconomyRow,
+  onCopyPreviousDescription,
+  onCopyPreviousEconomyDescription,
   onRemoveRow,
   onRemoveEconomyRow,
   onChangeRow,
@@ -1873,8 +1878,8 @@ function ExternalResourcesSection({
   savingExternalResource: boolean;
   onAddRow: () => void;
   onAddEconomyRow: () => void;
-  onDuplicateRow: (localId: string) => void;
-  onDuplicateEconomyRow: (localId: string) => void;
+  onCopyPreviousDescription: (index: number) => void;
+  onCopyPreviousEconomyDescription: (index: number) => void;
   onRemoveRow: (localId: string) => void;
   onRemoveEconomyRow: (localId: string) => void;
   onChangeRow: (localId: string, patch: Partial<ExternalEditableRow>) => void;
@@ -1928,7 +1933,7 @@ function ExternalResourcesSection({
           quantityLabel="Giornate"
           quantityKey="days"
           onAddRow={onAddRow}
-          onDuplicateRow={onDuplicateRow}
+          onCopyPreviousDescription={onCopyPreviousDescription}
           onRemoveRow={onRemoveRow}
           onChangeRow={onChangeRow}
         />
@@ -1946,7 +1951,7 @@ function ExternalResourcesSection({
           loading={loading}
           loadingRows={loadingRows}
           onAddRow={onAddEconomyRow}
-          onDuplicateRow={onDuplicateEconomyRow}
+          onCopyPreviousDescription={onCopyPreviousEconomyDescription}
           onRemoveRow={onRemoveEconomyRow}
           onChangeRow={onChangeEconomyRow}
         />
@@ -1964,7 +1969,7 @@ function ExternalResourceRowsTable({
   quantityLabel,
   quantityKey,
   onAddRow,
-  onDuplicateRow,
+  onCopyPreviousDescription,
   onRemoveRow,
   onChangeRow,
 }: {
@@ -1976,7 +1981,7 @@ function ExternalResourceRowsTable({
   quantityLabel: string;
   quantityKey: "days";
   onAddRow: () => void;
-  onDuplicateRow: (localId: string) => void;
+  onCopyPreviousDescription: (index: number) => void;
   onRemoveRow: (localId: string) => void;
   onChangeRow: (localId: string, patch: Partial<ExternalEditableRow>) => void;
 }) {
@@ -1996,9 +2001,11 @@ function ExternalResourceRowsTable({
             {jobOrders.map((job) => <option key={job.id} value={job.id}>{job.name} ({job.type})</option>)}
           </select>
           <input type="number" step="0.1" min="0.1" value={row[quantityKey]} onChange={(event) => onChangeRow(row.localId, { [quantityKey]: event.target.value })} placeholder="0.0" disabled={loadingRows} />
-          <input type="text" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
+          <textarea rows={1} className="diary-description-textarea" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
           <div className="diary-compact-actions">
-            <button type="button" onClick={() => onDuplicateRow(row.localId)} disabled={loadingRows}>Duplica</button>
+            {index > 0 ? (
+              <button type="button" onClick={() => onCopyPreviousDescription(index)} disabled={loadingRows}>Copia des. riga precedente</button>
+            ) : null}
             <button type="button" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`}>Rimuovi</button>
           </div>
         </div>
@@ -2017,7 +2024,7 @@ function ExternalEconomyRowsTable({
   loading,
   loadingRows,
   onAddRow,
-  onDuplicateRow,
+  onCopyPreviousDescription,
   onRemoveRow,
   onChangeRow,
 }: {
@@ -2027,7 +2034,7 @@ function ExternalEconomyRowsTable({
   loading: boolean;
   loadingRows: boolean;
   onAddRow: () => void;
-  onDuplicateRow: (localId: string) => void;
+  onCopyPreviousDescription: (index: number) => void;
   onRemoveRow: (localId: string) => void;
   onChangeRow: (localId: string, patch: Partial<ExternalEconomyEditableRow>) => void;
 }) {
@@ -2047,9 +2054,11 @@ function ExternalEconomyRowsTable({
             {jobOrders.map((job) => <option key={job.id} value={job.id}>{job.name} ({job.type})</option>)}
           </select>
           <input type="number" step="0.1" min="0.1" value={row.hours} onChange={(event) => onChangeRow(row.localId, { hours: event.target.value })} placeholder="0.0" disabled={loadingRows} />
-          <input type="text" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
+          <textarea rows={1} className="diary-description-textarea" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
           <div className="diary-compact-actions">
-            <button type="button" onClick={() => onDuplicateRow(row.localId)} disabled={loadingRows}>Duplica</button>
+            {index > 0 ? (
+              <button type="button" onClick={() => onCopyPreviousDescription(index)} disabled={loadingRows}>Copia des. riga precedente</button>
+            ) : null}
             <button type="button" onClick={() => onRemoveRow(row.localId)} title={`Rimuovi riga ${index + 1}`}>Rimuovi</button>
           </div>
         </div>

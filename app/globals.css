@@ -1397,6 +1397,7 @@ a {
 .diary-day-actions input,
 .diary-compact-row input,
 .diary-compact-row select,
+.diary-compact-row textarea,
 .diary-print-options input[type="date"] {
   min-height: 40px;
   border: 1px solid #d1d5db;
@@ -1405,6 +1406,16 @@ a {
   color: var(--diary-text);
   font: inherit;
   padding: 0.58rem 0.68rem;
+}
+
+.diary-description-textarea {
+  field-sizing: content;
+  min-height: 40px;
+  max-height: 180px;
+  line-height: 1.35;
+  resize: vertical;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .diary-kpi-strip {
@@ -1515,6 +1526,7 @@ a {
   display: flex;
   gap: 0.35rem;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .diary-compact-actions button {

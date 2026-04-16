@@ -660,41 +660,45 @@ function JobExternalResourcesSummary({ dashboard }: { dashboard: JobOrderDashboa
 
   return (
     <section className="job-premium-card">
-      <div className="job-premium-section-head">
-        <div>
-          <span>Risorse esterne</span>
-          <h2>Subappalto ed economia</h2>
+      <details className="job-premium-diary-accordion">
+        <summary>
+          <span className="job-premium-expand">+</span>
+          <div>
+            <span>Risorse esterne</span>
+            <h2>Subappalto ed economia</h2>
+          </div>
+        </summary>
+        <div className="job-premium-diary-accordion-content">
+          <div className="job-premium-external-grid">
+            <ExternalResourceSummaryTable
+              title="Risorse in subappalto"
+              emptyText="Nessuna risorsa in subappalto associata alla commessa."
+              quantityLabel="Giornate totali"
+              rows={subcontractRows.map((row) => ({
+                resourceId: row.resourceId,
+                resourceLabel: row.resourceLabel,
+                entryCount: row.entryCount,
+                total: row.totalDays,
+              }))}
+              total={formatQuantity(dashboard.actual.externalResources?.totalDays ?? 0, "gg")}
+              unit="gg"
+            />
+            <ExternalResourceSummaryTable
+              title="Risorse in economia"
+              emptyText="Nessuna risorsa in economia associata alla commessa."
+              quantityLabel="Ore totali"
+              rows={economyRows.map((row) => ({
+                resourceId: row.resourceId,
+                resourceLabel: row.resourceLabel,
+                entryCount: row.entryCount,
+                total: row.totalHours,
+              }))}
+              total={formatQuantity(dashboard.actual.externalEconomyResources?.totalHours ?? 0, "h")}
+              unit="h"
+            />
+          </div>
         </div>
-      </div>
-
-      <div className="job-premium-external-grid">
-        <ExternalResourceSummaryTable
-          title="Risorse in subappalto"
-          emptyText="Nessuna risorsa in subappalto associata alla commessa."
-          quantityLabel="Giornate totali"
-          rows={subcontractRows.map((row) => ({
-            resourceId: row.resourceId,
-            resourceLabel: row.resourceLabel,
-            entryCount: row.entryCount,
-            total: row.totalDays,
-          }))}
-          total={formatQuantity(dashboard.actual.externalResources?.totalDays ?? 0, "gg")}
-          unit="gg"
-        />
-        <ExternalResourceSummaryTable
-          title="Risorse in economia"
-          emptyText="Nessuna risorsa in economia associata alla commessa."
-          quantityLabel="Ore totali"
-          rows={economyRows.map((row) => ({
-            resourceId: row.resourceId,
-            resourceLabel: row.resourceLabel,
-            entryCount: row.entryCount,
-            total: row.totalHours,
-          }))}
-          total={formatQuantity(dashboard.actual.externalEconomyResources?.totalHours ?? 0, "h")}
-          unit="h"
-        />
-      </div>
+      </details>
     </section>
   );
 }
