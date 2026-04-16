@@ -1825,7 +1825,7 @@ a {
 }
 
 .delivery-note-diary-form {
-  grid-template-columns: minmax(220px, 1fr) minmax(170px, 0.75fr) minmax(260px, 1.4fr) auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(170px, 0.75fr) minmax(260px, 1.4fr) minmax(220px, 1fr) auto;
 }
 
 .material-diary-field {
@@ -1921,6 +1921,164 @@ a {
   border-color: #fecaca;
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.delivery-note-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 0.25rem 0.55rem;
+  white-space: nowrap;
+}
+
+.delivery-note-status-pending {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.delivery-note-status-validated {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.delivery-note-documents {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+
+.delivery-note-documents a {
+  color: #0f766e;
+  font-size: 0.85rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.delivery-note-documents a:hover {
+  text-decoration: underline;
+}
+
+.delivery-note-upload-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 32px;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  background: #f0f9ff;
+  color: #0369a1;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 900;
+  padding: 0.35rem 0.55rem;
+}
+
+.delivery-note-upload-inline input {
+  display: none;
+}
+
+.documentale-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.documentale-tabs {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.documentale-tab {
+  min-height: 42px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #9a3412;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 0.65rem 1rem;
+}
+
+.documentale-tab-active {
+  background: #fff7ed;
+}
+
+.documentale-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) minmax(150px, 0.7fr) minmax(150px, 0.7fr) minmax(150px, 0.7fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.documentale-filters label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.documentale-filters span {
+  color: var(--diary-muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.documentale-filters input,
+.documentale-filters select {
+  min-height: 40px;
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: var(--diary-text);
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+}
+
+.documentale-filter-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.documentale-table-wrap {
+  overflow-x: auto;
+}
+
+.documentale-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.documentale-table th {
+  background: var(--diary-primary);
+  color: #ffffff;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.documentale-table th,
+.documentale-table td {
+  border-bottom: 1px solid var(--diary-border);
+  padding: 0.75rem;
+  vertical-align: top;
+}
+
+.documentale-alert-card {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.documentale-alert-link {
+  width: fit-content;
+  margin-top: 0.75rem;
+  text-decoration: none;
 }
 
 .card {
@@ -5150,5 +5308,20 @@ a {
   .diary-section-head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .documentale-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .documentale-filter-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .documentale-filter-actions .button,
+  .documentale-filter-actions .mobile-button-secondary,
+  .documentale-alert-link {
+    width: 100%;
   }
 }

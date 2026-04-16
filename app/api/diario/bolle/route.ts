@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveAppUser } from "@/lib/app-user";
 import { prisma } from "@/lib/prisma";
+import { DeliveryNoteValidationStatus } from "@prisma/client";
 
 function parseDate(value: string) {
   const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -13,8 +14,17 @@ function serializeDeliveryNote(row: {
   supplier: string;
   description: string;
   usageDate: Date;
+  validationStatus: DeliveryNoteValidationStatus;
+  validatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  documents?: Array<{
+    id: string;
+    fileName: string;
+    mimeType: string | null;
+    sizeBytes: number | null;
+    createdAt: Date;
+  }>;
 }) {
   return {
     id: row.id,
@@ -22,8 +32,20 @@ function serializeDeliveryNote(row: {
     supplier: row.supplier,
     description: row.description,
     usageDate: row.usageDate.toISOString().slice(0, 10),
+    validationStatus: row.validationStatus,
+    validationStatusLabel:
+      row.validationStatus === DeliveryNoteValidationStatus.VALIDATED ? "Validata" : "Da validare",
+    validatedAt: row.validatedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    documents:
+      row.documents?.map((document) => ({
+        id: document.id,
+        fileName: document.fileName,
+        mimeType: document.mimeType,
+        sizeBytes: document.sizeBytes,
+        createdAt: document.createdAt.toISOString(),
+      })) ?? [],
   };
 }
 
@@ -41,6 +63,18 @@ export async function GET(request: NextRequest) {
       ? prisma.deliveryNoteUsage.findMany({
           where: { jobOrderId },
           orderBy: [{ usageDate: "desc" }, { createdAt: "desc" }],
+          include: {
+            documents: {
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                fileName: true,
+                mimeType: true,
+                sizeBytes: true,
+                createdAt: true,
+              },
+            },
+          },
         })
       : Promise.resolve([]),
     prisma.deliveryNoteUsage.findMany({

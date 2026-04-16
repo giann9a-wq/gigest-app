@@ -41,6 +41,7 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
     { href: "/diario" as Route, label: "Diario di cantiere" },
     { href: "/commesse" as Route, label: "Gestione Commesse" },
     { href: "/risorse" as Route, label: "Vedi Risorse" },
+    { href: "/documentale" as Route, label: "Documentale" },
     { href: "/scadenziario" as Route, label: "Scadenziario" },
     { href: "/stampa-risorse-mese" as Route, label: "Stampa Risorse" },
     ...(showAdminLink ? [{ href: "/admin" as Route, label: "Admin" }] : []),

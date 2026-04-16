@@ -1,5 +1,7 @@
 import { auth } from "@/auth";
 import { getScheduleEvents, type ScheduleEventRow } from "@/lib/schedule-events";
+import { prisma } from "@/lib/prisma";
+import { DeliveryNoteValidationStatus } from "@prisma/client";
 
 function getUtcDateBoundsFromIso(isoDate: string) {
   return {
@@ -71,11 +73,23 @@ export default async function DashboardPage() {
   const todayBounds = getUtcDateBoundsFromIso(todayIso);
   const nextThirtyDaysEnd = new Date(todayBounds.end);
   nextThirtyDaysEnd.setUTCDate(nextThirtyDaysEnd.getUTCDate() + 30);
+  const oldPendingDeliveryNotesLimit = new Date(todayBounds.start);
+  oldPendingDeliveryNotesLimit.setUTCDate(oldPendingDeliveryNotesLimit.getUTCDate() - 45);
 
-  const scheduleEvents = await getScheduleEvents({
-    from: todayBounds.start,
-    to: nextThirtyDaysEnd,
-  });
+  const [scheduleEvents, oldPendingDeliveryNotesCount] = await Promise.all([
+    getScheduleEvents({
+      from: todayBounds.start,
+      to: nextThirtyDaysEnd,
+    }),
+    prisma.deliveryNoteUsage.count({
+      where: {
+        validationStatus: DeliveryNoteValidationStatus.PENDING,
+        usageDate: {
+          lt: oldPendingDeliveryNotesLimit,
+        },
+      },
+    }),
+  ]);
 
   const todayEvents = scheduleEvents.filter((event) => {
     const eventTime = event.eventDate.getTime();
@@ -106,6 +120,21 @@ export default async function DashboardPage() {
       </section>
 
       <section className="dashboard-grid">
+        {oldPendingDeliveryNotesCount > 0 ? (
+          <div className="card dashboard-card documentale-alert-card">
+            <div className="dashboard-card-head">
+              <strong>Presenti Bolle da validare</strong>
+              <span className="dashboard-pill">{oldPendingDeliveryNotesCount}</span>
+            </div>
+            <p className="muted">
+              Sono presenti bolle non validate più vecchie di 45 giorni.
+            </p>
+            <a className="button documentale-alert-link" href="/documentale">
+              Vai al Documentale
+            </a>
+          </div>
+        ) : null}
+
         <div className="card dashboard-card dashboard-card-fixed">
           <div className="dashboard-card-head">
             <strong>Eventi di oggi</strong>

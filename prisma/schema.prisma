@@ -126,6 +126,11 @@ enum InvoiceImportAssignmentSource {
   MANUAL
 }
 
+enum DeliveryNoteValidationStatus {
+  PENDING
+  VALIDATED
+}
+
 model User {
   id          String     @id @default(cuid())
   googleSub   String?    @unique
@@ -147,6 +152,8 @@ model User {
   updatedMaterialUsages         MaterialUsage[]         @relation("MaterialUsageUpdatedBy")
   createdDeliveryNotes          DeliveryNoteUsage[]     @relation("DeliveryNoteUsageCreatedBy")
   updatedDeliveryNotes          DeliveryNoteUsage[]     @relation("DeliveryNoteUsageUpdatedBy")
+  validatedDeliveryNotes        DeliveryNoteUsage[]     @relation("DeliveryNoteUsageValidatedBy")
+  uploadedDeliveryNoteDocuments DeliveryNoteDocument[]   @relation("DeliveryNoteDocumentUploadedBy")
   createdDeadlines              Deadline[]              @relation("DeadlineCreatedBy")
   updatedDeadlines              Deadline[]              @relation("DeadlineUpdatedBy")
   createdMaintenances           Maintenance[]           @relation("MaintenanceCreatedBy")
@@ -608,23 +615,45 @@ model MaterialUsage {
 }
 
 model DeliveryNoteUsage {
-  id              String   @id @default(cuid())
-  jobOrderId      String
-  supplier        String
-  description     String
-  usageDate       DateTime
-  createdByUserId String?
-  updatedByUserId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String                       @id @default(cuid())
+  jobOrderId       String
+  supplier         String
+  description      String
+  usageDate        DateTime
+  validationStatus DeliveryNoteValidationStatus @default(PENDING)
+  validatedAt      DateTime?
+  validatedByUserId String?
+  createdByUserId  String?
+  updatedByUserId  String?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
 
-  jobOrder  JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
-  createdBy User?    @relation("DeliveryNoteUsageCreatedBy", fields: [createdByUserId], references: [id])
-  updatedBy User?    @relation("DeliveryNoteUsageUpdatedBy", fields: [updatedByUserId], references: [id])
+  jobOrder    JobOrder               @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  createdBy   User?                  @relation("DeliveryNoteUsageCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy   User?                  @relation("DeliveryNoteUsageUpdatedBy", fields: [updatedByUserId], references: [id])
+  validatedBy User?                  @relation("DeliveryNoteUsageValidatedBy", fields: [validatedByUserId], references: [id])
+  documents   DeliveryNoteDocument[]
 
   @@index([jobOrderId, usageDate])
   @@index([supplier])
   @@index([description])
+  @@index([validationStatus, usageDate])
+}
+
+model DeliveryNoteDocument {
+  id             String   @id @default(cuid())
+  deliveryNoteId String
+  fileName       String
+  driveFileId    String   @unique
+  mimeType       String?
+  sizeBytes      Int?
+  uploadedById   String?
+  createdAt      DateTime @default(now())
+
+  deliveryNote DeliveryNoteUsage @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  uploadedBy   User?             @relation("DeliveryNoteDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([deliveryNoteId])
 }
 
 model Deadline {

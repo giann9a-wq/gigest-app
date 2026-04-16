@@ -45,6 +45,16 @@ type DeliveryNoteRow = {
   supplier: string;
   description: string;
   usageDate: string;
+  validationStatus: "PENDING" | "VALIDATED";
+  validationStatusLabel: string;
+  validatedAt: string | null;
+  documents: Array<{
+    id: string;
+    fileName: string;
+    mimeType: string | null;
+    sizeBytes: number | null;
+    createdAt: string;
+  }>;
   createdAt: string;
   updatedAt: string;
 };
@@ -433,6 +443,7 @@ export function DailyLogPage() {
     description: "",
     usageDate: todayAsInputValue(),
   });
+  const [deliveryNoteAttachment, setDeliveryNoteAttachment] = useState<File | null>(null);
   const [editingMaterialId, setEditingMaterialId] = useState("");
   const [editingDeliveryNoteId, setEditingDeliveryNoteId] = useState("");
   const [materialEditForm, setMaterialEditForm] = useState<MaterialFormState>({
@@ -450,6 +461,7 @@ export function DailyLogPage() {
   const [materialsSaving, setMaterialsSaving] = useState(false);
   const [deliveryNotesLoading, setDeliveryNotesLoading] = useState(false);
   const [deliveryNotesSaving, setDeliveryNotesSaving] = useState(false);
+  const [deliveryNoteUploadingId, setDeliveryNoteUploadingId] = useState("");
   const [printLoading, setPrintLoading] = useState(false);
   const [printPreviewDays, setPrintPreviewDays] = useState<PrintDay[]>([]);
   const printPreviewRequestRef = useRef(0);
@@ -994,6 +1006,7 @@ export function DailyLogPage() {
       description: "",
       usageDate: todayAsInputValue(),
     });
+    setDeliveryNoteAttachment(null);
     setEditingDeliveryNoteId("");
     void loadDeliveryNoteRows(initialJobOrderId);
   }
@@ -1015,7 +1028,7 @@ export function DailyLogPage() {
     setMessage("");
 
     try {
-      await safeJsonFetch("/api/diario/bolle", {
+      const data = (await safeJsonFetch("/api/diario/bolle", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1024,13 +1037,18 @@ export function DailyLogPage() {
           jobOrderId: selectedDeliveryNoteJobOrderId,
           ...deliveryNoteForm,
         }),
-      });
+      })) as { row: DeliveryNoteRow };
+
+      if (deliveryNoteAttachment) {
+        await uploadDeliveryNoteAttachment(data.row.id, deliveryNoteAttachment);
+      }
 
       setDeliveryNoteForm({
         supplier: "",
         description: "",
         usageDate: todayAsInputValue(),
       });
+      setDeliveryNoteAttachment(null);
       setMessage("Bolla di cantiere salvata.");
       await loadDeliveryNoteRows(selectedDeliveryNoteJobOrderId);
     } catch (err) {
@@ -1097,6 +1115,34 @@ export function DailyLogPage() {
       setError(err instanceof Error ? err.message : "Errore nell'eliminazione bolla");
     } finally {
       setDeliveryNotesSaving(false);
+    }
+  }
+
+  async function uploadDeliveryNoteAttachment(deliveryNoteId: string, file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    await safeJsonFetch(`/api/diario/bolle/${deliveryNoteId}/documenti`, {
+      method: "POST",
+      body: formData,
+    });
+  }
+
+  async function handleUploadDeliveryNoteAttachment(row: DeliveryNoteRow, file: File | null) {
+    if (!selectedDeliveryNoteJobOrderId || !file) return;
+
+    setDeliveryNoteUploadingId(row.id);
+    setError("");
+    setMessage("");
+
+    try {
+      await uploadDeliveryNoteAttachment(row.id, file);
+      setMessage("Allegato caricato.");
+      await loadDeliveryNoteRows(selectedDeliveryNoteJobOrderId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel caricamento allegato");
+    } finally {
+      setDeliveryNoteUploadingId("");
     }
   }
 
@@ -1381,15 +1427,19 @@ export function DailyLogPage() {
           descriptionSuggestions={deliveryNoteDescriptionSuggestions}
           loading={deliveryNotesLoading}
           saving={deliveryNotesSaving}
+          uploadingId={deliveryNoteUploadingId}
+          attachment={deliveryNoteAttachment}
           onClose={() => setDeliveryNotesDialogOpen(false)}
           onJobOrderChange={changeDeliveryNoteJobOrder}
           onFormChange={(patch) => setDeliveryNoteForm((current) => ({ ...current, ...patch }))}
+          onAttachmentChange={setDeliveryNoteAttachment}
           onEditFormChange={(patch) => setDeliveryNoteEditForm((current) => ({ ...current, ...patch }))}
           onSave={() => void handleSaveDeliveryNote()}
           onStartEdit={startEditDeliveryNote}
           onCancelEdit={() => setEditingDeliveryNoteId("")}
           onUpdate={() => void handleUpdateDeliveryNote()}
           onDelete={(row) => void handleDeleteDeliveryNote(row)}
+          onUploadAttachment={(row, file) => void handleUploadDeliveryNoteAttachment(row, file)}
         />
       ) : null}
     </div>
@@ -1592,15 +1642,19 @@ function DeliveryNotesDiaryDialog({
   descriptionSuggestions,
   loading,
   saving,
+  uploadingId,
+  attachment,
   onClose,
   onJobOrderChange,
   onFormChange,
+  onAttachmentChange,
   onEditFormChange,
   onSave,
   onStartEdit,
   onCancelEdit,
   onUpdate,
   onDelete,
+  onUploadAttachment,
 }: {
   jobOrders: JobOrderOption[];
   selectedJobOrderId: string;
@@ -1612,15 +1666,19 @@ function DeliveryNotesDiaryDialog({
   descriptionSuggestions: string[];
   loading: boolean;
   saving: boolean;
+  uploadingId: string;
+  attachment: File | null;
   onClose: () => void;
   onJobOrderChange: (jobOrderId: string) => void;
   onFormChange: (patch: Partial<DeliveryNoteFormState>) => void;
+  onAttachmentChange: (file: File | null) => void;
   onEditFormChange: (patch: Partial<DeliveryNoteFormState>) => void;
   onSave: () => void;
   onStartEdit: (row: DeliveryNoteRow) => void;
   onCancelEdit: () => void;
   onUpdate: () => void;
   onDelete: (row: DeliveryNoteRow) => void;
+  onUploadAttachment: (row: DeliveryNoteRow, file: File | null) => void;
 }) {
   return (
     <div className="diary-print-backdrop" role="dialog" aria-modal="true">
@@ -1674,6 +1732,15 @@ function DeliveryNotesDiaryDialog({
                     placeholder="Es. Bolla DDt materiali elettrici"
                   />
                 </label>
+                <label className="material-diary-field material-diary-field-wide">
+                  <span>Allegato PDF</span>
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    onChange={(event) => onAttachmentChange(event.target.files?.[0] ?? null)}
+                  />
+                  {attachment ? <small>{attachment.name}</small> : null}
+                </label>
                 <div className="material-diary-save">
                   <button type="button" className="button" onClick={onSave} disabled={saving}>
                     {saving ? "Salvataggio..." : "Salva bolla"}
@@ -1695,14 +1762,16 @@ function DeliveryNotesDiaryDialog({
                       <th>Data</th>
                       <th>Fornitore</th>
                       <th>Descrizione</th>
+                      <th>Stato</th>
+                      <th>Allegati</th>
                       <th>Azioni</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={4}>Caricamento bolle...</td></tr>
+                      <tr><td colSpan={6}>Caricamento bolle...</td></tr>
                     ) : rows.length === 0 ? (
-                      <tr><td colSpan={4}>Nessuna bolla inserita per questa commessa.</td></tr>
+                      <tr><td colSpan={6}>Nessuna bolla inserita per questa commessa.</td></tr>
                     ) : (
                       rows.map((row) => (
                         <tr key={row.id}>
@@ -1711,6 +1780,8 @@ function DeliveryNotesDiaryDialog({
                               <td><input type="date" value={editForm.usageDate} onChange={(event) => onEditFormChange({ usageDate: event.target.value })} /></td>
                               <td><input list="delivery-note-supplier-suggestions" value={editForm.supplier} onChange={(event) => onEditFormChange({ supplier: event.target.value })} /></td>
                               <td><input list="delivery-note-description-suggestions" value={editForm.description} onChange={(event) => onEditFormChange({ description: event.target.value })} /></td>
+                              <td>{row.validationStatusLabel}</td>
+                              <td>{row.documents.length} file</td>
                               <td>
                                 <div className="material-diary-row-actions">
                                   <button type="button" onClick={onUpdate} disabled={saving}>Salva</button>
@@ -1724,6 +1795,38 @@ function DeliveryNotesDiaryDialog({
                               <td>{formatItalianShortDate(row.usageDate)}</td>
                               <td><strong>{row.supplier}</strong></td>
                               <td>{row.description}</td>
+                              <td>
+                                <span className={`delivery-note-status delivery-note-status-${row.validationStatus.toLowerCase()}`}>
+                                  {row.validationStatusLabel}
+                                </span>
+                              </td>
+                              <td>
+                                <div className="delivery-note-documents">
+                                  {row.documents.length === 0 ? <span className="muted">Nessun allegato</span> : null}
+                                  {row.documents.map((document) => (
+                                    <a
+                                      key={document.id}
+                                      href={`/api/documentale/bolle/documenti/${document.id}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      {document.fileName}
+                                    </a>
+                                  ))}
+                                  <label className="delivery-note-upload-inline">
+                                    <span>{uploadingId === row.id ? "Caricamento..." : "Allega"}</span>
+                                    <input
+                                      type="file"
+                                      accept="application/pdf,image/*"
+                                      disabled={Boolean(uploadingId)}
+                                      onChange={(event) => {
+                                        onUploadAttachment(row, event.target.files?.[0] ?? null);
+                                        event.currentTarget.value = "";
+                                      }}
+                                    />
+                                  </label>
+                                </div>
+                              </td>
                               <td>
                                 <div className="material-diary-row-actions">
                                   <button type="button" className="material-diary-edit-button" onClick={() => onStartEdit(row)}>

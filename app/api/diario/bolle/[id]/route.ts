@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveAppUser } from "@/lib/app-user";
 import { prisma } from "@/lib/prisma";
+import { DeliveryNoteValidationStatus } from "@prisma/client";
 
 function parseDate(value: string) {
   const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -13,6 +14,8 @@ function serializeDeliveryNote(row: {
   supplier: string;
   description: string;
   usageDate: Date;
+  validationStatus: DeliveryNoteValidationStatus;
+  validatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -22,6 +25,10 @@ function serializeDeliveryNote(row: {
     supplier: row.supplier,
     description: row.description,
     usageDate: row.usageDate.toISOString().slice(0, 10),
+    validationStatus: row.validationStatus,
+    validationStatusLabel:
+      row.validationStatus === DeliveryNoteValidationStatus.VALIDATED ? "Validata" : "Da validare",
+    validatedAt: row.validatedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
