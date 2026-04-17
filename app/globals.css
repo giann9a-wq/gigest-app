@@ -4060,6 +4060,36 @@ a {
   white-space: nowrap;
 }
 
+.job-premium-delivery-list {
+  padding-left: 0;
+}
+
+.job-premium-delivery-list .job-premium-supplier-group summary {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.job-premium-delivery-movement-list {
+  padding-left: 2.1rem;
+}
+
+.job-premium-delivery-row {
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+}
+
+.job-premium-delivery-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.job-premium-delivery-actions small {
+  color: var(--job-premium-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .job-premium-table-wrap {
   overflow-x: auto;
   border-radius: 18px;

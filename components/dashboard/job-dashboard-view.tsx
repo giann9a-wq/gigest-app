@@ -790,30 +790,29 @@ function JobDeliveryNotesSummary({
         <strong>{totalEntries} movimenti</strong>
       </div>
 
-      <div className="job-premium-table-wrap">
-        <table className="job-premium-summary-table">
-          <thead>
-            <tr>
-              <th>Fornitore</th>
-              <th>Movimenti</th>
-              <th>Ultime bolle</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={3}>Nessuna bolla registrata per questa commessa.</td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={row.key}>
-                  <td><strong>{row.supplier}</strong></td>
-                  <td>{row.entryCount}</td>
-                  <td>
-                    {row.entries.slice(0, 3).map((entry) => (
-                      <span key={entry.id} className="job-premium-material-chip">
-                        {formatDate(entry.usageDate)} - {entry.description || "Senza descrizione"}
-                        {entry.documents.map((document, index) => (
+      <div className="job-premium-supplier-list job-premium-delivery-list">
+        {rows.length === 0 ? (
+          <p className="job-premium-empty-inline">Nessuna bolla registrata per questa commessa.</p>
+        ) : (
+          rows.map((row) => (
+            <details key={row.key} className="job-premium-supplier-group">
+              <summary>
+                <span className="job-premium-expand job-premium-expand-small">+</span>
+                <span>
+                  <strong>{row.supplier}</strong>
+                  <small>{row.entryCount} movimenti</small>
+                </span>
+              </summary>
+              <div className="job-premium-movement-list job-premium-delivery-movement-list">
+                {row.entries.map((entry) => (
+                  <div key={entry.id} className="job-premium-movement-row job-premium-delivery-row">
+                    <span>{formatDate(entry.usageDate)}</span>
+                    <p>{entry.description || "Senza descrizione"}</p>
+                    <div className="job-premium-delivery-actions">
+                      {entry.documents.length === 0 ? (
+                        <small>Nessun allegato</small>
+                      ) : (
+                        entry.documents.map((document, index) => (
                           <button
                             key={document.id}
                             type="button"
@@ -822,15 +821,15 @@ function JobDeliveryNotesSummary({
                           >
                             {entry.documents.length > 1 ? `PDF ${index + 1}` : "Apri PDF"}
                           </button>
-                        ))}
-                      </span>
-                    ))}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ))
+        )}
       </div>
     </section>
   );
