@@ -45,10 +45,20 @@ function formatMonthInput(month: number) {
 
 function formatHours(value: number) {
   if (!value) return "";
+  if (Number.isInteger(value)) return String(value);
   return value.toLocaleString("it-IT", {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   });
+}
+
+function splitResourceName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length <= 1) return { firstLine: fullName, secondLine: "" };
+  return {
+    firstLine: parts[0],
+    secondLine: parts.slice(1).join(" "),
+  };
 }
 
 function formatMonthLabel(month: number, year: number) {
@@ -291,7 +301,7 @@ export default function StampaRisorseMesePage() {
                     Risorsa
                   </th>
                   <th rowSpan={2} className="report-fixed-col report-group-col">
-                    Raggruppamento
+                    Tipo
                   </th>
                   {report.days.map((day) => (
                     <th
@@ -324,7 +334,15 @@ export default function StampaRisorseMesePage() {
                         <>
                           <td rowSpan={resource.groups.length} className="report-resource-name">
                             <div className="report-resource-block">
-                              <strong>{resource.fullName}</strong>
+                              {(() => {
+                                const name = splitResourceName(resource.fullName);
+                                return (
+                                  <strong>
+                                    <span>{name.firstLine}</span>
+                                    {name.secondLine ? <span>{name.secondLine}</span> : null}
+                                  </strong>
+                                );
+                              })()}
                               <span className="report-resource-total">
                                 Totale mese: {formatHours(resource.total)}
                               </span>
