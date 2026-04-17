@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 async function readJsonResponse(response: Response) {
   const data = await response.json();
@@ -16,33 +16,48 @@ async function readJsonResponse(response: Response) {
 export function ScansSyncButton() {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const syncingRef = useRef(false);
 
-  async function syncScans() {
+  const syncScans = useCallback(async ({ showLoading = true } = {}) => {
+    if (syncingRef.current) return;
+
+    syncingRef.current = true;
     setSyncing(true);
-    setMessage("");
-    setError("");
+    if (showLoading) {
+      setError("");
+    }
 
     try {
-      const data = await readJsonResponse(
+      await readJsonResponse(
         await fetch("/api/integrations/gmail/scansioni/sync", { method: "POST" })
       );
-      setMessage(`Importate ${data.imported ?? 0}, saltate ${data.skipped ?? 0}`);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore sincronizzazione Gmail");
+      if (showLoading) {
+        setError(err instanceof Error ? err.message : "Errore sincronizzazione Gmail");
+      }
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    void syncScans({ showLoading: false });
+
+    const intervalId = window.setInterval(() => {
+      void syncScans({ showLoading: false });
+    }, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [syncScans]);
 
   return (
     <div className="dashboard-sync-control">
       <button type="button" className="dashboard-sync-button" onClick={() => void syncScans()} disabled={syncing}>
         {syncing ? "Sync..." : "Sync Gmail"}
       </button>
-      {message ? <span className="dashboard-sync-message">{message}</span> : null}
       {error ? <span className="dashboard-sync-error">{error}</span> : null}
     </div>
   );

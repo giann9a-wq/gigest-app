@@ -297,8 +297,7 @@ export default function DocumentalePage() {
     setMessage("");
 
     try {
-      const data = await safeJsonFetch("/api/integrations/gmail/scansioni/sync", { method: "POST" });
-      setMessage(`Sync completata. Importate: ${data.imported}. Saltate: ${data.skipped}. Errori: ${data.errors}.`);
+      await safeJsonFetch("/api/integrations/gmail/scansioni/sync", { method: "POST" });
       await loadScans();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nella sync Gmail");
