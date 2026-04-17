@@ -478,7 +478,7 @@ export default function DocumentalePage() {
                     <th>Commessa</th>
                     <th>Descrizione</th>
                     <th>Stato</th>
-                    <th>Allegati</th>
+                    <th>PDF</th>
                     <th>Azioni</th>
                   </tr>
                 </thead>
@@ -560,7 +560,7 @@ export default function DocumentalePage() {
                             <td>
                               <div className="delivery-note-documents">
                                 {row.documents.length === 0 ? <span className="muted">Nessun allegato</span> : null}
-                                {row.documents.map((document) => (
+                                {row.documents.map((document, index) => (
                                   <button
                                     key={document.id}
                                     type="button"
@@ -573,14 +573,13 @@ export default function DocumentalePage() {
                                       })
                                     }
                                   >
-                                    {document.fileName}
-                                    {formatFileSize(document.sizeBytes) ? ` (${formatFileSize(document.sizeBytes)})` : ""}
+                                    {row.documents.length > 1 ? `Vedi bolla pdf ${index + 1}` : "Vedi bolla pdf"}
                                   </button>
                                 ))}
                               </div>
                             </td>
                             <td>
-                              <div className="documentale-row-actions">
+                              <div className="documentale-row-actions documentale-bolle-actions">
                                 {row.validationStatus === "PENDING" ? (
                                   <button type="button" className="button" onClick={() => void validateDeliveryNote(row.id)} disabled={savingId === row.id}>
                                     {savingId === row.id ? "Validazione..." : "Valida"}
