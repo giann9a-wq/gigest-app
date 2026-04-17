@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { PdfViewerModal } from "@/components/pdf-viewer-modal";
 import { formatCurrency, formatPercent, formatQuantity } from "@/lib/number-format";
 
 export type JobTypeValue =
@@ -78,7 +80,20 @@ type DeliveryNoteUsageDetail = {
     id: string;
     usageDate: string;
     description: string;
+    documents: Array<{
+      id: string;
+      fileName: string;
+      mimeType: string | null;
+      sizeBytes: number | null;
+      createdAt: string;
+    }>;
   }>;
+};
+
+type PdfPreviewState = {
+  title: string;
+  url: string;
+  subtitle?: string;
 };
 
 type ImportedCostMovement = {
@@ -755,7 +770,13 @@ function JobMaterialsSummary({ dashboard }: { dashboard: JobOrderDashboardRespon
   );
 }
 
-function JobDeliveryNotesSummary({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
+function JobDeliveryNotesSummary({
+  dashboard,
+  onOpenDocument,
+}: {
+  dashboard: JobOrderDashboardResponse;
+  onOpenDocument: (document: { id: string; fileName: string }, subtitle: string) => void;
+}) {
   const rows = dashboard.actual.deliveryNoteUsages?.details ?? [];
   const totalEntries = dashboard.actual.deliveryNoteUsages?.totalEntries ?? 0;
 
@@ -792,6 +813,16 @@ function JobDeliveryNotesSummary({ dashboard }: { dashboard: JobOrderDashboardRe
                     {row.entries.slice(0, 3).map((entry) => (
                       <span key={entry.id} className="job-premium-material-chip">
                         {formatDate(entry.usageDate)} - {entry.description || "Senza descrizione"}
+                        {entry.documents.map((document, index) => (
+                          <button
+                            key={document.id}
+                            type="button"
+                            className="job-premium-chip-action"
+                            onClick={() => onOpenDocument(document, `${row.supplier} - ${formatDate(entry.usageDate)}`)}
+                          >
+                            {entry.documents.length > 1 ? `PDF ${index + 1}` : "Apri PDF"}
+                          </button>
+                        ))}
                       </span>
                     ))}
                   </td>
@@ -805,7 +836,13 @@ function JobDeliveryNotesSummary({ dashboard }: { dashboard: JobOrderDashboardRe
   );
 }
 
-function JobDiaryAccordion({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
+function JobDiaryAccordion({
+  dashboard,
+  onOpenDocument,
+}: {
+  dashboard: JobOrderDashboardResponse;
+  onOpenDocument: (document: { id: string; fileName: string }, subtitle: string) => void;
+}) {
   return (
     <section className="job-premium-card">
       <details className="job-premium-diary-accordion">
@@ -818,7 +855,7 @@ function JobDiaryAccordion({ dashboard }: { dashboard: JobOrderDashboardResponse
         </summary>
         <div className="job-premium-diary-accordion-content">
           <JobMaterialsSummary dashboard={dashboard} />
-          <JobDeliveryNotesSummary dashboard={dashboard} />
+          <JobDeliveryNotesSummary dashboard={dashboard} onOpenDocument={onOpenDocument} />
         </div>
       </details>
     </section>
@@ -876,6 +913,7 @@ function ExternalResourceSummaryTable({
 
 export function JobDashboardView(props: JobDashboardViewProps) {
   const categories = buildDashboardCategories(props.dashboard);
+  const [pdfPreview, setPdfPreview] = useState<PdfPreviewState | null>(null);
 
   return (
     <div className="job-premium-dashboard">
@@ -886,9 +924,26 @@ export function JobDashboardView(props: JobDashboardViewProps) {
       <JobBudgetVsActualChart categories={categories} />
       </div>
       <JobCostBreakdownAccordion categories={categories} />
-      <JobDiaryAccordion dashboard={props.dashboard} />
+      <JobDiaryAccordion
+        dashboard={props.dashboard}
+        onOpenDocument={(document, subtitle) =>
+          setPdfPreview({
+            title: document.fileName,
+            url: `/api/documentale/bolle/documenti/${document.id}`,
+            subtitle,
+          })
+        }
+      />
       <JobExternalResourcesSummary dashboard={props.dashboard} />
       <JobSummaryTable categories={categories} />
+      {pdfPreview ? (
+        <PdfViewerModal
+          title={pdfPreview.title}
+          subtitle={pdfPreview.subtitle}
+          url={pdfPreview.url}
+          onClose={() => setPdfPreview(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -832,10 +832,13 @@ a {
 .commesse-table-shell {
   width: 100%;
   max-width: 100%;
+  max-height: calc(100vh - 330px);
+  min-height: 360px;
   min-width: 0;
-  overflow-x: auto;
+  overflow: auto;
   border: 1px solid rgba(240, 176, 137, 0.32);
   background: rgba(255, 255, 255, 0.52);
+  scrollbar-gutter: stable both-edges;
 }
 
 .commesse-table {
@@ -880,6 +883,9 @@ a {
 }
 
 .commesse-header-cell {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   padding: 0.85rem 0.8rem;
   background: linear-gradient(180deg, #ff7a18 0%, #eb5b19 100%);
   color: white;
@@ -2061,6 +2067,7 @@ a {
 
 .documentale-row-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
 }
@@ -2089,6 +2096,57 @@ a {
   border-bottom: 1px solid var(--diary-border);
   padding: 0.75rem;
   vertical-align: top;
+}
+
+.documentale-table input,
+.documentale-table select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--diary-border);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  background: #ffffff;
+  color: var(--diary-text);
+  font: inherit;
+}
+
+.document-link-button {
+  display: inline;
+  border: none;
+  background: transparent;
+  color: #0369a1;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.icon-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(240, 176, 137, 0.7);
+  border-radius: 8px;
+  background: #fff7ed;
+  color: var(--brand-dark);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.icon-action-button-danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+}
+
+.icon-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .documentale-alert-card {
@@ -2162,6 +2220,55 @@ a {
   border: 1px solid var(--diary-border);
   border-radius: 8px;
   background: #111827;
+}
+
+.pdf-viewer-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(17, 24, 39, 0.68);
+}
+
+.pdf-viewer-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1180px, 96vw);
+  height: min(860px, 92vh);
+  overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+.pdf-viewer-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid rgba(229, 231, 235, 0.95);
+}
+
+.pdf-viewer-modal-head h2 {
+  margin: 0.15rem 0;
+  color: #111827;
+  font-size: 1.15rem;
+}
+
+.pdf-viewer-modal-head p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.pdf-viewer-modal-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #2f3134;
 }
 
 .documentale-scan-form {
@@ -2399,6 +2506,46 @@ a {
   color: #ffffff;
   font-size: 0.9rem;
   font-weight: 800;
+}
+
+.dashboard-sync-control {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: end;
+  margin-top: 0.65rem;
+}
+
+.dashboard-sync-button {
+  min-height: 32px;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgba(234, 88, 12, 0.35);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--brand-dark);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.dashboard-sync-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.dashboard-sync-message,
+.dashboard-sync-error {
+  max-width: 180px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.dashboard-sync-message {
+  color: #166534;
+}
+
+.dashboard-sync-error {
+  color: #b91c1c;
 }
 
 .dashboard-grid,
@@ -3909,6 +4056,7 @@ a {
 .job-premium-material-chip {
   display: inline-flex;
   align-items: center;
+  gap: 0.45rem;
   min-height: 28px;
   padding: 0.25rem 0.45rem;
   border: 1px solid #fed7aa;
@@ -3917,6 +4065,18 @@ a {
   color: #9a3412;
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.job-premium-chip-action {
+  border: none;
+  border-radius: 8px;
+  background: #ea580c;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 900;
+  padding: 0.22rem 0.42rem;
 }
 
 .job-premium-diary-accordion {
@@ -5547,6 +5707,16 @@ a {
   .documentale-scan-modal {
     height: calc(100vh - 1rem);
     padding: 0.75rem;
+  }
+
+  .pdf-viewer-modal {
+    width: 100%;
+    height: calc(100vh - 1rem);
+  }
+
+  .pdf-viewer-modal-head {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .documentale-scan-modal-body {

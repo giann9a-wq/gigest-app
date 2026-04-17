@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PdfViewerModal } from "@/components/pdf-viewer-modal";
 
 type JobOrderOption = {
   id: string;
@@ -49,6 +50,14 @@ type ScanFormState = {
   usageDate: string;
   supplier: string;
   description: string;
+};
+
+type DeliveryNoteEditFormState = ScanFormState;
+
+type PdfPreviewState = {
+  title: string;
+  url: string;
+  subtitle?: string;
 };
 
 type DocumentaleTab = "bolle" | "scansioni";
@@ -120,6 +129,9 @@ export default function DocumentalePage() {
   const [syncing, setSyncing] = useState(false);
   const [selectedScan, setSelectedScan] = useState<ScannedDeliveryNoteRow | null>(null);
   const [scanForm, setScanForm] = useState<ScanFormState>(emptyScanForm());
+  const [editingDeliveryNoteId, setEditingDeliveryNoteId] = useState("");
+  const [deliveryNoteEditForm, setDeliveryNoteEditForm] = useState<DeliveryNoteEditFormState>(emptyScanForm());
+  const [pdfPreview, setPdfPreview] = useState<PdfPreviewState | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -165,6 +177,9 @@ export default function DocumentalePage() {
       const data = await safeJsonFetch("/api/documentale/scansioni");
       setScanRows(data.rows ?? []);
       setJobOrders((current) => (data.jobOrders?.length ? data.jobOrders : current));
+      if (data.suppliers?.length) {
+        setSuppliers(data.suppliers);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nel caricamento scansioni");
     } finally {
@@ -199,6 +214,78 @@ export default function DocumentalePage() {
       await loadRows();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nella validazione");
+    } finally {
+      setSavingId("");
+    }
+  }
+
+  function startEditDeliveryNote(row: DeliveryNoteDocumentRow) {
+    setEditingDeliveryNoteId(row.id);
+    setDeliveryNoteEditForm({
+      jobOrderId: row.jobOrderId,
+      usageDate: row.usageDate,
+      supplier: row.supplier,
+      description: row.description,
+    });
+    setError("");
+    setMessage("");
+  }
+
+  function cancelEditDeliveryNote() {
+    setEditingDeliveryNoteId("");
+    setDeliveryNoteEditForm(emptyScanForm());
+  }
+
+  async function updateDeliveryNote(id: string) {
+    const complete = Boolean(
+      deliveryNoteEditForm.jobOrderId.trim() &&
+        deliveryNoteEditForm.usageDate.trim() &&
+        deliveryNoteEditForm.supplier.trim() &&
+        deliveryNoteEditForm.description.trim()
+    );
+
+    if (!complete) {
+      setError("Compila tutti i campi obbligatori");
+      return;
+    }
+
+    setSavingId(id);
+    setError("");
+    setMessage("");
+
+    try {
+      await safeJsonFetch(`/api/documentale/bolle/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(deliveryNoteEditForm),
+      });
+      setMessage("Bolla aggiornata.");
+      cancelEditDeliveryNote();
+      await loadRows();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nella modifica bolla");
+    } finally {
+      setSavingId("");
+    }
+  }
+
+  async function deleteDeliveryNote(row: DeliveryNoteDocumentRow) {
+    const confirmed = window.confirm(`Eliminare la bolla "${row.supplier}" del ${formatDate(row.usageDate)}?`);
+    if (!confirmed) return;
+
+    setSavingId(row.id);
+    setError("");
+    setMessage("");
+
+    try {
+      await safeJsonFetch(`/api/documentale/bolle/${row.id}`, { method: "DELETE" });
+      setMessage("Bolla eliminata.");
+      if (editingDeliveryNoteId === row.id) {
+        cancelEditDeliveryNote();
+      }
+      await loadRows();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore eliminazione bolla");
     } finally {
       setSavingId("");
     }
@@ -403,35 +490,127 @@ export default function DocumentalePage() {
                   ) : (
                     rows.map((row) => (
                       <tr key={row.id}>
-                        <td>{formatDate(row.usageDate)}</td>
-                        <td><strong>{row.supplier}</strong></td>
-                        <td>{row.jobOrderName}</td>
-                        <td>{row.description}</td>
-                        <td>
-                          <span className={`delivery-note-status delivery-note-status-${row.validationStatus.toLowerCase()}`}>
-                            {row.validationStatusLabel}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="delivery-note-documents">
-                            {row.documents.length === 0 ? <span className="muted">Nessun allegato</span> : null}
-                            {row.documents.map((document) => (
-                              <a key={document.id} href={`/api/documentale/bolle/documenti/${document.id}`} target="_blank" rel="noreferrer">
-                                {document.fileName}
-                                {formatFileSize(document.sizeBytes) ? ` (${formatFileSize(document.sizeBytes)})` : ""}
-                              </a>
-                            ))}
-                          </div>
-                        </td>
-                        <td>
-                          {row.validationStatus === "PENDING" ? (
-                            <button type="button" className="button" onClick={() => void validateDeliveryNote(row.id)} disabled={savingId === row.id}>
-                              {savingId === row.id ? "Validazione..." : "Valida"}
-                            </button>
-                          ) : (
-                            <span className="muted">Validata</span>
-                          )}
-                        </td>
+                        {editingDeliveryNoteId === row.id ? (
+                          <>
+                            <td>
+                              <input
+                                type="date"
+                                value={deliveryNoteEditForm.usageDate}
+                                onChange={(event) =>
+                                  setDeliveryNoteEditForm((current) => ({ ...current, usageDate: event.target.value }))
+                                }
+                              />
+                            </td>
+                            <td>
+                              <input
+                                list="documentale-suppliers"
+                                value={deliveryNoteEditForm.supplier}
+                                onChange={(event) =>
+                                  setDeliveryNoteEditForm((current) => ({ ...current, supplier: event.target.value }))
+                                }
+                              />
+                            </td>
+                            <td>
+                              <select
+                                value={deliveryNoteEditForm.jobOrderId}
+                                onChange={(event) =>
+                                  setDeliveryNoteEditForm((current) => ({ ...current, jobOrderId: event.target.value }))
+                                }
+                              >
+                                <option value="">Seleziona commessa</option>
+                                {jobOrders.map((jobOrder) => (
+                                  <option key={jobOrder.id} value={jobOrder.id}>
+                                    {jobOrder.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <input
+                                value={deliveryNoteEditForm.description}
+                                onChange={(event) =>
+                                  setDeliveryNoteEditForm((current) => ({ ...current, description: event.target.value }))
+                                }
+                              />
+                            </td>
+                            <td>{row.validationStatusLabel}</td>
+                            <td>{row.documents.length} file</td>
+                            <td>
+                              <div className="documentale-row-actions">
+                                <button type="button" className="button" onClick={() => void updateDeliveryNote(row.id)} disabled={savingId === row.id}>
+                                  Salva
+                                </button>
+                                <button type="button" className="mobile-button-secondary" onClick={cancelEditDeliveryNote}>
+                                  Annulla
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td>{formatDate(row.usageDate)}</td>
+                            <td><strong>{row.supplier}</strong></td>
+                            <td>{row.jobOrderName}</td>
+                            <td>{row.description}</td>
+                            <td>
+                              <span className={`delivery-note-status delivery-note-status-${row.validationStatus.toLowerCase()}`}>
+                                {row.validationStatusLabel}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="delivery-note-documents">
+                                {row.documents.length === 0 ? <span className="muted">Nessun allegato</span> : null}
+                                {row.documents.map((document) => (
+                                  <button
+                                    key={document.id}
+                                    type="button"
+                                    className="document-link-button"
+                                    onClick={() =>
+                                      setPdfPreview({
+                                        title: document.fileName,
+                                        url: `/api/documentale/bolle/documenti/${document.id}`,
+                                        subtitle: `${row.supplier} - ${formatDate(row.usageDate)}`,
+                                      })
+                                    }
+                                  >
+                                    {document.fileName}
+                                    {formatFileSize(document.sizeBytes) ? ` (${formatFileSize(document.sizeBytes)})` : ""}
+                                  </button>
+                                ))}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="documentale-row-actions">
+                                {row.validationStatus === "PENDING" ? (
+                                  <button type="button" className="button" onClick={() => void validateDeliveryNote(row.id)} disabled={savingId === row.id}>
+                                    {savingId === row.id ? "Validazione..." : "Valida"}
+                                  </button>
+                                ) : (
+                                  <span className="muted">Validata</span>
+                                )}
+                                <button
+                                  type="button"
+                                  className="icon-action-button"
+                                  aria-label="Modifica bolla"
+                                  title="Modifica"
+                                  onClick={() => startEditDeliveryNote(row)}
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  type="button"
+                                  className="icon-action-button icon-action-button-danger"
+                                  aria-label="Elimina bolla"
+                                  title="Elimina"
+                                  onClick={() => void deleteDeliveryNote(row)}
+                                  disabled={savingId === row.id}
+                                >
+                                  🗑
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        )}
                       </tr>
                     ))
                   )}
@@ -557,6 +736,15 @@ export default function DocumentalePage() {
             </div>
           </section>
         </div>
+      ) : null}
+
+      {pdfPreview ? (
+        <PdfViewerModal
+          title={pdfPreview.title}
+          subtitle={pdfPreview.subtitle}
+          url={pdfPreview.url}
+          onClose={() => setPdfPreview(null)}
+        />
       ) : null}
     </div>
   );

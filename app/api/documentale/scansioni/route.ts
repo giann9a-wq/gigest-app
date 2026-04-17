@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
-  const [rows, jobOrders] = await Promise.all([
+  const [rows, jobOrders, deliveryNoteSuppliers, costSuppliers] = await Promise.all([
     prisma.scannedDeliveryNote.findMany({
       where: { status: ScannedDeliveryNoteStatus.NEW },
       orderBy: [{ receivedAt: "asc" }, { createdAt: "asc" }],
@@ -19,7 +19,32 @@ export async function GET() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, type: true },
     }),
+    prisma.deliveryNoteUsage.findMany({
+      distinct: ["supplier"],
+      orderBy: { supplier: "asc" },
+      select: { supplier: true },
+    }),
+    prisma.costActualEntry.findMany({
+      distinct: ["supplierName"],
+      where: {
+        supplierName: {
+          not: null,
+        },
+      },
+      orderBy: { supplierName: "asc" },
+      select: { supplierName: true },
+    }),
   ]);
+  const supplierSuggestions = [
+    ...new Set(
+      [
+        ...costSuppliers.map((item) => item.supplierName ?? ""),
+        ...deliveryNoteSuppliers.map((item) => item.supplier),
+      ]
+        .map((value) => value.trim())
+        .filter(Boolean)
+    ),
+  ].sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" }));
 
   return NextResponse.json({
     rows: rows.map((row) => ({
@@ -35,5 +60,6 @@ export async function GET() {
       importedAt: row.importedAt.toISOString(),
     })),
     jobOrders,
+    suppliers: supplierSuggestions,
   });
 }

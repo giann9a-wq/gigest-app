@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatItalianLongDate, formatItalianShortDate } from "@/lib/date-format";
+import { PdfViewerModal } from "@/components/pdf-viewer-modal";
 
 type ResourceOption = {
   value: string;
@@ -64,6 +65,12 @@ type DeliveryNoteFormState = {
   supplier: string;
   description: string;
   usageDate: string;
+};
+
+type PdfPreviewState = {
+  title: string;
+  url: string;
+  subtitle?: string;
 };
 
 type InternalEditableRow = {
@@ -1711,6 +1718,8 @@ function DeliveryNotesDiaryDialog({
   onUploadAttachment: (row: DeliveryNoteRow, file: File | null) => void;
   onOpenScans: () => void;
 }) {
+  const [pdfPreview, setPdfPreview] = useState<PdfPreviewState | null>(null);
+
   return (
     <div className="diary-print-backdrop" role="dialog" aria-modal="true">
       <section className="diary-print-dialog material-diary-dialog">
@@ -1841,14 +1850,20 @@ function DeliveryNotesDiaryDialog({
                                 <div className="delivery-note-documents">
                                   {row.documents.length === 0 ? <span className="muted">Nessun allegato</span> : null}
                                   {row.documents.map((document) => (
-                                    <a
+                                    <button
                                       key={document.id}
-                                      href={`/api/documentale/bolle/documenti/${document.id}`}
-                                      target="_blank"
-                                      rel="noreferrer"
+                                      type="button"
+                                      className="document-link-button"
+                                      onClick={() =>
+                                        setPdfPreview({
+                                          title: document.fileName,
+                                          url: `/api/documentale/bolle/documenti/${document.id}`,
+                                          subtitle: `${row.supplier} - ${formatItalianShortDate(row.usageDate)}`,
+                                        })
+                                      }
                                     >
                                       {document.fileName}
-                                    </a>
+                                    </button>
                                   ))}
                                   <label className="delivery-note-upload-inline">
                                     <span>{uploadingId === row.id ? "Caricamento..." : "Allega"}</span>
@@ -1888,6 +1903,14 @@ function DeliveryNotesDiaryDialog({
           )}
         </div>
       </section>
+      {pdfPreview ? (
+        <PdfViewerModal
+          title={pdfPreview.title}
+          subtitle={pdfPreview.subtitle}
+          url={pdfPreview.url}
+          onClose={() => setPdfPreview(null)}
+        />
+      ) : null}
     </div>
   );
 }

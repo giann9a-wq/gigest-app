@@ -272,6 +272,18 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       },
       deliveryNoteUsages: {
         orderBy: [{ usageDate: "desc" }, { createdAt: "desc" }],
+        include: {
+          documents: {
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              fileName: true,
+              mimeType: true,
+              sizeBytes: true,
+              createdAt: true,
+            },
+          },
+        },
       },
     },
   });
@@ -373,6 +385,13 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         id: string;
         usageDate: string;
         description: string;
+        documents: {
+          id: string;
+          fileName: string;
+          mimeType: string | null;
+          sizeBytes: number | null;
+          createdAt: string;
+        }[];
       }[];
     }
   >();
@@ -536,6 +555,13 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       id: deliveryNote.id,
       usageDate: deliveryNote.usageDate.toISOString().slice(0, 10),
       description: deliveryNote.description,
+      documents: deliveryNote.documents.map((document) => ({
+        id: document.id,
+        fileName: document.fileName,
+        mimeType: document.mimeType,
+        sizeBytes: document.sizeBytes,
+        createdAt: document.createdAt.toISOString(),
+      })),
     };
 
     if (current) {

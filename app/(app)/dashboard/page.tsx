@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { ScansSyncButton } from "@/components/dashboard/scans-sync-button";
 import { getScheduleEvents, type ScheduleEventRow } from "@/lib/schedule-events";
 import { prisma } from "@/lib/prisma";
 import {
@@ -124,6 +125,7 @@ export default async function DashboardPage() {
         <div className="dashboard-hero-badge">
           <span className="dashboard-hero-badge-label">Workspace</span>
           <strong>GiGEST</strong>
+          <ScansSyncButton />
         </div>
       </section>
 

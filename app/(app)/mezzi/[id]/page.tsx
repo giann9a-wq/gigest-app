@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { PdfViewerModal } from "@/components/pdf-viewer-modal";
 
 type EquipmentTypeValue = "VEHICLE" | "EQUIPMENT";
 type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
@@ -35,6 +36,12 @@ type MaintenanceRow = {
     fileName: string;
     filePath: string;
   }[];
+};
+
+type PdfPreviewState = {
+  title: string;
+  url: string;
+  subtitle?: string;
 };
 
 function makeEmptyCostRow(): CostRow {
@@ -116,6 +123,7 @@ export default function SchedaMezzoPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [pdfPreview, setPdfPreview] = useState<PdfPreviewState | null>(null);
 
   function setCostRow(localId: string, patch: Partial<CostRow>) {
     setCostRows((current) =>
@@ -311,7 +319,11 @@ async function handleOpenDocument(documentId: string) {
     const data = await safeJsonFetch(
       `/api/risorse/mezzi/${params.id}/maintenance/document/${documentId}`
     );
-    window.open(data.url, "_blank", "noopener,noreferrer");
+    setPdfPreview({
+      title: data.fileName || "Documento manutenzione",
+      url: data.url,
+      subtitle: equipment.nameDescription,
+    });
   } catch (err) {
     setError(err instanceof Error ? err.message : "Errore apertura documento");
   }
@@ -575,6 +587,14 @@ async function handleOpenDocument(documentId: string) {
           </div>
         </>
       )}
+      {pdfPreview ? (
+        <PdfViewerModal
+          title={pdfPreview.title}
+          subtitle={pdfPreview.subtitle}
+          url={pdfPreview.url}
+          onClose={() => setPdfPreview(null)}
+        />
+      ) : null}
     </div>
   );
 }
