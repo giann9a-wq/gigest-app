@@ -5429,8 +5429,13 @@ a {
     padding: 1px !important;
   }
 
-  .report-table td:not(.report-resource-name):not(.report-group-name) {
-    font-size: 6px !important;
+  .report-hour-value,
+  .report-day-number {
+    font-size: 7.5px !important;
+    line-height: 1;
+  }
+
+  .report-hour-value {
     font-weight: 600;
   }
 

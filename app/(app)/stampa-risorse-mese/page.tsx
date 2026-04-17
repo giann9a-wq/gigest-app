@@ -321,7 +321,7 @@ export default function StampaRisorseMesePage() {
                       key={`${day.iso}-number`}
                       className={day.isWeekend ? "report-weekend" : ""}
                     >
-                      {day.dayNumber}/{report.month}
+                      <span className="report-day-number">{day.dayNumber}/{report.month}</span>
                     </th>
                   ))}
                 </tr>
@@ -372,7 +372,7 @@ export default function StampaRisorseMesePage() {
                             .filter(Boolean)
                             .join(" ")}
                         >
-                          {formatHours(value)}
+                          <span className="report-hour-value">{formatHours(value)}</span>
                         </td>
                       ))}
                       <td
@@ -384,7 +384,7 @@ export default function StampaRisorseMesePage() {
                           .filter(Boolean)
                           .join(" ")}
                       >
-                        {formatHours(group.total)}
+                        <span className="report-hour-value">{formatHours(group.total)}</span>
                       </td>
                     </tr>
                   ))
