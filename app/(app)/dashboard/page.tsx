@@ -127,35 +127,41 @@ export default async function DashboardPage() {
         </div>
       </section>
 
+      {newScansCount > 0 || oldPendingDeliveryNotesCount > 0 ? (
+        <section className="dashboard-alert-stack" aria-label="Attivita da lavorare">
+          {newScansCount > 0 ? (
+            <a className="dashboard-work-alert dashboard-work-alert-scans" href="/documentale?tab=scansioni">
+              <span className="dashboard-work-alert-main">
+                <span className="dashboard-work-alert-count">{newScansCount}</span>
+                <span>
+                  <strong>Nuove scansioni da inserire</strong>
+                  <span className="dashboard-work-alert-copy">
+                    Ci sono bolle scansionate da lavorare nel documentale.
+                  </span>
+                </span>
+              </span>
+              <span className="dashboard-work-alert-action">Apri Bolle da inserire</span>
+            </a>
+          ) : null}
+
+          {oldPendingDeliveryNotesCount > 0 ? (
+            <a className="dashboard-work-alert dashboard-work-alert-validation" href="/documentale">
+              <span className="dashboard-work-alert-main">
+                <span className="dashboard-work-alert-count">{oldPendingDeliveryNotesCount}</span>
+                <span>
+                  <strong>Presenti Bolle da validare</strong>
+                  <span className="dashboard-work-alert-copy">
+                    Sono presenti bolle non validate oltre 45 giorni.
+                  </span>
+                </span>
+              </span>
+              <span className="dashboard-work-alert-action">Vai al Documentale</span>
+            </a>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="dashboard-grid">
-        {newScansCount > 0 ? (
-          <div className="card dashboard-card documentale-scan-alert-card">
-            <div className="dashboard-card-head">
-              <strong>Nuove scansioni da inserire</strong>
-              <span className="dashboard-pill">{newScansCount}</span>
-            </div>
-            <p className="muted">Hai {newScansCount} nuove scansioni da inserire.</p>
-            <a className="button documentale-alert-link" href="/documentale?tab=scansioni">
-              Apri Bolle da inserire
-            </a>
-          </div>
-        ) : null}
-
-        {oldPendingDeliveryNotesCount > 0 ? (
-          <div className="card dashboard-card documentale-alert-card">
-            <div className="dashboard-card-head">
-              <strong>Presenti Bolle da validare</strong>
-              <span className="dashboard-pill">{oldPendingDeliveryNotesCount}</span>
-            </div>
-            <p className="muted">
-              Sono presenti bolle non validate più vecchie di 45 giorni.
-            </p>
-            <a className="button documentale-alert-link" href="/documentale">
-              Vai al Documentale
-            </a>
-          </div>
-        ) : null}
-
         <div className="card dashboard-card dashboard-card-fixed">
           <div className="dashboard-card-head">
             <strong>Eventi di oggi</strong>
