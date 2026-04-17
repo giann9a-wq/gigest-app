@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 const GOOGLE_OAUTH_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
+const GOOGLE_DOCUMENTALE_SCOPES = [
+  "https://www.googleapis.com/auth/drive",
+  "https://www.googleapis.com/auth/gmail.readonly",
+].join(" ");
 
 export async function GET() {
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
@@ -19,7 +22,7 @@ export async function GET() {
   authUrl.searchParams.set("client_id", clientId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("scope", GOOGLE_DRIVE_SCOPE);
+  authUrl.searchParams.set("scope", GOOGLE_DOCUMENTALE_SCOPES);
   authUrl.searchParams.set("access_type", "offline");
   authUrl.searchParams.set("prompt", "consent");
   if (setupKey) {

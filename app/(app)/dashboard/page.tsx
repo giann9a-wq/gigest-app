@@ -1,7 +1,10 @@
 import { auth } from "@/auth";
 import { getScheduleEvents, type ScheduleEventRow } from "@/lib/schedule-events";
 import { prisma } from "@/lib/prisma";
-import { DeliveryNoteValidationStatus } from "@prisma/client";
+import {
+  DeliveryNoteValidationStatus,
+  ScannedDeliveryNoteStatus,
+} from "@prisma/client";
 
 function getUtcDateBoundsFromIso(isoDate: string) {
   return {
@@ -76,7 +79,7 @@ export default async function DashboardPage() {
   const oldPendingDeliveryNotesLimit = new Date(todayBounds.start);
   oldPendingDeliveryNotesLimit.setUTCDate(oldPendingDeliveryNotesLimit.getUTCDate() - 45);
 
-  const [scheduleEvents, oldPendingDeliveryNotesCount] = await Promise.all([
+  const [scheduleEvents, oldPendingDeliveryNotesCount, newScansCount] = await Promise.all([
     getScheduleEvents({
       from: todayBounds.start,
       to: nextThirtyDaysEnd,
@@ -87,6 +90,11 @@ export default async function DashboardPage() {
         usageDate: {
           lt: oldPendingDeliveryNotesLimit,
         },
+      },
+    }),
+    prisma.scannedDeliveryNote.count({
+      where: {
+        status: ScannedDeliveryNoteStatus.NEW,
       },
     }),
   ]);
@@ -120,6 +128,19 @@ export default async function DashboardPage() {
       </section>
 
       <section className="dashboard-grid">
+        {newScansCount > 0 ? (
+          <div className="card dashboard-card documentale-scan-alert-card">
+            <div className="dashboard-card-head">
+              <strong>Nuove scansioni da inserire</strong>
+              <span className="dashboard-pill">{newScansCount}</span>
+            </div>
+            <p className="muted">Hai {newScansCount} nuove scansioni da inserire.</p>
+            <a className="button documentale-alert-link" href="/documentale?tab=scansioni">
+              Apri Bolle da inserire
+            </a>
+          </div>
+        ) : null}
+
         {oldPendingDeliveryNotesCount > 0 ? (
           <div className="card dashboard-card documentale-alert-card">
             <div className="dashboard-card-head">

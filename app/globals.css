@@ -2008,6 +2008,21 @@ a {
   background: #fff7ed;
 }
 
+.documentale-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  margin-left: 0.45rem;
+  border-radius: 8px;
+  background: #f97316;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 0.1rem 0.4rem;
+}
+
 .documentale-filters {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) minmax(150px, 0.7fr) minmax(150px, 0.7fr) minmax(150px, 0.7fr) auto;
@@ -2075,10 +2090,114 @@ a {
   background: #fff7ed;
 }
 
+.documentale-scan-alert-card {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
 .documentale-alert-link {
   width: fit-content;
   margin-top: 0.75rem;
   text-decoration: none;
+}
+
+.documentale-scans-table td small {
+  display: block;
+  color: var(--diary-muted);
+  font-weight: 800;
+  margin-top: 0.15rem;
+}
+
+.documentale-scan-inline-alert {
+  min-height: 42px;
+  width: fit-content;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  background: #f0f9ff;
+  color: #0369a1;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 0.65rem 0.85rem;
+}
+
+.documentale-scan-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.68);
+}
+
+.documentale-scan-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1320px, 100%);
+  height: min(880px, calc(100vh - 2rem));
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 1rem;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.35);
+}
+
+.documentale-scan-modal-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.34fr);
+  gap: 1rem;
+  min-height: 0;
+}
+
+.documentale-pdf-viewer {
+  width: 100%;
+  height: 100%;
+  min-height: 560px;
+  border: 1px solid var(--diary-border);
+  border-radius: 8px;
+  background: #111827;
+}
+
+.documentale-scan-form {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--diary-border);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 0.9rem;
+}
+
+.documentale-scan-form label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.documentale-scan-form span {
+  color: var(--diary-muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.documentale-scan-form input,
+.documentale-scan-form select,
+.documentale-scan-form textarea {
+  min-height: 40px;
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: var(--diary-text);
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+}
+
+.documentale-scan-form textarea {
+  min-height: 130px;
+  resize: vertical;
 }
 
 .card {
@@ -5322,6 +5441,28 @@ a {
   .documentale-filter-actions .button,
   .documentale-filter-actions .mobile-button-secondary,
   .documentale-alert-link {
+    width: 100%;
+  }
+
+  .documentale-scan-modal {
+    height: calc(100vh - 1rem);
+    padding: 0.75rem;
+  }
+
+  .documentale-scan-modal-body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .documentale-pdf-viewer {
+    min-height: 420px;
+  }
+
+  .documentale-scan-form {
+    position: static;
+  }
+
+  .documentale-scan-inline-alert {
     width: 100%;
   }
 }

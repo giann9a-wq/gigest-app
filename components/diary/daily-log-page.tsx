@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import type { Route } from "next";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formatItalianLongDate, formatItalianShortDate } from "@/lib/date-format";
 
 type ResourceOption = {
@@ -403,6 +404,7 @@ function buildPrintHtml(days: PrintDay[], options: PrintOptions) {
 
 export function DailyLogPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [referenceDate, setReferenceDate] = useState(todayAsInputValue());
   const [resources, setResources] = useState<ResourceOption[]>([]);
   const [jobOrders, setJobOrders] = useState<JobOrderOption[]>([]);
@@ -430,6 +432,7 @@ export function DailyLogPage() {
   const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
   const [materialUnitSuggestions, setMaterialUnitSuggestions] = useState<string[]>([]);
   const [deliveryNoteRows, setDeliveryNoteRows] = useState<DeliveryNoteRow[]>([]);
+  const [newScansCount, setNewScansCount] = useState(0);
   const [deliveryNoteSupplierSuggestions, setDeliveryNoteSupplierSuggestions] = useState<string[]>([]);
   const [deliveryNoteDescriptionSuggestions, setDeliveryNoteDescriptionSuggestions] = useState<string[]>([]);
   const [materialForm, setMaterialForm] = useState<MaterialFormState>({
@@ -702,6 +705,25 @@ export function DailyLogPage() {
 
     void init();
   }, []);
+
+  useEffect(() => {
+    async function loadNewScansCount() {
+      try {
+        const data = await safeJsonFetch("/api/documentale/scansioni/count");
+        setNewScansCount(Number(data.count ?? 0));
+      } catch {
+        setNewScansCount(0);
+      }
+    }
+
+    void loadNewScansCount();
+  }, []);
+
+  useEffect(() => {
+    if (!loading && searchParams.get("open") === "bolle" && !deliveryNotesDialogOpen) {
+      openDeliveryNotesDialog();
+    }
+  }, [loading, searchParams, deliveryNotesDialogOpen]);
 
   useEffect(() => {
     async function refreshRows() {
@@ -1008,6 +1030,9 @@ export function DailyLogPage() {
     });
     setDeliveryNoteAttachment(null);
     setEditingDeliveryNoteId("");
+    void safeJsonFetch("/api/documentale/scansioni/count")
+      .then((data) => setNewScansCount(Number(data.count ?? 0)))
+      .catch(() => setNewScansCount(0));
     void loadDeliveryNoteRows(initialJobOrderId);
   }
 
@@ -1425,6 +1450,7 @@ export function DailyLogPage() {
           editingId={editingDeliveryNoteId}
           supplierSuggestions={deliveryNoteSupplierSuggestions}
           descriptionSuggestions={deliveryNoteDescriptionSuggestions}
+          newScansCount={newScansCount}
           loading={deliveryNotesLoading}
           saving={deliveryNotesSaving}
           uploadingId={deliveryNoteUploadingId}
@@ -1440,6 +1466,7 @@ export function DailyLogPage() {
           onUpdate={() => void handleUpdateDeliveryNote()}
           onDelete={(row) => void handleDeleteDeliveryNote(row)}
           onUploadAttachment={(row, file) => void handleUploadDeliveryNoteAttachment(row, file)}
+          onOpenScans={() => router.push("/documentale?tab=scansioni&source=diario-bolle" as Route)}
         />
       ) : null}
     </div>
@@ -1640,6 +1667,7 @@ function DeliveryNotesDiaryDialog({
   editingId,
   supplierSuggestions,
   descriptionSuggestions,
+  newScansCount,
   loading,
   saving,
   uploadingId,
@@ -1655,6 +1683,7 @@ function DeliveryNotesDiaryDialog({
   onUpdate,
   onDelete,
   onUploadAttachment,
+  onOpenScans,
 }: {
   jobOrders: JobOrderOption[];
   selectedJobOrderId: string;
@@ -1664,6 +1693,7 @@ function DeliveryNotesDiaryDialog({
   editingId: string;
   supplierSuggestions: string[];
   descriptionSuggestions: string[];
+  newScansCount: number;
   loading: boolean;
   saving: boolean;
   uploadingId: string;
@@ -1679,6 +1709,7 @@ function DeliveryNotesDiaryDialog({
   onUpdate: () => void;
   onDelete: (row: DeliveryNoteRow) => void;
   onUploadAttachment: (row: DeliveryNoteRow, file: File | null) => void;
+  onOpenScans: () => void;
 }) {
   return (
     <div className="diary-print-backdrop" role="dialog" aria-modal="true">
@@ -1704,6 +1735,12 @@ function DeliveryNotesDiaryDialog({
               ))}
             </select>
           </label>
+
+          {newScansCount > 0 ? (
+            <button type="button" className="documentale-scan-inline-alert" onClick={onOpenScans}>
+              Ci sono {newScansCount} nuove scansioni da inserire
+            </button>
+          ) : null}
 
           {selectedJobOrderId ? (
             <>

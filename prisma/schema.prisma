@@ -131,6 +131,12 @@ enum DeliveryNoteValidationStatus {
   VALIDATED
 }
 
+enum ScannedDeliveryNoteStatus {
+  NEW
+  INSERTED
+  ERROR
+}
+
 model User {
   id          String     @id @default(cuid())
   googleSub   String?    @unique
@@ -633,11 +639,39 @@ model DeliveryNoteUsage {
   updatedBy   User?                  @relation("DeliveryNoteUsageUpdatedBy", fields: [updatedByUserId], references: [id])
   validatedBy User?                  @relation("DeliveryNoteUsageValidatedBy", fields: [validatedByUserId], references: [id])
   documents   DeliveryNoteDocument[]
+  sourceScan  ScannedDeliveryNote?
 
   @@index([jobOrderId, usageDate])
   @@index([supplier])
   @@index([description])
   @@index([validationStatus, usageDate])
+}
+
+model ScannedDeliveryNote {
+  id              String                    @id @default(cuid())
+  gmailMessageId  String
+  gmailAttachmentId String
+  gmailInternalDate DateTime?
+  fromEmail       String
+  subject         String?
+  fileName        String
+  driveFileId     String                    @unique
+  mimeType        String?
+  sizeBytes       Int?
+  status          ScannedDeliveryNoteStatus @default(NEW)
+  errorMessage    String?
+  deliveryNoteId  String?                   @unique
+  receivedAt      DateTime                  @default(now())
+  importedAt      DateTime                  @default(now())
+  insertedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  deliveryNote DeliveryNoteUsage? @relation(fields: [deliveryNoteId], references: [id], onDelete: SetNull)
+
+  @@unique([gmailMessageId, gmailAttachmentId])
+  @@index([status, receivedAt])
+  @@index([fromEmail])
 }
 
 model DeliveryNoteDocument {
