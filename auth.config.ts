@@ -8,7 +8,6 @@ const authConfig = {
       authorization: {
         params: {
           access_type: "offline",
-          prompt: "consent",
           scope: [
             "openid",
             "email",

@@ -1,4 +1,5 @@
-import { signIn } from "@/auth";
+import { auth, signIn } from "@/auth";
+import { redirect } from "next/navigation";
 
 function getErrorMessage(error?: string) {
   if (error === "AccessDenied") {
@@ -13,6 +14,12 @@ export default async function LoginPage({
 }: {
   searchParams?: Promise<{ error?: string }>;
 }) {
+  const session = await auth();
+
+  if (session) {
+    redirect("/dashboard");
+  }
+
   const params = (await searchParams) ?? {};
   const errorMessage = getErrorMessage(params.error);
 

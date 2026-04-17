@@ -1,7 +1,15 @@
 import Link from "next/link";
 import type { Route } from "next";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await auth();
+
+  if (session) {
+    redirect("/dashboard");
+  }
+
   return (
     <section className="grid gap-6">
       <div className="card">
