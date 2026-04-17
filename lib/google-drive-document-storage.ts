@@ -216,3 +216,16 @@ export async function downloadDriveFile(driveFileId: string) {
 
   return Buffer.from(await response.arrayBuffer());
 }
+
+export async function deleteDriveFile(driveFileId: string) {
+  const accessToken = await getGoogleDriveAccessToken();
+  const response = await driveFetch(
+    accessToken,
+    `${GOOGLE_DRIVE_API_URL}/files/${encodeURIComponent(driveFileId)}`,
+    { method: "DELETE" }
+  );
+
+  if (!response.ok && response.status !== 404) {
+    throw new Error("Eliminazione documento da Google Drive fallita");
+  }
+}

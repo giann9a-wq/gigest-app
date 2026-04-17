@@ -1150,9 +1150,12 @@ export function DailyLogPage() {
     }
   }
 
-  async function uploadDeliveryNoteAttachment(deliveryNoteId: string, file: File) {
+  async function uploadDeliveryNoteAttachment(deliveryNoteId: string, file: File, replaceExisting = false) {
     const formData = new FormData();
     formData.append("file", file);
+    if (replaceExisting) {
+      formData.append("replace", "true");
+    }
 
     await safeJsonFetch(`/api/diario/bolle/${deliveryNoteId}/documenti`, {
       method: "POST",
@@ -1160,7 +1163,7 @@ export function DailyLogPage() {
     });
   }
 
-  async function handleUploadDeliveryNoteAttachment(row: DeliveryNoteRow, file: File | null) {
+  async function handleUploadDeliveryNoteAttachment(row: DeliveryNoteRow, file: File | null, replaceExisting = false) {
     if (!selectedDeliveryNoteJobOrderId || !file) return;
 
     setDeliveryNoteUploadingId(row.id);
@@ -1168,8 +1171,8 @@ export function DailyLogPage() {
     setMessage("");
 
     try {
-      await uploadDeliveryNoteAttachment(row.id, file);
-      setMessage("Allegato caricato.");
+      await uploadDeliveryNoteAttachment(row.id, file, replaceExisting);
+      setMessage(replaceExisting ? "Allegato sostituito." : "Allegato caricato.");
       await loadDeliveryNoteRows(selectedDeliveryNoteJobOrderId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nel caricamento allegato");
@@ -1472,7 +1475,7 @@ export function DailyLogPage() {
           onCancelEdit={() => setEditingDeliveryNoteId("")}
           onUpdate={() => void handleUpdateDeliveryNote()}
           onDelete={(row) => void handleDeleteDeliveryNote(row)}
-          onUploadAttachment={(row, file) => void handleUploadDeliveryNoteAttachment(row, file)}
+          onUploadAttachment={(row, file, replaceExisting) => void handleUploadDeliveryNoteAttachment(row, file, replaceExisting)}
           onOpenScans={() => router.push("/documentale?tab=scansioni&source=diario-bolle" as Route)}
         />
       ) : null}
@@ -1715,7 +1718,7 @@ function DeliveryNotesDiaryDialog({
   onCancelEdit: () => void;
   onUpdate: () => void;
   onDelete: (row: DeliveryNoteRow) => void;
-  onUploadAttachment: (row: DeliveryNoteRow, file: File | null) => void;
+  onUploadAttachment: (row: DeliveryNoteRow, file: File | null, replaceExisting?: boolean) => void;
   onOpenScans: () => void;
 }) {
   const [pdfPreview, setPdfPreview] = useState<PdfPreviewState | null>(null);
@@ -1827,7 +1830,44 @@ function DeliveryNotesDiaryDialog({
                               <td><input list="delivery-note-supplier-suggestions" value={editForm.supplier} onChange={(event) => onEditFormChange({ supplier: event.target.value })} /></td>
                               <td><input list="delivery-note-description-suggestions" value={editForm.description} onChange={(event) => onEditFormChange({ description: event.target.value })} /></td>
                               <td>{row.validationStatusLabel}</td>
-                              <td>{row.documents.length} file</td>
+                              <td>
+                                <div className="delivery-note-documents">
+                                  {row.documents.map((document, index) => (
+                                    <button
+                                      key={document.id}
+                                      type="button"
+                                      className="document-link-button"
+                                      onClick={() =>
+                                        setPdfPreview({
+                                          title: document.fileName,
+                                          url: `/api/documentale/bolle/documenti/${document.id}`,
+                                          subtitle: `${row.supplier} - ${formatItalianShortDate(row.usageDate)}`,
+                                        })
+                                      }
+                                    >
+                                      {row.documents.length > 1 ? `Vedi bolla pdf ${index + 1}` : "Vedi bolla pdf"}
+                                    </button>
+                                  ))}
+                                  <label className="delivery-note-upload-inline">
+                                    <span>
+                                      {uploadingId === row.id
+                                        ? "Caricamento..."
+                                        : row.documents.length > 0
+                                          ? "Sostituisci allegato"
+                                          : "Allega"}
+                                    </span>
+                                    <input
+                                      type="file"
+                                      accept="application/pdf,image/*"
+                                      disabled={Boolean(uploadingId)}
+                                      onChange={(event) => {
+                                        onUploadAttachment(row, event.target.files?.[0] ?? null, row.documents.length > 0);
+                                        event.currentTarget.value = "";
+                                      }}
+                                    />
+                                  </label>
+                                </div>
+                              </td>
                               <td>
                                 <div className="material-diary-row-actions">
                                   <button type="button" onClick={onUpdate} disabled={saving}>Salva</button>
@@ -1849,7 +1889,7 @@ function DeliveryNotesDiaryDialog({
                               <td>
                                 <div className="delivery-note-documents">
                                   {row.documents.length === 0 ? <span className="muted">Nessun allegato</span> : null}
-                                  {row.documents.map((document) => (
+                                  {row.documents.map((document, index) => (
                                     <button
                                       key={document.id}
                                       type="button"
@@ -1862,21 +1902,23 @@ function DeliveryNotesDiaryDialog({
                                         })
                                       }
                                     >
-                                      {document.fileName}
+                                      {row.documents.length > 1 ? `Vedi bolla pdf ${index + 1}` : "Vedi bolla pdf"}
                                     </button>
                                   ))}
-                                  <label className="delivery-note-upload-inline">
-                                    <span>{uploadingId === row.id ? "Caricamento..." : "Allega"}</span>
-                                    <input
-                                      type="file"
-                                      accept="application/pdf,image/*"
-                                      disabled={Boolean(uploadingId)}
-                                      onChange={(event) => {
-                                        onUploadAttachment(row, event.target.files?.[0] ?? null);
-                                        event.currentTarget.value = "";
-                                      }}
-                                    />
-                                  </label>
+                                  {row.documents.length === 0 ? (
+                                    <label className="delivery-note-upload-inline">
+                                      <span>{uploadingId === row.id ? "Caricamento..." : "Allega"}</span>
+                                      <input
+                                        type="file"
+                                        accept="application/pdf,image/*"
+                                        disabled={Boolean(uploadingId)}
+                                        onChange={(event) => {
+                                          onUploadAttachment(row, event.target.files?.[0] ?? null);
+                                          event.currentTarget.value = "";
+                                        }}
+                                      />
+                                    </label>
+                                  ) : null}
                                 </div>
                               </td>
                               <td>
