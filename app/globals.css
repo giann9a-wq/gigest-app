@@ -5306,7 +5306,7 @@ a {
 @media print {
   @page {
     size: A4 landscape;
-    margin: 10mm;
+    margin: 6mm;
   }
 
   body {
@@ -5350,7 +5350,7 @@ a {
   }
 
   .report-sheet-header {
-    margin-bottom: 8px !important;
+    margin-bottom: 5px !important;
   }
 
   .report-table-wrap {
@@ -5362,14 +5362,18 @@ a {
     width: 100% !important;
     min-width: 0 !important;
     table-layout: fixed;
-    font-size: 9px !important;
+    font-size: 7px !important;
   }
 
   .report-table th,
   .report-table td {
-    padding: 2px 3px;
+    padding: 1px 2px;
     min-width: 0 !important;
-    word-break: break-word;
+    height: 18px;
+    line-height: 1.05;
+    overflow-wrap: normal;
+    white-space: nowrap;
+    word-break: normal;
   }
 
   .report-fixed-col,
@@ -5382,15 +5386,15 @@ a {
   }
 
   .report-resource-col {
-    width: 90px !important;
+    width: 68px !important;
   }
 
   .report-group-col {
-    width: 70px !important;
+    width: 48px !important;
   }
 
   .report-total-col {
-    width: 52px !important;
+    width: 38px !important;
   }
 
   .report-resource-name,
@@ -5398,22 +5402,40 @@ a {
     white-space: normal !important;
   }
 
+  .report-resource-name {
+    font-size: 7px !important;
+    line-height: 1.05;
+  }
+
+  .report-group-name {
+    font-size: 7px !important;
+    line-height: 1.05;
+  }
+
+  .report-resource-block {
+    gap: 1px !important;
+  }
+
   .report-main-title {
-    font-size: 18px !important;
+    font-size: 14px !important;
   }
 
   .report-kicker,
   .report-period-label,
   .report-resource-total,
   .muted {
-    font-size: 10px !important;
+    font-size: 7px !important;
   }
 
   .report-period-card {
     background: #f3f4f6 !important;
     border-color: #d1d5db !important;
-    min-width: 160px !important;
-    padding: 6px 8px !important;
+    min-width: 120px !important;
+    padding: 4px 6px !important;
+  }
+
+  .report-period {
+    font-size: 10px !important;
   }
 
   .report-weekend {
