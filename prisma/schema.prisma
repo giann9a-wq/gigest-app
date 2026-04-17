@@ -134,6 +134,7 @@ enum DeliveryNoteValidationStatus {
 enum ScannedDeliveryNoteStatus {
   NEW
   INSERTED
+  REJECTED
   ERROR
 }
 
@@ -656,6 +657,7 @@ model ScannedDeliveryNote {
   subject         String?
   fileName        String
   driveFileId     String                    @unique
+  fileHash        String?
   mimeType        String?
   sizeBytes       Int?
   status          ScannedDeliveryNoteStatus @default(NEW)
@@ -671,6 +673,7 @@ model ScannedDeliveryNote {
 
   @@unique([gmailMessageId, gmailAttachmentId])
   @@index([status, receivedAt])
+  @@index([fromEmail, fileHash])
   @@index([fromEmail])
 }
 

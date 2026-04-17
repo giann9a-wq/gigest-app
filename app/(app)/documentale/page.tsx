@@ -254,6 +254,28 @@ export default function DocumentalePage() {
     }
   }
 
+  async function rejectScan(scan: ScannedDeliveryNoteRow) {
+    const confirmed = window.confirm(`Rifiutare la scansione "${scan.fileName}"? Non ricomparira nelle nuove scansioni.`);
+    if (!confirmed) return;
+
+    setSavingId(scan.id);
+    setError("");
+    setMessage("");
+
+    try {
+      await safeJsonFetch(`/api/documentale/scansioni/${scan.id}/rifiuta`, { method: "POST" });
+      setMessage("Scansione rifiutata.");
+      if (selectedScan?.id === scan.id) {
+        setSelectedScan(null);
+      }
+      await loadScans();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel rifiuto scansione");
+    } finally {
+      setSavingId("");
+    }
+  }
+
   return (
     <div className="documentale-page">
       <section className="dashboard-hero">
@@ -458,9 +480,14 @@ export default function DocumentalePage() {
                       <td>{scan.subject || "-"}</td>
                       <td><span className="delivery-note-status delivery-note-status-pending">{scan.statusLabel}</span></td>
                       <td>
+                        <div className="documentale-row-actions">
                         <button type="button" className="button" onClick={() => openScan(scan)}>
                           Apri
                         </button>
+                          <button type="button" className="mobile-button-secondary" onClick={() => void rejectScan(scan)} disabled={savingId === scan.id}>
+                            Rifiuta
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -491,6 +518,11 @@ export default function DocumentalePage() {
                 title={`Scansione ${selectedScan.fileName}`}
               />
               <aside className="documentale-scan-form">
+                <datalist id="documentale-suppliers">
+                  {suppliers.map((item) => (
+                    <option key={item} value={item} />
+                  ))}
+                </datalist>
                 <label>
                   <span>Commessa</span>
                   <select value={scanForm.jobOrderId} onChange={(event) => setScanForm((current) => ({ ...current, jobOrderId: event.target.value }))}>
@@ -508,7 +540,11 @@ export default function DocumentalePage() {
                 </label>
                 <label>
                   <span>Fornitore</span>
-                  <input value={scanForm.supplier} onChange={(event) => setScanForm((current) => ({ ...current, supplier: event.target.value }))} />
+                  <input
+                    list="documentale-suppliers"
+                    value={scanForm.supplier}
+                    onChange={(event) => setScanForm((current) => ({ ...current, supplier: event.target.value }))}
+                  />
                 </label>
                 <label>
                   <span>Descrizione</span>

@@ -1,4 +1,5 @@
 import { ScannedDeliveryNoteStatus } from "@prisma/client";
+import { createHash } from "crypto";
 import {
   ensureScannedDeliveryNotesFolder,
   getGoogleDriveAccessToken,
@@ -44,6 +45,10 @@ function base64UrlDecode(value: string) {
   const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
   return Buffer.from(padded, "base64");
+}
+
+function hashBuffer(buffer: Buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
 }
 
 function headerValue(message: GmailMessage, name: string) {
@@ -187,6 +192,27 @@ export async function syncGmailScannedDeliveryNotes() {
 
         const fileName = attachment.filename?.trim() || `scansione-${message.id}.pdf`;
         const buffer = await fetchAttachment(accessToken, message.id, attachmentId);
+        const fileHash = hashBuffer(buffer);
+        const existingByHash = await prisma.scannedDeliveryNote.findFirst({
+          where: {
+            fromEmail,
+            fileHash,
+            status: {
+              in: [
+                ScannedDeliveryNoteStatus.NEW,
+                ScannedDeliveryNoteStatus.INSERTED,
+                ScannedDeliveryNoteStatus.REJECTED,
+              ],
+            },
+          },
+          select: { id: true },
+        });
+
+        if (existingByHash) {
+          skipped += 1;
+          continue;
+        }
+
         const uploaded = await uploadDocumentBufferToDrive({
           fileName,
           mimeType: "application/pdf",
@@ -203,6 +229,7 @@ export async function syncGmailScannedDeliveryNotes() {
             subject,
             fileName: uploaded.fileName,
             driveFileId: uploaded.driveFileId,
+            fileHash,
             mimeType: uploaded.mimeType,
             sizeBytes: uploaded.sizeBytes,
             status: ScannedDeliveryNoteStatus.NEW,
