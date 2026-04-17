@@ -633,35 +633,26 @@ export default function DocumentalePage() {
             <table className="documentale-table documentale-scans-table">
               <thead>
                 <tr>
-                  <th>Ricezione</th>
-                  <th>File</th>
-                  <th>Mittente</th>
-                  <th>Oggetto</th>
+                  <th>Data scansione</th>
                   <th>Stato</th>
                   <th>Azioni</th>
                 </tr>
               </thead>
               <tbody>
                 {scansLoading ? (
-                  <tr><td colSpan={6}>Caricamento scansioni...</td></tr>
+                  <tr><td colSpan={3}>Caricamento scansioni...</td></tr>
                 ) : scanRows.length === 0 ? (
-                  <tr><td colSpan={6}>Nessuna nuova scansione da inserire.</td></tr>
+                  <tr><td colSpan={3}>Nessuna nuova scansione da inserire.</td></tr>
                 ) : (
                   scanRows.map((scan) => (
                     <tr key={scan.id}>
                       <td>{formatDateTime(scan.receivedAt)}</td>
-                      <td>
-                        <strong>{scan.fileName}</strong>
-                        {formatFileSize(scan.sizeBytes) ? <small>{formatFileSize(scan.sizeBytes)}</small> : null}
-                      </td>
-                      <td>{scan.fromEmail}</td>
-                      <td>{scan.subject || "-"}</td>
                       <td><span className="delivery-note-status delivery-note-status-pending">{scan.statusLabel}</span></td>
                       <td>
-                        <div className="documentale-row-actions">
-                        <button type="button" className="button" onClick={() => openScan(scan)}>
-                          Apri
-                        </button>
+                        <div className="documentale-row-actions documentale-scans-actions">
+                          <button type="button" className="button" onClick={() => openScan(scan)}>
+                            Apri
+                          </button>
                           <button type="button" className="mobile-button-secondary" onClick={() => void rejectScan(scan)} disabled={savingId === scan.id}>
                             Rifiuta
                           </button>

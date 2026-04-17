@@ -2216,6 +2216,36 @@ a {
   margin-top: 0.15rem;
 }
 
+.documentale-scans-table {
+  min-width: 520px;
+}
+
+.documentale-scans-table th:nth-child(1),
+.documentale-scans-table td:nth-child(1) {
+  width: auto;
+}
+
+.documentale-scans-table th:nth-child(2),
+.documentale-scans-table td:nth-child(2) {
+  width: 130px;
+}
+
+.documentale-scans-table th:nth-child(3),
+.documentale-scans-table td:nth-child(3) {
+  width: 190px;
+}
+
+.documentale-scans-actions {
+  flex-wrap: nowrap;
+}
+
+.documentale-scans-actions .button,
+.documentale-scans-actions .mobile-button-secondary {
+  min-height: 38px;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+}
+
 .documentale-scan-inline-alert {
   min-height: 42px;
   width: fit-content;
