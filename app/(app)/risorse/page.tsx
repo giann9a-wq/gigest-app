@@ -2,14 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ResourceTabs } from "@/components/layout/resource-tabs";
 
 type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
-type PersonSortKey =
-  | "fullName"
-  | "roleDescription"
-  | "contacts"
-  | "status"
-  | "hourlyCost";
+type PersonSortKey = "fullName" | "roleDescription" | "contacts" | "status" | "hourlyCost";
 type SortDirection = "asc" | "desc";
 
 type EditablePersonRow = {
@@ -94,6 +90,10 @@ function compareNumberString(a: string, b: string) {
   return aNumber - bNumber;
 }
 
+function sortArrow(direction: SortDirection) {
+  return direction === "asc" ? "\u2191" : "\u2193";
+}
+
 export default function RisorsePage() {
   const router = useRouter();
 
@@ -105,15 +105,15 @@ export default function RisorsePage() {
   const [filters, setFilters] = useState<PersonFilters>(getEmptyFilters());
   const [sortKey, setSortKey] = useState<PersonSortKey>("fullName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   function setRowValue(localId: string, patch: Partial<EditablePersonRow>) {
-    setRows((current) =>
-      current.map((row) => (row.localId === localId ? { ...row, ...patch } : row))
-    );
+    setRows((current) => current.map((row) => (row.localId === localId ? { ...row, ...patch } : row)));
   }
 
   function setFilterValue<K extends keyof PersonFilters>(key: K, value: PersonFilters[K]) {
@@ -131,14 +131,64 @@ export default function RisorsePage() {
   }
 
   function addRow() {
-    setRows((current) => [...current, makeEmptyRow()]);
+    const nextRow = makeEmptyRow();
+    setRows((current) => [...current, nextRow]);
+    setEditingRowId(nextRow.localId);
   }
 
-  function removeRow(localId: string) {
+  async function persistRows(nextRows: EditablePersonRow[], successMessage: string) {
+    const payloadRows = nextRows.map((row) => ({
+      id: row.id,
+      fullName: row.fullName,
+      roleDescription: row.roleDescription,
+      contacts: row.contacts,
+      status: row.status,
+      hourlyCost: row.hourlyCost,
+    }));
+
+    const data = await safeJsonFetch("/api/risorse/personale", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: payloadRows }),
+    });
+
+    setMessage(successMessage || `Salvataggio completato. Righe salvate: ${data.savedRows}.`);
+    await loadRows();
+  }
+
+  async function deleteRow(row: EditablePersonRow, index: number) {
+    const label = row.fullName || `riga ${index + 1}`;
+    const confirmed = window.confirm(`Eliminare la risorsa "${label}"?`);
+    if (!confirmed) return;
+
+    setSaving(true);
+    setSavingRowId(row.localId);
+    setMessage("");
+    setError("");
+
+    try {
+      const updated = rows.filter((current) => current.localId !== row.localId);
+      const nextRows = updated.length > 0 ? updated : [makeEmptyRow()];
+      setRows(nextRows);
+      await persistRows(nextRows, "Risorsa eliminata.");
+      if (editingRowId === row.localId) {
+        setEditingRowId(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore eliminazione risorsa");
+      await loadRows();
+    } finally {
+      setSaving(false);
+      setSavingRowId(null);
+    }
+  }
+
+  function removeUnsavedRow(localId: string) {
     setRows((current) => {
       const updated = current.filter((row) => row.localId !== localId);
       return updated.length > 0 ? updated : [makeEmptyRow()];
     });
+    setEditingRowId(null);
   }
 
   async function loadRows() {
@@ -163,6 +213,7 @@ export default function RisorsePage() {
           }))
         );
       }
+      setEditingRowId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nel caricamento risorse");
     } finally {
@@ -174,36 +225,31 @@ export default function RisorsePage() {
     loadRows();
   }, []);
 
-  async function handleSave() {
+  async function saveRow(row: EditablePersonRow) {
     setSaving(true);
+    setSavingRowId(row.localId);
     setMessage("");
     setError("");
 
     try {
-      const payloadRows = rows.map((row) => ({
-        id: row.id,
-        fullName: row.fullName,
-        roleDescription: row.roleDescription,
-        contacts: row.contacts,
-        status: row.status,
-        hourlyCost: row.hourlyCost,
-      }));
-
-      const data = await safeJsonFetch("/api/risorse/personale", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ rows: payloadRows }),
-      });
-
-      setMessage(`Salvataggio completato. Righe salvate: ${data.savedRows}.`);
-      await loadRows();
+      await persistRows(rows, "Risorsa salvata.");
+      setEditingRowId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore nel salvataggio");
+      setError(err instanceof Error ? err.message : "Errore nel salvataggio risorsa");
     } finally {
       setSaving(false);
+      setSavingRowId(null);
     }
+  }
+
+  function cancelEdit(row: EditablePersonRow) {
+    if (!row.id) {
+      removeUnsavedRow(row.localId);
+      return;
+    }
+
+    setEditingRowId(null);
+    void loadRows();
   }
 
   const visibleRows = useMemo(() => {
@@ -213,11 +259,11 @@ export default function RisorsePage() {
         matchesFilter(row.roleDescription, filters.roleDescription) &&
         matchesFilter(row.contacts, filters.contacts) &&
         (filters.status ? row.status === filters.status : true) &&
-        matchesFilter(row.hourlyCost, filters.hourlyCost)
+        (filters.hourlyCost ? matchesFilter(String(row.hourlyCost), filters.hourlyCost) : true)
       );
     });
 
-    const sorted = [...filtered].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       let result = 0;
 
       switch (sortKey) {
@@ -240,111 +286,60 @@ export default function RisorsePage() {
 
       return sortDirection === "asc" ? result : -result;
     });
-
-    return sorted;
-  }, [filters, rows, sortDirection, sortKey]);
+  }, [rows, filters, sortKey, sortDirection]);
 
   function renderSortLabel(label: string, key: PersonSortKey) {
     if (sortKey !== key) return label;
-    return `${label} ${sortDirection === "asc" ? "↑" : "↓"}`;
+    return `${label} ${sortArrow(sortDirection)}`;
   }
 
   return (
     <div className="grid gap-4">
-      <div className="card">
+      <div className="card commesse-page-card">
         <div className="mobile-section-header">
           <div>
-            <h1 className="mobile-section-title">Vedi risorse</h1>
-            <p className="mobile-section-subtitle">
-              Gestisci il personale con una lettura piu rapida e campi comodi da usare anche da smartphone.
-            </p>
+            <h1 className="mobile-section-title">Gestione Risorse</h1>
           </div>
         </div>
 
-        <div className="mobile-segmented">
-          <button className="button mobile-segmented-button" type="button">
-            Personale
-          </button>
-          <button
-            className="button mobile-segmented-button"
-            type="button"
-            onClick={() => router.push("/caricamenti")}
-            style={{
-              background: "linear-gradient(180deg, #0f766e 0%, #115e59 100%)",
-              borderColor: "#115e59",
-              boxShadow: "0 10px 24px rgba(17, 94, 89, 0.22)",
-            }}
-          >
-            Caricamenti
-          </button>
-          <button
-            className="button mobile-segmented-button"
-            type="button"
-            onClick={() => router.push("/mezzi")}
-          >
-            Mezzi e Attrezzature
-          </button>
-        </div>
+        <ResourceTabs current="people" />
 
-        {message ? (
-          <div style={{ color: "#166534", fontWeight: 700, marginBottom: 16 }}>{message}</div>
-        ) : null}
-        {error ? (
-          <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 16 }}>{error}</div>
-        ) : null}
+        {message ? <div style={{ color: "#166534", fontWeight: 700, marginBottom: 16 }}>{message}</div> : null}
+        {error ? <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 16 }}>{error}</div> : null}
 
-        <div className="mobile-toolbar">
-          <div className="mobile-table-meta" style={{ color: "#6b7280", fontSize: 14 }}>
-            Righe visibili: <strong>{visibleRows.length}</strong> su {rows.length}
-          </div>
-          <div className="mobile-toolbar-actions">
-            <button
-              type="button"
-              className="mobile-button-secondary"
-              onClick={() => setFilters(getEmptyFilters())}
-            >
-              Azzera filtri
-            </button>
-          </div>
-        </div>
-
-        <div className="card mobile-filters">
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Nome e Cognome</span>
+        <div className="commesse-filter-bar">
+          <label className="report-control commesse-filter-name">
+            <span>Nome e Cognome</span>
             <input
               value={filters.fullName}
               onChange={(e) => setFilterValue("fullName", e.target.value)}
               placeholder="Filtra nome"
-              className="mobile-data-input"
             />
           </label>
 
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Mansione</span>
+          <label className="report-control">
+            <span>Mansione</span>
             <input
               value={filters.roleDescription}
               onChange={(e) => setFilterValue("roleDescription", e.target.value)}
               placeholder="Filtra mansione"
-              className="mobile-data-input"
             />
           </label>
 
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Contatti</span>
+          <label className="report-control">
+            <span>Contatti</span>
             <input
               value={filters.contacts}
               onChange={(e) => setFilterValue("contacts", e.target.value)}
               placeholder="Filtra contatti"
-              className="mobile-data-input"
             />
           </label>
 
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Stato</span>
+          <label className="report-control">
+            <span>Stato</span>
             <select
               value={filters.status}
               onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")}
-              className="mobile-data-select"
             >
               <option value="">Tutti</option>
               <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
@@ -353,190 +348,203 @@ export default function RisorsePage() {
             </select>
           </label>
 
-          <label className="mobile-data-field">
-            <span className="mobile-data-label">Costo Orario</span>
+          <label className="report-control">
+            <span>Costo Orario</span>
             <input
               value={filters.hourlyCost}
               onChange={(e) => setFilterValue("hourlyCost", e.target.value)}
               placeholder="Filtra costo"
-              className="mobile-data-input"
             />
           </label>
+
+          <button type="button" className="report-print-btn" onClick={() => setFilters(getEmptyFilters())}>
+            Azzera filtri
+          </button>
         </div>
 
-        <div className="mobile-table-shell">
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="mobile-toolbar">
+          <div className="mobile-table-meta commesse-table-meta">
+            Righe visibili: <strong>{visibleRows.length}</strong> su {rows.length}
+          </div>
+        </div>
+
+        <div className="mobile-table-shell commesse-table-shell">
+          <table className="commesse-table risorse-table">
+            <colgroup>
+              <col className="risorse-col-name" />
+              <col className="risorse-col-role" />
+              <col className="risorse-col-contacts" />
+              <col className="risorse-col-status" />
+              <col className="risorse-col-cost" />
+              <col className="risorse-col-action" />
+            </colgroup>
             <thead>
               <tr>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("fullName")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("fullName")} className="commesse-sort-button">
                     {renderSortLabel("Nome e Cognome", "fullName")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button
-                    type="button"
-                    onClick={() => toggleSort("roleDescription")}
-                    style={headerButtonStyle}
-                  >
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("roleDescription")} className="commesse-sort-button">
                     {renderSortLabel("Mansione", "roleDescription")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("contacts")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("contacts")} className="commesse-sort-button">
                     {renderSortLabel("Contatti", "contacts")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("status")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("status")} className="commesse-sort-button">
                     {renderSortLabel("Stato", "status")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("hourlyCost")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("hourlyCost")} className="commesse-sort-button">
                     {renderSortLabel("Costo Orario", "hourlyCost")}
                   </button>
                 </th>
-                <th style={headerCell}>Apri Scheda</th>
-                <th style={headerCellTiny}></th>
-              </tr>
-              <tr>
-                <th style={filterHeaderCell}>
-                  <input
-                    value={filters.fullName}
-                    onChange={(e) => setFilterValue("fullName", e.target.value)}
-                    placeholder="Filtra nome"
-                    style={filterInputStyle}
-                  />
-                </th>
-                <th style={filterHeaderCell}>
-                  <input
-                    value={filters.roleDescription}
-                    onChange={(e) => setFilterValue("roleDescription", e.target.value)}
-                    placeholder="Filtra mansione"
-                    style={filterInputStyle}
-                  />
-                </th>
-                <th style={filterHeaderCell}>
-                  <input
-                    value={filters.contacts}
-                    onChange={(e) => setFilterValue("contacts", e.target.value)}
-                    placeholder="Filtra contatti"
-                    style={filterInputStyle}
-                  />
-                </th>
-                <th style={filterHeaderCell}>
-                  <select
-                    value={filters.status}
-                    onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")}
-                    style={filterInputStyle}
-                  >
-                    <option value="">Tutti</option>
-                    <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
-                    <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
-                    <option value="ENDED">{statusLabel("ENDED")}</option>
-                  </select>
-                </th>
-                <th style={filterHeaderCell}>
-                  <input
-                    value={filters.hourlyCost}
-                    onChange={(e) => setFilterValue("hourlyCost", e.target.value)}
-                    placeholder="Filtra costo"
-                    style={filterInputStyle}
-                  />
-                </th>
-                <th style={filterHeaderCell}></th>
-                <th style={filterHeaderCell}></th>
+                <th className="commesse-header-cell commesse-actions-header">Menu Azioni</th>
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map((row, index) => (
-                <tr key={row.localId}>
-                  <td style={bodyCell}>
-                    <input
-                      type="text"
-                      value={row.fullName}
-                      onChange={(e) => setRowValue(row.localId, { fullName: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Nome e Cognome"
-                      disabled={loading}
-                    />
-                  </td>
+              {visibleRows.map((row, index) => {
+                const isEditing = editingRowId === row.localId;
 
-                  <td style={bodyCell}>
-                    <input
-                      type="text"
-                      value={row.roleDescription}
-                      onChange={(e) => setRowValue(row.localId, { roleDescription: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Mansione"
-                      disabled={loading}
-                    />
-                  </td>
-
-                  <td style={bodyCell}>
-                    <input
-                      type="text"
-                      value={row.contacts}
-                      onChange={(e) => setRowValue(row.localId, { contacts: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Telefono / Email"
-                      disabled={loading}
-                    />
-                  </td>
-
-                  <td style={bodyCell}>
-                    <select
-                      value={row.status}
-                      onChange={(e) =>
-                        setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })
-                      }
-                      style={inputStyle}
-                      disabled={loading}
-                    >
-                      <option value="">Seleziona stato</option>
-                      <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
-                      <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
-                      <option value="ENDED">{statusLabel("ENDED")}</option>
-                    </select>
-                  </td>
-
-                  <td style={bodyCell}>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={row.hourlyCost}
-                      onChange={(e) => setRowValue(row.localId, { hourlyCost: e.target.value })}
-                      style={inputStyle}
-                      placeholder="0.00"
-                      disabled={loading}
-                    />
-                  </td>
-
-                  <td style={bodyCell}>
-                    <button
-                      className="button"
-                      type="button"
-                      disabled={!row.id}
-                      onClick={() => row.id && router.push(`/risorse/${row.id}`)}
-                    >
-                      Apri Scheda
-                    </button>
-                  </td>
-
-                  <td style={bodyCellTiny}>
-                    <button
-                      type="button"
-                      onClick={() => removeRow(row.localId)}
-                      style={removeButtonStyle}
-                      title={`Rimuovi riga ${index + 1}`}
-                    >
-                      ×
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                return (
+                  <tr key={row.localId}>
+                    <td className="commesse-body-cell">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={row.fullName}
+                          onChange={(e) => setRowValue(row.localId, { fullName: e.target.value })}
+                          className="commesse-table-input"
+                          placeholder="Nome e Cognome"
+                          disabled={loading || saving}
+                        />
+                      ) : (
+                        <span className="commesse-table-value commesse-table-value-strong">{row.fullName || "-"}</span>
+                      )}
+                    </td>
+                    <td className="commesse-body-cell">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={row.roleDescription}
+                          onChange={(e) => setRowValue(row.localId, { roleDescription: e.target.value })}
+                          className="commesse-table-input"
+                          placeholder="Mansione"
+                          disabled={loading || saving}
+                        />
+                      ) : (
+                        <span className="commesse-table-value">{row.roleDescription || "-"}</span>
+                      )}
+                    </td>
+                    <td className="commesse-body-cell">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={row.contacts}
+                          onChange={(e) => setRowValue(row.localId, { contacts: e.target.value })}
+                          className="commesse-table-input"
+                          placeholder="Telefono / Email"
+                          disabled={loading || saving}
+                        />
+                      ) : (
+                        <span className="commesse-table-value">{row.contacts || "-"}</span>
+                      )}
+                    </td>
+                    <td className="commesse-body-cell">
+                      {isEditing ? (
+                        <select
+                          value={row.status}
+                          onChange={(e) => setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })}
+                          className="commesse-table-input"
+                          disabled={loading || saving}
+                        >
+                          <option value="">Seleziona stato</option>
+                          <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
+                          <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
+                          <option value="ENDED">{statusLabel("ENDED")}</option>
+                        </select>
+                      ) : (
+                        <span className="commesse-table-value">{row.status ? statusLabel(row.status as ResourceStatusValue) : "-"}</span>
+                      )}
+                    </td>
+                    <td className="commesse-body-cell">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={row.hourlyCost}
+                          onChange={(e) => setRowValue(row.localId, { hourlyCost: e.target.value })}
+                          className="commesse-table-input"
+                          placeholder="0.00"
+                          disabled={loading || saving}
+                        />
+                      ) : (
+                        <span className="commesse-table-value">{row.hourlyCost || "-"}</span>
+                      )}
+                    </td>
+                    <td className="commesse-body-cell commesse-actions-cell">
+                      <div className="commesse-row-actions">
+                        <button
+                          className="open-sheet-link-button"
+                          type="button"
+                          disabled={!row.id || isEditing}
+                          onClick={() => row.id && router.push(`/risorse/${row.id}`)}
+                        >
+                          Apri Scheda
+                        </button>
+                        {isEditing ? (
+                          <>
+                            <button
+                              className="button commesse-save-row-button"
+                              type="button"
+                              onClick={() => void saveRow(row)}
+                              disabled={saving || loading}
+                            >
+                              {savingRowId === row.localId ? "Salvo..." : "Salva"}
+                            </button>
+                            <button
+                              type="button"
+                              className="mobile-button-secondary commesse-cancel-row-button"
+                              onClick={() => cancelEdit(row)}
+                              disabled={saving}
+                            >
+                              Annulla
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="icon-action-button"
+                            aria-label="Modifica risorsa"
+                            title="Modifica"
+                            onClick={() => setEditingRowId(row.localId)}
+                            disabled={loading || !row.id}
+                          >
+                            ✎
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => (row.id ? void deleteRow(row, index) : removeUnsavedRow(row.localId))}
+                          className="icon-action-button icon-action-button-danger"
+                          aria-label="Elimina risorsa"
+                          title={`Elimina riga ${index + 1}`}
+                          disabled={saving}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -547,190 +555,120 @@ export default function RisorsePage() {
               <div className="mobile-data-card-head">
                 <div>
                   <div className="mobile-data-label">Risorsa</div>
-                  <strong>{row.fullName || `Nuova risorsa ${index + 1}`}</strong>
+                  <strong>{row.fullName || `Riga ${index + 1}`}</strong>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeRow(row.localId)}
-                  className="mobile-danger-button"
-                  title={`Rimuovi riga ${index + 1}`}
-                >
-                  ×
-                </button>
               </div>
 
-              <div className="mobile-data-card-grid">
-                <label className="mobile-data-field mobile-data-field-full">
-                  <span className="mobile-data-label">Nome e Cognome</span>
-                  <input
-                    type="text"
-                    value={row.fullName}
-                    onChange={(e) => setRowValue(row.localId, { fullName: e.target.value })}
-                    className="mobile-data-input"
-                    placeholder="Nome e Cognome"
-                    disabled={loading}
-                  />
-                </label>
-
-                <label className="mobile-data-field">
-                  <span className="mobile-data-label">Mansione</span>
-                  <input
-                    type="text"
-                    value={row.roleDescription}
-                    onChange={(e) => setRowValue(row.localId, { roleDescription: e.target.value })}
-                    className="mobile-data-input"
-                    placeholder="Mansione"
-                    disabled={loading}
-                  />
-                </label>
-
-                <label className="mobile-data-field">
-                  <span className="mobile-data-label">Stato</span>
-                  <select
-                    value={row.status}
-                    onChange={(e) =>
-                      setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })
-                    }
-                    className="mobile-data-select"
-                    disabled={loading}
-                  >
-                    <option value="">Seleziona stato</option>
-                    <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
-                    <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
-                    <option value="ENDED">{statusLabel("ENDED")}</option>
-                  </select>
-                </label>
-
-                <label className="mobile-data-field mobile-data-field-full">
-                  <span className="mobile-data-label">Contatti</span>
-                  <input
-                    type="text"
-                    value={row.contacts}
-                    onChange={(e) => setRowValue(row.localId, { contacts: e.target.value })}
-                    className="mobile-data-input"
-                    placeholder="Telefono / Email"
-                    disabled={loading}
-                  />
-                </label>
-
-                <label className="mobile-data-field">
-                  <span className="mobile-data-label">Costo Orario</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={row.hourlyCost}
-                    onChange={(e) => setRowValue(row.localId, { hourlyCost: e.target.value })}
-                    className="mobile-data-input"
-                    placeholder="0.00"
-                    disabled={loading}
-                  />
-                </label>
-              </div>
+              {editingRowId === row.localId ? (
+                <div className="mobile-data-card-grid">
+                  <label className="mobile-data-field mobile-data-field-full">
+                    <span className="mobile-data-label">Nome e Cognome</span>
+                    <input
+                      type="text"
+                      value={row.fullName}
+                      onChange={(e) => setRowValue(row.localId, { fullName: e.target.value })}
+                      className="mobile-data-input"
+                      disabled={loading || saving}
+                    />
+                  </label>
+                  <label className="mobile-data-field mobile-data-field-full">
+                    <span className="mobile-data-label">Mansione</span>
+                    <input
+                      type="text"
+                      value={row.roleDescription}
+                      onChange={(e) => setRowValue(row.localId, { roleDescription: e.target.value })}
+                      className="mobile-data-input"
+                      disabled={loading || saving}
+                    />
+                  </label>
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Stato</span>
+                    <select
+                      value={row.status}
+                      onChange={(e) => setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })}
+                      className="mobile-data-select"
+                      disabled={loading || saving}
+                    >
+                      <option value="">Seleziona stato</option>
+                      <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
+                      <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
+                      <option value="ENDED">{statusLabel("ENDED")}</option>
+                    </select>
+                  </label>
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Costo Orario</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.hourlyCost}
+                      onChange={(e) => setRowValue(row.localId, { hourlyCost: e.target.value })}
+                      className="mobile-data-input"
+                      disabled={loading || saving}
+                    />
+                  </label>
+                  <label className="mobile-data-field mobile-data-field-full">
+                    <span className="mobile-data-label">Contatti</span>
+                    <input
+                      type="text"
+                      value={row.contacts}
+                      onChange={(e) => setRowValue(row.localId, { contacts: e.target.value })}
+                      className="mobile-data-input"
+                      disabled={loading || saving}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="mobile-data-card-grid">
+                  <div className="mobile-data-field">
+                    <span className="mobile-data-label">Mansione</span>
+                    <strong>{row.roleDescription || "-"}</strong>
+                  </div>
+                  <div className="mobile-data-field">
+                    <span className="mobile-data-label">Stato</span>
+                    <strong>{row.status ? statusLabel(row.status as ResourceStatusValue) : "-"}</strong>
+                  </div>
+                  <div className="mobile-data-field">
+                    <span className="mobile-data-label">Costo Orario</span>
+                    <strong>{row.hourlyCost || "-"}</strong>
+                  </div>
+                  <div className="mobile-data-field mobile-data-field-full">
+                    <span className="mobile-data-label">Contatti</span>
+                    <strong>{row.contacts || "-"}</strong>
+                  </div>
+                </div>
+              )}
 
               <div className="mobile-data-actions">
                 <button
-                  className="button"
+                  className="open-sheet-link-button"
                   type="button"
-                  disabled={!row.id}
+                  disabled={!row.id || editingRowId === row.localId}
                   onClick={() => row.id && router.push(`/risorse/${row.id}`)}
                 >
                   Apri Scheda
                 </button>
+                {editingRowId === row.localId ? (
+                  <>
+                    <button className="button" type="button" onClick={() => void saveRow(row)} disabled={saving || loading}>
+                      {savingRowId === row.localId ? "Salvo..." : "Salva"}
+                    </button>
+                    <button className="mobile-button-secondary" type="button" onClick={() => cancelEdit(row)} disabled={saving}>
+                      Annulla
+                    </button>
+                  </>
+                ) : null}
               </div>
             </article>
           ))}
         </div>
 
         <div className="mobile-footer-actions" style={{ marginTop: 18 }}>
-          <button
-            type="button"
-            onClick={addRow}
-            className="mobile-button-success"
-            aria-label="Aggiungi riga"
-          >
+          <button type="button" onClick={addRow} className="mobile-button-success" aria-label="Aggiungi riga">
             +
           </button>
-
-          <div className="mobile-toolbar-actions">
-            <button className="button" type="button" disabled>
-              Modifica
-            </button>
-            <button className="button" type="button" onClick={handleSave} disabled={saving || loading}>
-              {saving ? "Salvataggio..." : "Salva"}
-            </button>
-          </div>
         </div>
       </div>
     </div>
   );
 }
-
-const headerCell: React.CSSProperties = {
-  background: "#f97316",
-  color: "white",
-  textAlign: "left",
-  padding: "12px 10px",
-  fontWeight: 700,
-  border: "2px solid white",
-};
-
-const filterHeaderCell: React.CSSProperties = {
-  background: "#ffd9c2",
-  padding: "8px 10px",
-  border: "2px solid white",
-};
-
-const headerCellTiny: React.CSSProperties = {
-  ...headerCell,
-  width: 56,
-};
-
-const bodyCell: React.CSSProperties = {
-  background: "#fdf2f2",
-  border: "2px solid white",
-  padding: 6,
-};
-
-const bodyCellTiny: React.CSSProperties = {
-  ...bodyCell,
-  width: 56,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 8px",
-  borderRadius: 8,
-  border: "1px solid #d1d5db",
-  background: "white",
-};
-
-const filterInputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 8px",
-  borderRadius: 8,
-  border: "1px solid #f08a54",
-  background: "white",
-};
-
-const headerButtonStyle: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "white",
-  padding: 0,
-  font: "inherit",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const removeButtonStyle: React.CSSProperties = {
-  width: 34,
-  height: 34,
-  borderRadius: 8,
-  border: "none",
-  background: "#ef4444",
-  color: "white",
-  fontSize: 22,
-  lineHeight: 1,
-  cursor: "pointer",
-};

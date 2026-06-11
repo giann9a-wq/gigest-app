@@ -11,16 +11,22 @@ export type ScheduleEventRow = {
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
+  recurrenceRule: string | null;
   origin: DeadlineOrigin;
   originLabel: string;
   lastSource: SyncSource;
   maintenanceId: string | null;
+  trainingId: string | null;
   canEdit: boolean;
   canDelete: boolean;
   eventKind: ScheduleEventKind;
   linkedEquipment: {
     id: string;
     nameDescription: string;
+  } | null;
+  linkedPerson: {
+    id: string;
+    fullName: string;
   } | null;
   linkedJobOrder: {
     id: string;
@@ -34,7 +40,9 @@ function getDayEnd(date: Date) {
 }
 
 function toDeadlineOriginLabel(origin: DeadlineOrigin) {
-  return origin === DeadlineOrigin.MAINTENANCE ? "Manutenzione" : "Manuale";
+  if (origin === DeadlineOrigin.MAINTENANCE) return "Manutenzione";
+  if (origin === DeadlineOrigin.TRAINING) return "Formazione";
+  return "Manuale";
 }
 
 export async function getScheduleEvents({
@@ -59,6 +67,16 @@ export async function getScheduleEvents({
               select: {
                 id: true,
                 nameDescription: true,
+              },
+            },
+          },
+        },
+        training: {
+          include: {
+            person: {
+              select: {
+                id: true,
+                fullName: true,
               },
             },
           },
@@ -91,10 +109,12 @@ export async function getScheduleEvents({
     startTime: row.startTime,
     endTime: row.endTime,
     isAllDay: row.isAllDay,
+    recurrenceRule: row.recurrenceRule,
     origin: row.origin,
     originLabel: toDeadlineOriginLabel(row.origin),
     lastSource: row.lastSource,
     maintenanceId: row.maintenanceId,
+    trainingId: row.trainingId,
     canEdit: row.origin === DeadlineOrigin.MANUAL,
     canDelete: row.origin === DeadlineOrigin.MANUAL,
     eventKind: "DEADLINE",
@@ -102,6 +122,12 @@ export async function getScheduleEvents({
       ? {
           id: row.maintenance.equipment.id,
           nameDescription: row.maintenance.equipment.nameDescription,
+        }
+      : null,
+    linkedPerson: row.training?.person
+      ? {
+          id: row.training.person.id,
+          fullName: row.training.person.fullName,
         }
       : null,
     linkedJobOrder: null,
@@ -117,14 +143,17 @@ export async function getScheduleEvents({
       startTime: null,
       endTime: null,
       isAllDay: true,
+      recurrenceRule: null,
       origin: DeadlineOrigin.MANUAL,
       originLabel: "Fine commessa",
       lastSource: SyncSource.GIGEST,
       maintenanceId: null,
+      trainingId: null,
       canEdit: false,
       canDelete: false,
       eventKind: "JOB_ORDER_END",
       linkedEquipment: null,
+      linkedPerson: null,
       linkedJobOrder: {
         id: jobOrder.id,
         name: jobOrder.name,

@@ -2,6 +2,43 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
+function buildSupplierSuggestions(
+  supplierNames: string[],
+  externalNames: string[],
+  usageNames: string[]
+) {
+  const stats = new Map<string, { name: string; usageCount: number; sourceRank: number }>();
+
+  function addName(value: string | null | undefined, usageCount: number, sourceRank: number) {
+    const name = value?.trim();
+    if (!name) return;
+    const key = name.toLocaleLowerCase("it");
+    const current = stats.get(key);
+
+    if (!current) {
+      stats.set(key, { name, usageCount, sourceRank });
+      return;
+    }
+
+    current.usageCount += usageCount;
+    current.sourceRank = Math.min(current.sourceRank, sourceRank);
+    if (name.length > current.name.length) current.name = name;
+  }
+
+  supplierNames.forEach((name) => addName(name, 0, 0));
+  externalNames.forEach((name) => addName(name, 0, 1));
+  usageNames.forEach((name) => addName(name, 1, 2));
+
+  return [...stats.values()]
+    .sort(
+      (a, b) =>
+        b.usageCount - a.usageCount ||
+        a.sourceRank - b.sourceRank ||
+        a.name.localeCompare(b.name, "it", { sensitivity: "base" })
+    )
+    .map((item) => ({ id: item.name, name: item.name, usageCount: item.usageCount }));
+}
+
 export async function GET() {
   const session = await auth();
 
@@ -9,7 +46,16 @@ export async function GET() {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
-  const [people, equipment, jobOrders, externalResources] = await Promise.all([
+  const [
+    people,
+    equipment,
+    jobOrders,
+    costSuppliers,
+    costStagingSuppliers,
+    costCorrectionSuppliers,
+    externalResources,
+    externalActivityResources,
+  ] = await Promise.all([
     prisma.person.findMany({
       where: { status: "ACTIVE" },
       orderBy: { fullName: "asc" },
@@ -19,7 +65,7 @@ export async function GET() {
       },
     }),
     prisma.equipment.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", isVisibleInDiary: true },
       orderBy: { nameDescription: "asc" },
       select: {
         id: true,
@@ -36,11 +82,38 @@ export async function GET() {
         type: true,
       },
     }),
+    prisma.costActualEntry.findMany({
+      distinct: ["supplierName"],
+      where: { supplierName: { not: null } },
+      orderBy: { supplierName: "asc" },
+      select: { supplierName: true },
+    }),
+    prisma.costImportRowStaging.findMany({
+      distinct: ["supplierName"],
+      where: { supplierName: { not: null } },
+      orderBy: { supplierName: "asc" },
+      select: { supplierName: true },
+    }),
+    prisma.costImportCorrectionRule.findMany({
+      distinct: ["supplierName"],
+      where: { supplierName: { not: null } },
+      orderBy: { supplierName: "asc" },
+      select: { supplierName: true },
+    }),
     prisma.externalResource.findMany({
       orderBy: { name: "asc" },
       select: {
         id: true,
         name: true,
+      },
+    }),
+    prisma.externalDiaryActivity.findMany({
+      select: {
+        externalResource: {
+          select: {
+            name: true,
+          },
+        },
       },
     }),
   ]);
@@ -61,6 +134,14 @@ export async function GET() {
   return NextResponse.json({
     resources,
     jobOrders,
-    externalResources,
+    externalResources: buildSupplierSuggestions(
+      [
+        ...costSuppliers.map((item) => item.supplierName ?? ""),
+        ...costStagingSuppliers.map((item) => item.supplierName ?? ""),
+        ...costCorrectionSuppliers.map((item) => item.supplierName ?? ""),
+      ],
+      externalResources.map((item) => item.name),
+      externalActivityResources.map((item) => item.externalResource.name)
+    ),
   });
 }

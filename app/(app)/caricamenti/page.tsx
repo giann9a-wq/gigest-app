@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ResourceTabs } from "@/components/layout/resource-tabs";
 
 type ResourceOption = {
   value: string;
@@ -283,6 +284,8 @@ export default function CaricamentiPage() {
             </p>
           </div>
         </div>
+
+        <ResourceTabs current="loadings" />
 
         <div className="stats-filter-bar" style={{ marginTop: 20 }}>
           <label className="report-control">

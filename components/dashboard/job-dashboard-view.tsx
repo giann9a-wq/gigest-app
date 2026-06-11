@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { PdfViewerModal } from "@/components/pdf-viewer-modal";
 import { formatCurrency, formatPercent, formatQuantity } from "@/lib/number-format";
 
@@ -57,6 +57,21 @@ type ExternalDetailGroup = {
   totalDays: number;
   entryCount: number;
   entries: ExternalDetailEntry[];
+};
+
+type ExternalEconomyDetailEntry = {
+  id: string;
+  referenceDate: string;
+  hours: number;
+  description: string;
+};
+
+type ExternalEconomyDetailGroup = {
+  resourceId: string;
+  resourceLabel: string;
+  totalHours: number;
+  entryCount: number;
+  entries: ExternalEconomyDetailEntry[];
 };
 
 type MaterialUsageDetail = {
@@ -153,12 +168,7 @@ export type JobOrderDashboardResponse = {
     externalEconomyResources: {
       totalHours: number;
       totalEntries: number;
-      details: Array<{
-        resourceId: string;
-        resourceLabel: string;
-        totalHours: number;
-        entryCount: number;
-      }>;
+      details: ExternalEconomyDetailGroup[];
     };
     materialUsages: {
       totalEntries: number;
@@ -189,6 +199,37 @@ export type JobOrderDashboardResponse = {
         rows: ImportedCostMovement[];
       }>;
     }>;
+    revenueDetails: {
+      invoices: {
+        totalAmount: number;
+        entryCount: number;
+        rows: Array<{
+          id: string;
+          documentDate: string;
+          invoiceNumber: string;
+          customerCode: string;
+          customerName: string;
+          netAmount: number;
+          vatAmount: number;
+          grossAmount: number;
+        }>;
+      };
+      advances: {
+        activeAmount: number;
+        inactiveAmount: number;
+        entryCount: number;
+        activeCount: number;
+        rows: Array<{
+          id: string;
+          advanceDate: string;
+          description: string;
+          amount: number;
+          isActive: boolean;
+          disabledReason: string;
+          disabledAt: string | null;
+        }>;
+      };
+    };
   };
 };
 
@@ -197,16 +238,19 @@ type DashboardCategory = {
   label: string;
   budget: number;
   actual: number;
+  totalHours?: number;
   groups: Array<{
     key: string;
     name: string;
     entryCount: number;
     totalAmount: number;
+    totalHours?: number;
     movements: Array<{
       id: string;
       date: string;
       description: string;
       amount: number;
+      hours?: number;
     }>;
   }>;
 };
@@ -285,16 +329,19 @@ function buildDashboardCategories(dashboard: JobOrderDashboardResponse): Dashboa
       label: "Utilizzo Personale",
       budget: dashboard.budget.personnel,
       actual: dashboard.actual.personnel,
+      totalHours: dashboard.actual.personnelDetails.reduce((sum, detail) => sum + detail.totalHours, 0),
       groups: dashboard.actual.personnelDetails.map((detail) => ({
         key: detail.resourceId,
         name: detail.resourceLabel,
         entryCount: detail.entries.length,
         totalAmount: detail.totalCost,
+        totalHours: detail.totalHours,
         movements: detail.entries.map((entry) => ({
           id: entry.id,
           date: entry.referenceDate,
           description: entry.description || `${formatQuantity(entry.hours, "h")} personale`,
           amount: entry.totalCost,
+          hours: entry.hours,
         })),
       })),
     },
@@ -303,16 +350,19 @@ function buildDashboardCategories(dashboard: JobOrderDashboardResponse): Dashboa
       label: "Utilizzo Mezzi e Attrezzature",
       budget: dashboard.budget.equipment,
       actual: dashboard.actual.equipment,
+      totalHours: dashboard.actual.equipmentDetails.reduce((sum, detail) => sum + detail.totalHours, 0),
       groups: dashboard.actual.equipmentDetails.map((detail) => ({
         key: detail.resourceId,
         name: detail.resourceLabel,
         entryCount: detail.entries.length,
         totalAmount: detail.totalCost,
+        totalHours: detail.totalHours,
         movements: detail.entries.map((entry) => ({
           id: entry.id,
           date: entry.referenceDate,
           description: entry.description || `${formatQuantity(entry.hours, "h")} mezzo`,
           amount: entry.totalCost,
+          hours: entry.hours,
         })),
       })),
     },
@@ -583,6 +633,9 @@ function JobCostBreakdownAccordion({ categories }: { categories: DashboardCatego
                 <span className="job-premium-category-metric">
                   <small>Actual</small>
                   <strong>{formatCurrency(category.actual)}</strong>
+                  {category.totalHours !== undefined ? (
+                    <small>{formatQuantity(category.totalHours, "h")}</small>
+                  ) : null}
                 </span>
                 <span className={`job-premium-delta job-premium-delta-${deltaTone}`}>{formatCurrency(delta)}</span>
                 <span className="job-premium-mini-progress"><i style={{ width: `${progress}%` }} /></span>
@@ -598,15 +651,30 @@ function JobCostBreakdownAccordion({ categories }: { categories: DashboardCatego
                         <span className="job-premium-expand job-premium-expand-small">+</span>
                         <span>
                           <strong>{group.name}</strong>
-                          <small>{group.entryCount} movimenti</small>
+                          <small>
+                            {group.entryCount} movimenti
+                            {group.totalHours !== undefined
+                              ? ` · ${formatQuantity(group.totalHours, "h")}`
+                              : ""}
+                          </small>
                         </span>
-                        <strong>{formatCurrency(group.totalAmount)}</strong>
+                        <span className="job-premium-group-total">
+                          {group.totalHours !== undefined ? (
+                            <small>{formatQuantity(group.totalHours, "h")}</small>
+                          ) : null}
+                          <strong>{formatCurrency(group.totalAmount)}</strong>
+                        </span>
                       </summary>
                       <div className="job-premium-movement-list">
                         {group.movements.map((movement) => (
                           <div key={movement.id} className="job-premium-movement-row">
                             <span>{formatDate(movement.date)}</span>
                             <p>{movement.description || "Movimento"}</p>
+                            {movement.hours !== undefined ? (
+                              <span className="job-premium-movement-hours">
+                                {formatQuantity(movement.hours, "h")}
+                              </span>
+                            ) : null}
                             <strong>{formatCurrency(movement.amount)}</strong>
                           </div>
                         ))}
@@ -619,6 +687,105 @@ function JobCostBreakdownAccordion({ categories }: { categories: DashboardCatego
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function JobRevenueSummary({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
+  const invoices = dashboard.actual.revenueDetails.invoices;
+  const advances = dashboard.actual.revenueDetails.advances;
+  const revenueRows = [
+    ...invoices.rows.map((row) => ({
+      id: `invoice-${row.id}`,
+      type: "invoice" as const,
+      date: row.documentDate,
+      title: row.invoiceNumber || "Fattura",
+      description: row.customerName || row.customerCode || "-",
+      status: "Conteggiata",
+      amount: row.netAmount,
+    })),
+    ...advances.rows.map((row) => ({
+      id: `advance-${row.id}`,
+      type: "advance" as const,
+      date: row.advanceDate,
+      title: row.description,
+      description: !row.isActive && row.disabledReason ? row.disabledReason : row.isActive ? "Acconto attivo" : "Acconto spento",
+      status: row.isActive ? "Conteggiato" : "Spento",
+      amount: row.amount,
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  return (
+    <section className="job-premium-card">
+      <details className="job-premium-diary-accordion job-revenue-accordion">
+        <summary>
+          <span className="job-premium-expand">+</span>
+          <div>
+            <span>Ricavi actual</span>
+            <h2>Fatture emesse e acconti</h2>
+          </div>
+          <strong>{formatCurrency(dashboard.actual.revenue)}</strong>
+        </summary>
+
+        <div className="job-premium-diary-accordion-content">
+          <div className="job-revenue-summary-grid">
+            <article>
+              <span>Fatture emesse</span>
+              <strong>{formatCurrency(invoices.totalAmount)}</strong>
+              <small>{invoices.entryCount} fatture</small>
+            </article>
+            <article>
+              <span>Acconti attivi</span>
+              <strong>{formatCurrency(advances.activeAmount)}</strong>
+              <small>{advances.activeCount} acconti conteggiati</small>
+            </article>
+            <article>
+              <span>Acconti spenti</span>
+              <strong>{formatCurrency(advances.inactiveAmount)}</strong>
+              <small>Non inclusi nei ricavi actual</small>
+            </article>
+          </div>
+
+          <div className="job-revenue-ledger-panel">
+            <h3>Registro ricavi</h3>
+            <div className="job-premium-table-wrap">
+              <table className="job-premium-summary-table">
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Data</th>
+                    <th>Documento / Descrizione</th>
+                    <th>Stato</th>
+                    <th>Importo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revenueRows.length === 0 ? (
+                    <tr><td colSpan={5}>Nessuna fattura o acconto registrato.</td></tr>
+                  ) : (
+                    revenueRows.map((row) => (
+                      <tr key={row.id}>
+                        <td>
+                          <span className={`job-revenue-type-badge ${row.type === "invoice" ? "is-invoice" : "is-advance"}`}>
+                            {row.type === "invoice" ? "Fattura" : "Acconto"}
+                          </span>
+                        </td>
+                        <td>{formatDate(row.date)}</td>
+                        <td>
+                          <strong>{row.title}</strong>
+                          <small>{row.description}</small>
+                        </td>
+                        <td>{row.status}</td>
+                        <td>{formatCurrency(row.amount)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </details>
     </section>
   );
 }
@@ -707,6 +874,12 @@ function JobExternalResourcesSummary({ dashboard }: { dashboard: JobOrderDashboa
                 resourceLabel: row.resourceLabel,
                 entryCount: row.entryCount,
                 total: row.totalHours,
+                entries: row.entries.map((entry) => ({
+                  id: entry.id,
+                  referenceDate: entry.referenceDate,
+                  quantity: entry.hours,
+                  description: entry.description,
+                })),
               }))}
               total={formatQuantity(dashboard.actual.externalEconomyResources?.totalHours ?? 0, "h")}
               unit="h"
@@ -872,10 +1045,35 @@ function ExternalResourceSummaryTable({
   title: string;
   emptyText: string;
   quantityLabel: string;
-  rows: Array<{ resourceId: string; resourceLabel: string; entryCount: number; total: number }>;
+  rows: Array<{
+    resourceId: string;
+    resourceLabel: string;
+    entryCount: number;
+    total: number;
+    entries?: Array<{
+      id: string;
+      referenceDate: string;
+      quantity: number;
+      description: string;
+    }>;
+  }>;
   total: string;
   unit: string;
 }) {
+  const [expandedResourceIds, setExpandedResourceIds] = useState<Set<string>>(new Set());
+
+  function toggleResource(resourceId: string) {
+    setExpandedResourceIds((current) => {
+      const next = new Set(current);
+      if (next.has(resourceId)) {
+        next.delete(resourceId);
+      } else {
+        next.add(resourceId);
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="job-premium-table-wrap">
       <div className="job-premium-external-table-head">
@@ -896,13 +1094,52 @@ function ExternalResourceSummaryTable({
               <td colSpan={3}>{emptyText}</td>
             </tr>
           ) : (
-            rows.map((row) => (
-              <tr key={row.resourceId}>
-                <td><strong>{row.resourceLabel}</strong></td>
-                <td>{row.entryCount}</td>
-                <td>{formatQuantity(row.total, unit)}</td>
-              </tr>
-            ))
+            rows.map((row) => {
+              const canExpand = Boolean(row.entries?.length);
+              const isExpanded = expandedResourceIds.has(row.resourceId);
+
+              return (
+                <Fragment key={row.resourceId}>
+                  <tr>
+                    <td>
+                      <div className="job-premium-economy-resource-cell">
+                        {canExpand ? (
+                          <button
+                            type="button"
+                            className="job-premium-expand job-premium-expand-small job-premium-expand-button"
+                            onClick={() => toggleResource(row.resourceId)}
+                            aria-expanded={isExpanded}
+                            aria-label={`${isExpanded ? "Chiudi" : "Apri"} movimenti ${row.resourceLabel}`}
+                          >
+                            {isExpanded ? "-" : "+"}
+                          </button>
+                        ) : null}
+                        <strong>{row.resourceLabel}</strong>
+                      </div>
+                    </td>
+                    <td>{row.entryCount}</td>
+                    <td>{formatQuantity(row.total, unit)}</td>
+                  </tr>
+                  {canExpand && isExpanded ? (
+                    <tr className="job-premium-economy-detail-row">
+                      <td colSpan={3}>
+                        <div className="job-premium-movement-list job-premium-economy-movement-list">
+                          {row.entries!.map((entry) => (
+                            <div key={entry.id} className="job-premium-movement-row job-premium-economy-movement-row">
+                              <span>{formatDate(entry.referenceDate)}</span>
+                              <p>{entry.description || "Senza descrizione"}</p>
+                              <span className="job-premium-movement-hours">
+                                {formatQuantity(entry.quantity, unit)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })
           )}
         </tbody>
       </table>
@@ -922,6 +1159,7 @@ export function JobDashboardView(props: JobDashboardViewProps) {
         <JobCostCompositionChart categories={categories} />
       <JobBudgetVsActualChart categories={categories} />
       </div>
+      <JobRevenueSummary dashboard={props.dashboard} />
       <JobCostBreakdownAccordion categories={categories} />
       <JobDiaryAccordion
         dashboard={props.dashboard}

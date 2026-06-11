@@ -74,9 +74,17 @@ export async function GET(request: Request) {
     hasRefreshToken: Boolean(tokenData.refresh_token),
   });
 
+  const shouldReturnTokens = Boolean(setupKey);
+
   return NextResponse.json({
     success: true,
     message: "Token ricevuti.",
     hasRefreshToken: Boolean(tokenData.refresh_token),
+    ...(shouldReturnTokens
+      ? {
+          refreshToken: tokenData.refresh_token ?? null,
+          scope: tokenData.scope ?? null,
+        }
+      : {}),
   });
 }

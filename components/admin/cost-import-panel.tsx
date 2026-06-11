@@ -46,7 +46,7 @@ export function CostImportPanel({
 
   async function handleUpload() {
     if (!selectedJobOrderId || !selectedFile) {
-      setError("Seleziona commessa e file .xls prima di avviare l'import.");
+      setError("Seleziona commessa e file Excel prima di avviare l'import.");
       return;
     }
 
@@ -84,7 +84,7 @@ export function CostImportPanel({
           <div>
             <h2 style={{ margin: 0 }}>Upload file gestionale</h2>
             <p className="mobile-section-subtitle">
-              Carica un report partitario `.xls`, crea una nuova import session e passa subito alla validazione righe.
+              Carica un report partitario `.xls` o `.xlsx`, crea una nuova import session e passa subito alla validazione righe.
             </p>
           </div>
         </div>
@@ -108,10 +108,10 @@ export function CostImportPanel({
           </label>
 
           <label className="mobile-data-field">
-            <span className="mobile-data-label">File Excel `.xls`</span>
+            <span className="mobile-data-label">File Excel `.xls` / `.xlsx`</span>
             <input
               type="file"
-              accept=".xls,application/vnd.ms-excel"
+              accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="admin-password-input"
               onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
               disabled={isPending}

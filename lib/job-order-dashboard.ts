@@ -1,23 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { getEffectiveResourceHourlyCost } from "@/lib/resource-economics";
 import { CostActualCategory, Prisma } from "@prisma/client";
-
-type CostHistoryRow = {
-  hourlyCost: unknown;
-  validFrom: Date;
-  validTo: Date | null;
-};
-
-function getApplicableCost(history: CostHistoryRow[], referenceDate: Date) {
-  const matching = history.find((item) => {
-    const start = item.validFrom.getTime();
-    const end = item.validTo ? item.validTo.getTime() : Number.POSITIVE_INFINITY;
-    const current = referenceDate.getTime();
-    return current >= start && current <= end;
-  });
-
-  if (!matching) return 0;
-  return Number(matching.hourlyCost);
-}
 
 function toAmount(value: unknown) {
   if (value == null) return 0;
@@ -211,6 +194,84 @@ async function getCostActualCategoryViews(jobOrderId: string) {
   });
 }
 
+function getCostActualTotalsByCategory(categories: Awaited<ReturnType<typeof getCostActualCategoryViews>>) {
+  const byCategory = new Map(categories.map((category) => [category.key, category.totalAmount]));
+
+  return {
+    materials: byCategory.get(CostActualCategory.MATERIE_PRIME) ?? 0,
+    professionalServices: byCategory.get(CostActualCategory.PRESTAZIONI_PROFESSIONALI) ?? 0,
+    thirdPartyServices: byCategory.get(CostActualCategory.PRESTAZIONI_TERZI) ?? 0,
+    misc: byCategory.get(CostActualCategory.SPESE_VARIE) ?? 0,
+  };
+}
+
+async function getRevenueActualView(jobOrderId: string) {
+  const [invoices, advances] = await Promise.all([
+    prisma.issuedInvoiceActual.findMany({
+      where: { jobOrderId },
+      orderBy: [{ documentDate: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        documentDate: true,
+        invoiceNumber: true,
+        customerCode: true,
+        customerName: true,
+        netAmount: true,
+        vatAmount: true,
+        grossAmount: true,
+      },
+    }),
+    prisma.jobOrderAdvance.findMany({
+      where: { jobOrderId },
+      orderBy: [{ isActive: "desc" }, { advanceDate: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        advanceDate: true,
+        description: true,
+        amount: true,
+        isActive: true,
+        disabledReason: true,
+        disabledAt: true,
+      },
+    }),
+  ]);
+
+  const invoiceRows = invoices.map((invoice) => ({
+    id: invoice.id,
+    documentDate: invoice.documentDate?.toISOString().slice(0, 10) ?? "",
+    invoiceNumber: invoice.invoiceNumber ?? "",
+    customerCode: invoice.customerCode ?? "",
+    customerName: invoice.customerName ?? "",
+    netAmount: toDecimalNumber(invoice.netAmount),
+    vatAmount: toDecimalNumber(invoice.vatAmount),
+    grossAmount: toDecimalNumber(invoice.grossAmount),
+  }));
+  const advanceRows = advances.map((advance) => ({
+    id: advance.id,
+    advanceDate: advance.advanceDate.toISOString().slice(0, 10),
+    description: advance.description,
+    amount: toDecimalNumber(advance.amount),
+    isActive: advance.isActive,
+    disabledReason: advance.disabledReason ?? "",
+    disabledAt: advance.disabledAt?.toISOString() ?? null,
+  }));
+
+  return {
+    invoices: {
+      totalAmount: roundCurrency(invoiceRows.reduce((sum, row) => sum + row.netAmount, 0)),
+      entryCount: invoiceRows.length,
+      rows: invoiceRows,
+    },
+    advances: {
+      activeAmount: roundCurrency(advanceRows.filter((row) => row.isActive).reduce((sum, row) => sum + row.amount, 0)),
+      inactiveAmount: roundCurrency(advanceRows.filter((row) => !row.isActive).reduce((sum, row) => sum + row.amount, 0)),
+      entryCount: advanceRows.length,
+      activeCount: advanceRows.filter((row) => row.isActive).length,
+      rows: advanceRows,
+    },
+  };
+}
+
 export async function getJobOrderDashboard(jobOrderId: string) {
   const jobOrder = await prisma.jobOrder.findUnique({
     where: { id: jobOrderId },
@@ -402,10 +463,15 @@ export async function getJobOrderDashboard(jobOrderId: string) {
 
   for (const activity of jobOrder.diaryActivities) {
     const hours = Number(activity.hours);
-    const hourlyCost =
-      activity.resourceType === "PERSON"
-        ? getApplicableCost(activity.person?.costHistory ?? [], activity.referenceDate)
-        : getApplicableCost(activity.equipment?.costHistory ?? [], activity.referenceDate);
+    const hourlyCost = getEffectiveResourceHourlyCost({
+      resourceType: activity.resourceType,
+      jobType: jobOrder.type,
+      costHistory:
+        activity.resourceType === "PERSON"
+          ? activity.person?.costHistory ?? []
+          : activity.equipment?.costHistory ?? [],
+      referenceDate: activity.referenceDate,
+    });
     const totalCost = roundCurrency(hours * hourlyCost);
 
     const detailEntry = {
@@ -577,6 +643,9 @@ export async function getJobOrderDashboard(jobOrderId: string) {
     }
   }
 
+  const costCategories = await getCostActualCategoryViews(jobOrder.id);
+  const importedActualCosts = getCostActualTotalsByCategory(costCategories);
+
   const budget = {
     personnel: toAmount(jobOrder.budgetPersonnelCost),
     equipment: toAmount(jobOrder.budgetEquipmentCost),
@@ -590,10 +659,10 @@ export async function getJobOrderDashboard(jobOrderId: string) {
   const actual = {
     personnel: actualPersonnelCost,
     equipment: actualEquipmentCost,
-    materials: toAmount(jobOrder.actualMaterialsCost),
-    professionalServices: toAmount(jobOrder.actualProfessionalServicesCost),
-    thirdPartyServices: toAmount(jobOrder.actualThirdPartyServicesCost),
-    misc: toAmount(jobOrder.actualMiscCost),
+    materials: importedActualCosts.materials,
+    professionalServices: importedActualCosts.professionalServices,
+    thirdPartyServices: importedActualCosts.thirdPartyServices,
+    misc: importedActualCosts.misc,
     revenue: toAmount(jobOrder.actualRevenue),
   };
 
@@ -680,7 +749,8 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         misc: "Import costi actual",
         revenue: "Import fatture emesse",
       },
-      costCategories: await getCostActualCategoryViews(jobOrder.id),
+      costCategories,
+      revenueDetails: await getRevenueActualView(jobOrder.id),
     },
   };
 }

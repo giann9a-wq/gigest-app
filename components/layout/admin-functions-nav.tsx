@@ -1,13 +1,25 @@
 import type { Route } from "next";
 import Link from "next/link";
 
-type AdminSection = "accessi" | "import-diario-manuale" | "import-costi" | "import-fatture";
+type AdminSection =
+  | "accessi"
+  | "import-diario-manuale"
+  | "import-costi"
+  | "import-fatture"
+  | "acconti"
+  | "controlli"
+  | "gestione-db";
 
 const ADMIN_FUNCTIONS: Array<{
   key: AdminSection;
   href: Route;
   title: string;
 }> = [
+  {
+    key: "controlli",
+    href: "/admin/controlli" as Route,
+    title: "Controlli",
+  },
   {
     key: "accessi",
     href: "/admin/accessi" as Route,
@@ -27,6 +39,16 @@ const ADMIN_FUNCTIONS: Array<{
     key: "import-fatture",
     href: "/admin/import-fatture" as Route,
     title: "Importa fatture",
+  },
+  {
+    key: "acconti",
+    href: "/admin/acconti" as Route,
+    title: "Gestione Acconti",
+  },
+  {
+    key: "gestione-db",
+    href: "/admin/gestione-db" as Route,
+    title: "Gestione DB",
   },
 ];
 

@@ -28,6 +28,19 @@ function isValidTime(value: string | null) {
   return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 }
 
+function parseRecurrenceRule(value: string | null | undefined): { seriesId: string } | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed?.seriesId === "string") {
+      return { seriesId: parsed.seriesId };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function buildRow(row: {
   id: string;
   title: string;
@@ -169,7 +182,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const authResult = await getAuthorizedUser();
@@ -182,6 +195,7 @@ export async function DELETE(
     select: {
       id: true,
       origin: true,
+      recurrenceRule: true,
     },
   });
 
@@ -196,8 +210,27 @@ export async function DELETE(
     );
   }
 
+  const scope = request.nextUrl.searchParams.get("scope");
+  const recurrence = parseRecurrenceRule(existing.recurrenceRule);
+  const idsToDelete =
+    scope === "series" && recurrence
+      ? (
+          await prisma.deadline.findMany({
+            where: {
+              origin: DeadlineOrigin.MANUAL,
+              recurrenceRule: {
+                contains: `"seriesId":"${recurrence.seriesId}"`,
+              },
+            },
+            select: { id: true },
+          })
+        ).map((row) => row.id)
+      : [id];
+
   try {
-    await deleteDeadlineFromSharedGoogleCalendar(id);
+    for (const deadlineId of idsToDelete) {
+      await deleteDeadlineFromSharedGoogleCalendar(deadlineId);
+    }
   } catch (error) {
     return NextResponse.json(
       {
@@ -210,9 +243,9 @@ export async function DELETE(
     );
   }
 
-  await prisma.deadline.delete({
-    where: { id },
+  await prisma.deadline.deleteMany({
+    where: { id: { in: idsToDelete } },
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, deletedCount: idsToDelete.length });
 }

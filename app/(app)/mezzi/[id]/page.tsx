@@ -13,6 +13,7 @@ type EquipmentForm = {
   type: EquipmentTypeValue | "";
   purchaseDate: string;
   status: ResourceStatusValue | "";
+  isVisibleInDiary: boolean;
 };
 
 type CostRow = {
@@ -29,6 +30,8 @@ type MaintenanceRow = {
   interventionType: string;
   interventionDate: string;
   nextIntervention: string;
+  isRecurring: boolean;
+  recurrenceMonths: string;
   cost: string;
   notes: string;
   documents: {
@@ -59,6 +62,8 @@ function makeEmptyMaintenanceRow(): MaintenanceRow {
     interventionType: "",
     interventionDate: "",
     nextIntervention: "",
+    isRecurring: false,
+    recurrenceMonths: "",
     cost: "",
     notes: "",
     documents: [],
@@ -103,6 +108,18 @@ function statusLabel(status: ResourceStatusValue) {
   }
 }
 
+function addMonthsToDate(baseDate: string, amountRaw: string) {
+  const amount = Number(amountRaw);
+  if (!baseDate || !Number.isFinite(amount) || amount <= 0) return "";
+
+  const result = new Date(`${baseDate}T00:00:00.000Z`);
+  if (Number.isNaN(result.getTime())) return "";
+
+  result.setUTCMonth(result.getUTCMonth() + amount);
+
+  return result.toISOString().slice(0, 10);
+}
+
 export default function SchedaMezzoPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -114,6 +131,7 @@ export default function SchedaMezzoPage() {
     type: "EQUIPMENT",
     purchaseDate: "",
     status: "ACTIVE",
+    isVisibleInDiary: true,
   });
 
   const [costRows, setCostRows] = useState<CostRow[]>([makeEmptyCostRow()]);
@@ -148,6 +166,37 @@ export default function SchedaMezzoPage() {
     );
   }
 
+  function setMaintenanceDate(localId: string, interventionDate: string) {
+    setMaintenanceRows((current) =>
+      current.map((row) => {
+        if (row.localId !== localId) return row;
+        const nextIntervention = row.isRecurring
+          ? addMonthsToDate(interventionDate, row.recurrenceMonths)
+          : "";
+
+        const nextRow = { ...row, interventionDate };
+        return nextIntervention ? { ...nextRow, nextIntervention } : nextRow;
+      })
+    );
+  }
+
+  function setMaintenanceRecurrence(localId: string, patch: Partial<Pick<MaintenanceRow, "isRecurring" | "recurrenceMonths">>) {
+    setMaintenanceRows((current) =>
+      current.map((row) => {
+        if (row.localId !== localId) return row;
+        const nextRow = { ...row, ...patch };
+        const nextIntervention = nextRow.isRecurring
+          ? addMonthsToDate(nextRow.interventionDate, nextRow.recurrenceMonths)
+          : "";
+
+        return {
+          ...nextRow,
+          nextIntervention: nextIntervention || nextRow.nextIntervention,
+        };
+      })
+    );
+  }
+
   function addMaintenanceRow() {
     setMaintenanceRows((current) => [...current, makeEmptyMaintenanceRow()]);
   }
@@ -174,6 +223,7 @@ export default function SchedaMezzoPage() {
         type: equipmentData.equipment.type ?? "EQUIPMENT",
         purchaseDate: equipmentData.equipment.purchaseDate ?? "",
         status: equipmentData.equipment.status ?? "ACTIVE",
+        isVisibleInDiary: equipmentData.equipment.isVisibleInDiary ?? true,
       });
 
         if (!equipmentData.costHistory || equipmentData.costHistory.length === 0) {
@@ -200,6 +250,8 @@ export default function SchedaMezzoPage() {
             interventionType: row.interventionType ?? "",
             interventionDate: row.interventionDate ?? "",
             nextIntervention: row.nextIntervention ?? "",
+            isRecurring: row.isRecurring ?? false,
+            recurrenceMonths: row.recurrenceMonths?.toString() ?? "",
             cost: row.cost?.toString() ?? "",
             notes: row.notes ?? "",
             documents: row.documents ?? [],
@@ -265,6 +317,8 @@ export default function SchedaMezzoPage() {
             interventionType: row.interventionType,
             interventionDate: row.interventionDate,
             nextIntervention: row.nextIntervention,
+            isRecurring: row.isRecurring,
+            recurrenceMonths: row.recurrenceMonths,
             cost: row.cost,
             notes: row.notes,
           })),
@@ -387,6 +441,18 @@ async function handleOpenDocument(documentId: string) {
             <option value="ENDED">{statusLabel("ENDED")}</option>
           </select>
         </div>
+
+        <div style={labelCell}>Visibile nel Diario</div>
+        <div style={valueCell}>
+          <label style={checkboxLineStyle}>
+            <input
+              type="checkbox"
+              checked={equipment.isVisibleInDiary}
+              onChange={(e) => setEquipment({ ...equipment, isVisibleInDiary: e.target.checked })}
+            />
+            <span>Mostra nelle tendine delle risorse operative</span>
+          </label>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -505,16 +571,43 @@ async function handleOpenDocument(documentId: string) {
                         type="date"
                         style={inputStyle}
                         value={row.interventionDate}
-                        onChange={(e) => setMaintenanceRow(row.localId, { interventionDate: e.target.value })}
+                        onChange={(e) => setMaintenanceDate(row.localId, e.target.value)}
                       />
                     </td>
                     <td style={bodyCell}>
-                      <input
-                        type="date"
-                        style={inputStyle}
-                        value={row.nextIntervention}
-                        onChange={(e) => setMaintenanceRow(row.localId, { nextIntervention: e.target.value })}
-                      />
+                      <div style={nextInterventionCellStyle}>
+                        <input
+                          type="date"
+                          style={inputStyle}
+                          value={row.nextIntervention}
+                          onChange={(e) => setMaintenanceRow(row.localId, { nextIntervention: e.target.value })}
+                        />
+                        <label style={recurringLineStyle}>
+                          <input
+                            type="checkbox"
+                            checked={row.isRecurring}
+                            onChange={(e) =>
+                              setMaintenanceRecurrence(row.localId, {
+                                isRecurring: e.target.checked,
+                                recurrenceMonths: row.recurrenceMonths,
+                              })
+                            }
+                          />
+                          <span>Ricorrente ogni</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            style={recurringMonthInputStyle}
+                            value={row.recurrenceMonths}
+                            onChange={(e) =>
+                              setMaintenanceRecurrence(row.localId, { recurrenceMonths: e.target.value })
+                            }
+                            disabled={!row.isRecurring}
+                          />
+                          <span>mesi</span>
+                        </label>
+                      </div>
                     </td>
                     <td style={bodyCell}>
                     <input
@@ -643,6 +736,35 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   border: "1px solid #d1d5db",
   background: "white",
+};
+
+const checkboxLineStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  fontWeight: 700,
+  color: "#1f2937",
+};
+
+const nextInterventionCellStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 8,
+  minWidth: 230,
+};
+
+const recurringLineStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "auto auto 64px auto",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#475569",
+};
+
+const recurringMonthInputStyle: React.CSSProperties = {
+  ...inputStyle,
+  padding: "8px 6px",
 };
 
 const plusButtonStyle: React.CSSProperties = {

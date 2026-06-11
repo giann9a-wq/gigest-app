@@ -45,8 +45,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "File Excel obbligatorio" }, { status: 400 });
   }
 
-  if (!file.name.toLowerCase().endsWith(".xls")) {
-    return NextResponse.json({ error: "Sono supportati solo file .xls gestionali in questa fase" }, { status: 400 });
+  const fileName = file.name.toLowerCase();
+  const isSupportedExcel = fileName.endsWith(".xls") || fileName.endsWith(".xlsx");
+
+  if (!isSupportedExcel) {
+    return NextResponse.json({ error: "Sono supportati file Excel .xls e .xlsx" }, { status: 400 });
   }
 
   try {

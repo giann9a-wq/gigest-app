@@ -1,0 +1,1 @@
+ALTER TABLE "Person" ADD COLUMN "excludeFromChecks" BOOLEAN NOT NULL DEFAULT false;

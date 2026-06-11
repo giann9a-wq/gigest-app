@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   JobDashboardView,
   type JobOrderDashboardResponse,
@@ -27,8 +28,10 @@ async function safeJsonFetch(url: string, options?: RequestInit) {
 }
 
 export default function DashboardCommessaPage() {
+  const searchParams = useSearchParams();
+  const initialJobOrderId = searchParams.get("jobOrderId") ?? "";
   const [jobOrders, setJobOrders] = useState<JobOrderOption[]>([]);
-  const [selectedJobOrderId, setSelectedJobOrderId] = useState("");
+  const [selectedJobOrderId, setSelectedJobOrderId] = useState(initialJobOrderId);
   const [dashboard, setDashboard] = useState<JobOrderDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [dashboardLoading, setDashboardLoading] = useState(false);

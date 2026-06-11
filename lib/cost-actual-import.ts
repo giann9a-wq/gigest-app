@@ -360,6 +360,40 @@ function buildApprovedFallbackFingerprint(input: {
   };
 }
 
+function buildSplitFingerprint(input: {
+  jobOrderId: string;
+  sourceRowFingerprint: string | null;
+  rowId: string;
+  splitIndex: number;
+  sourceAccountCode: string | null;
+  supplierCode: string | null;
+  supplierName: string | null;
+  documentDate: Date | null;
+  registrationDate: Date | null;
+  documentNumber: string | null;
+  amount: number | null;
+}) {
+  const source = [
+    "SPLIT_ALLOCATION",
+    input.jobOrderId,
+    input.sourceRowFingerprint ?? "",
+    input.rowId,
+    String(input.splitIndex),
+    input.sourceAccountCode ?? "",
+    input.supplierCode ?? "",
+    normalizeText(input.supplierName),
+    input.documentDate?.toISOString().slice(0, 10) ?? "",
+    input.registrationDate?.toISOString().slice(0, 10) ?? "",
+    normalizeText(input.documentNumber),
+    input.amount == null ? "" : input.amount.toFixed(2),
+  ].join("|");
+
+  return {
+    fingerprint: createHash("sha256").update(source).digest("hex"),
+    fingerprintSource: source,
+  };
+}
+
 function extractAccountContext(row: string[]) {
   const cell = cleanCell(row[0]);
   const match = cell.match(ACCOUNT_CODE_REGEX);
@@ -971,6 +1005,16 @@ export async function getCostImportSessionDetails(sessionId: string) {
       },
       rows: {
         orderBy: [{ rowIndex: "asc" }, { createdAt: "asc" }],
+        include: {
+          jobOrder: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              status: true,
+            },
+          },
+        },
       },
     },
   });
@@ -991,6 +1035,17 @@ export async function getCostImportSessionDetails(sessionId: string) {
     newRows: session.rows.filter((row) => row.matchStatus === CostImportMatchStatus.NEW).length,
   };
 
+  const allJobOrders = await prisma.jobOrder.findMany({
+    where: { status: "ACTIVE" },
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      status: true,
+    },
+  });
+
   return {
     id: session.id,
     fileName: session.fileName,
@@ -1000,9 +1055,12 @@ export async function getCostImportSessionDetails(sessionId: string) {
     parseSummary: session.parseSummary,
     appliedAt: session.appliedAt?.toISOString() ?? null,
     jobOrder: session.jobOrder,
+    allJobOrders,
     stats,
     rows: session.rows.map((row) => ({
       id: row.id,
+      jobOrderId: row.jobOrderId,
+      jobOrderName: row.jobOrder.name,
       rowIndex: row.rowIndex,
       sourceAccountCode: row.sourceAccountCode,
       sourceAccountDescription: row.sourceAccountDescription,
@@ -1073,6 +1131,7 @@ export async function updateCostImportRow(
     amount?: number | string | null;
     finalDescription?: string;
     finalCategory?: CostActualCategory | null;
+    jobOrderId?: string;
     validationNote?: string;
   }
 ) {
@@ -1096,6 +1155,24 @@ export async function updateCostImportRow(
 
   if (!existing || existing.importSessionId !== sessionId) {
     throw new Error("Riga staging non coerente con la sessione.");
+  }
+
+  const jobOrderId =
+    input.jobOrderId !== undefined ? cleanCell(input.jobOrderId) : existing.jobOrderId;
+
+  if (!jobOrderId) {
+    throw new Error("Commessa obbligatoria.");
+  }
+
+  if (input.jobOrderId !== undefined && input.jobOrderId !== existing.jobOrderId) {
+    const targetJobOrder = await prisma.jobOrder.findUnique({
+      where: { id: jobOrderId },
+      select: { id: true },
+    });
+
+    if (!targetJobOrder) {
+      throw new Error("Commessa non trovata.");
+    }
   }
 
   const sourceAccountCode =
@@ -1133,7 +1210,7 @@ export async function updateCostImportRow(
 
   const recalculatedState = await evaluateEditedCostImportRow({
     rowId,
-    jobOrderId: existing.jobOrderId,
+    jobOrderId,
     sourceAccountCode,
     sourceAccountDescription,
     supplierCode,
@@ -1158,6 +1235,7 @@ export async function updateCostImportRow(
       ...(input.amount !== undefined ? { amount: toDecimal(amount) } : {}),
       ...(input.finalDescription !== undefined ? { finalDescription: input.finalDescription } : {}),
       ...(input.finalCategory !== undefined ? { finalCategory } : {}),
+      ...(input.jobOrderId !== undefined ? { jobOrderId } : {}),
       fingerprint: recalculatedState.fingerprint,
       fingerprintSource: recalculatedState.fingerprintSource,
       matchStatus: recalculatedState.matchStatus,
@@ -1172,6 +1250,210 @@ export async function updateCostImportRow(
   await refreshImportSessionStatus(sessionId);
 
   return updated;
+}
+
+export async function splitCostImportRow(
+  sessionId: string,
+  rowId: string,
+  input: {
+    splits: Array<{
+      jobOrderId: string;
+      amount: number | string;
+      finalCategory?: CostActualCategory | null;
+      finalDescription?: string | null;
+    }>;
+  }
+) {
+  if (!Array.isArray(input.splits) || input.splits.length < 2) {
+    throw new Error("Servono almeno due righe per dividere il costo.");
+  }
+
+  const existing = await prisma.costImportRowStaging.findUnique({
+    where: { id: rowId },
+    include: {
+      importSession: {
+        select: { id: true, status: true },
+      },
+    },
+  });
+
+  if (!existing || existing.importSessionId !== sessionId) {
+    throw new Error("Riga staging non coerente con la sessione.");
+  }
+
+  if (existing.importSession.status === CostImportSessionStatus.APPLIED) {
+    throw new Error("Non puoi dividere una sessione gia confermata.");
+  }
+
+  const originalAmount = decimalToNumber(existing.amount);
+  if (originalAmount == null) {
+    throw new Error("La riga origine non ha un importo valido da dividere.");
+  }
+
+  const normalizedSplits = input.splits.map((split, index) => {
+    const amount =
+      typeof split.amount === "number"
+        ? Number(split.amount.toFixed(2))
+        : parseAmount(split.amount);
+
+    return {
+      index,
+      jobOrderId: cleanCell(split.jobOrderId),
+      amount,
+      finalCategory: split.finalCategory ?? existing.finalCategory,
+      finalDescription:
+        split.finalDescription === undefined || split.finalDescription === null
+          ? existing.finalDescription
+          : cleanCell(split.finalDescription),
+    };
+  });
+
+  for (const split of normalizedSplits) {
+    if (!split.jobOrderId) {
+      throw new Error("Ogni riga di split deve avere una commessa.");
+    }
+    if (split.amount == null || split.amount <= 0) {
+      throw new Error("Ogni riga di split deve avere un importo positivo.");
+    }
+    if (!split.finalCategory) {
+      throw new Error("Ogni riga di split deve avere una categoria finale.");
+    }
+  }
+
+  const originalCents = Math.round(originalAmount * 100);
+  const splitCents = normalizedSplits.reduce(
+    (total, split) => total + Math.round((split.amount ?? 0) * 100),
+    0
+  );
+
+  if (splitCents !== originalCents) {
+    throw new Error(
+      `Il totale dello split deve essere ${originalAmount.toFixed(2)}. Totale inserito: ${(splitCents / 100).toFixed(2)}.`
+    );
+  }
+
+  const jobOrderIds = [...new Set(normalizedSplits.map((split) => split.jobOrderId))];
+  const jobOrders = await prisma.jobOrder.findMany({
+    where: { id: { in: jobOrderIds } },
+    select: { id: true },
+  });
+  const foundJobOrderIds = new Set(jobOrders.map((jobOrder) => jobOrder.id));
+
+  if (jobOrderIds.some((id) => !foundJobOrderIds.has(id))) {
+    throw new Error("Una o piu commesse dello split non esistono.");
+  }
+
+  const baseSplitSource = existing.sourceRowFingerprint ?? existing.id;
+  const rowsToWrite = normalizedSplits.map((split) => {
+    const sourceRowFingerprintSource = [
+      existing.sourceRowFingerprintSource ?? "",
+      `SPLIT:${split.index + 1}`,
+      split.jobOrderId,
+      split.amount?.toFixed(2) ?? "",
+    ].join("|");
+    const sourceRowFingerprint = createHash("sha256").update(sourceRowFingerprintSource || `${baseSplitSource}|${split.index + 1}`).digest("hex");
+    const validationState = buildRowValidationState({
+      jobOrderId: split.jobOrderId,
+      sourceAccountCode: existing.sourceAccountCode,
+      sourceAccountDescription: existing.sourceAccountDescription,
+      supplierCode: existing.supplierCode,
+      supplierName: existing.supplierName,
+      documentDate: existing.documentDate,
+      registrationDate: existing.registrationDate,
+      documentNumber: existing.documentNumber,
+      amount: split.amount,
+      finalCategory: split.finalCategory,
+    });
+    const splitFingerprint = buildSplitFingerprint({
+      jobOrderId: split.jobOrderId,
+      sourceRowFingerprint,
+      rowId: existing.id,
+      splitIndex: split.index + 1,
+      sourceAccountCode: existing.sourceAccountCode,
+      supplierCode: existing.supplierCode,
+      supplierName: existing.supplierName,
+      documentDate: existing.documentDate,
+      registrationDate: existing.registrationDate,
+      documentNumber: existing.documentNumber,
+      amount: split.amount,
+    });
+
+    return {
+      split,
+      sourceRowFingerprint,
+      sourceRowFingerprintSource,
+      fingerprint:
+        validationState.matchStatus === CostImportMatchStatus.INVALID
+          ? validationState.fingerprint
+          : splitFingerprint.fingerprint,
+      fingerprintSource:
+        validationState.matchStatus === CostImportMatchStatus.INVALID
+          ? validationState.fingerprintSource
+          : splitFingerprint.fingerprintSource,
+      matchStatus: validationState.matchStatus,
+      validationNote:
+        validationState.matchStatus === CostImportMatchStatus.INVALID
+          ? validationState.validationNote
+          : "Riga generata da split manuale. Verificare e approvare.",
+    };
+  });
+
+  await prisma.$transaction(async (tx) => {
+    const first = rowsToWrite[0];
+
+    await tx.costImportRowStaging.update({
+      where: { id: existing.id },
+      data: {
+        jobOrderId: first.split.jobOrderId,
+        amount: toDecimal(first.split.amount),
+        finalCategory: first.split.finalCategory,
+        finalDescription: first.split.finalDescription,
+        sourceRowFingerprint: first.sourceRowFingerprint,
+        sourceRowFingerprintSource: first.sourceRowFingerprintSource,
+        fingerprint: first.fingerprint,
+        fingerprintSource: first.fingerprintSource,
+        matchStatus: first.matchStatus,
+        validationStatus: CostImportValidationStatus.PENDING,
+        validationNote: first.validationNote,
+      },
+    });
+
+    for (const item of rowsToWrite.slice(1)) {
+      await tx.costImportRowStaging.create({
+        data: {
+          importSessionId: existing.importSessionId,
+          jobOrderId: item.split.jobOrderId,
+          rowIndex: existing.rowIndex,
+          rawData: existing.rawData as Prisma.InputJsonValue,
+          sourceAccountCode: existing.sourceAccountCode,
+          sourceAccountDescription: existing.sourceAccountDescription,
+          supplierCode: existing.supplierCode,
+          supplierName: existing.supplierName,
+          documentDate: existing.documentDate,
+          registrationDate: existing.registrationDate,
+          documentNumber: existing.documentNumber,
+          descriptionOriginal: existing.descriptionOriginal,
+          descriptionNormalized: existing.descriptionNormalized,
+          amount: toDecimal(item.split.amount),
+          quantity: existing.quantity,
+          suggestedCategory: existing.suggestedCategory,
+          sourceRowFingerprint: item.sourceRowFingerprint,
+          sourceRowFingerprintSource: item.sourceRowFingerprintSource,
+          fingerprint: item.fingerprint,
+          fingerprintSource: item.fingerprintSource,
+          matchStatus: item.matchStatus,
+          validationStatus: CostImportValidationStatus.PENDING,
+          validationNote: item.validationNote,
+          finalCategory: item.split.finalCategory,
+          finalDescription: item.split.finalDescription,
+        },
+      });
+    }
+  });
+
+  await refreshImportSessionStatus(sessionId);
+
+  return { splitCount: rowsToWrite.length };
 }
 
 async function refreshImportSessionStatus(sessionId: string) {
@@ -1216,16 +1498,32 @@ export async function applyApprovedCostImportRows(sessionId: string) {
   }
 
   const fingerprints = session.rows.map((row) => row.fingerprint).filter((value): value is string => Boolean(value));
-  const existingByFingerprint = new Set(
-    (
-      await prisma.costActualEntry.findMany({
-        where: {
-          jobOrderId: session.jobOrderId,
-          fingerprint: { in: fingerprints },
-        },
-        select: { fingerprint: true },
-      })
-    ).map((entry) => entry.fingerprint)
+  const targetJobOrderIds = [...new Set(session.rows.map((row) => row.jobOrderId))];
+  const existingEntries = await prisma.costActualEntry.findMany({
+    where: {
+      jobOrderId: { in: targetJobOrderIds },
+      fingerprint: { in: fingerprints },
+    },
+    select: { jobOrderId: true, fingerprint: true },
+  });
+  const existingByJobOrder = new Map<string, Set<string>>();
+
+  for (const entry of existingEntries) {
+    const bucket = existingByJobOrder.get(entry.jobOrderId) ?? new Set<string>();
+    if (entry.fingerprint) {
+      bucket.add(entry.fingerprint);
+    }
+    existingByJobOrder.set(entry.jobOrderId, bucket);
+  }
+
+  const getExistingFingerprints = (jobOrderId: string) => {
+    const bucket = existingByJobOrder.get(jobOrderId) ?? new Set<string>();
+    existingByJobOrder.set(jobOrderId, bucket);
+    return bucket;
+  };
+
+  const affectedJobOrderIds = new Set<string>(
+    session.rows.length > 0 ? session.rows.map((row) => row.jobOrderId) : [session.jobOrderId]
   );
 
   let createdCount = 0;
@@ -1246,7 +1544,7 @@ export async function applyApprovedCostImportRows(sessionId: string) {
       const resolvedFingerprint =
         row.fingerprint ??
         buildApprovedFallbackFingerprint({
-          jobOrderId: session.jobOrderId,
+          jobOrderId: row.jobOrderId,
           sourceRowFingerprint: row.sourceRowFingerprint,
           rowId: row.id,
           sourceAccountCode: row.sourceAccountCode,
@@ -1261,7 +1559,7 @@ export async function applyApprovedCostImportRows(sessionId: string) {
       const resolvedFingerprintSource =
         row.fingerprintSource ??
         buildApprovedFallbackFingerprint({
-          jobOrderId: session.jobOrderId,
+          jobOrderId: row.jobOrderId,
           sourceRowFingerprint: row.sourceRowFingerprint,
           rowId: row.id,
           sourceAccountCode: row.sourceAccountCode,
@@ -1273,7 +1571,9 @@ export async function applyApprovedCostImportRows(sessionId: string) {
           amount: decimalToNumber(row.amount),
         }).fingerprintSource;
 
-      if (existingByFingerprint.has(resolvedFingerprint)) {
+      const existingFingerprints = getExistingFingerprints(row.jobOrderId);
+
+      if (existingFingerprints.has(resolvedFingerprint)) {
         await tx.costImportRowStaging.update({
           where: { id: row.id },
           data: {
@@ -1286,7 +1586,7 @@ export async function applyApprovedCostImportRows(sessionId: string) {
 
       await tx.costActualEntry.create({
         data: {
-          jobOrderId: session.jobOrderId,
+          jobOrderId: row.jobOrderId,
           category: row.finalCategory,
           amount: row.amount,
           sourceAccountCode: row.sourceAccountCode,
@@ -1307,12 +1607,12 @@ export async function applyApprovedCostImportRows(sessionId: string) {
         await tx.costImportCorrectionRule.upsert({
           where: {
             jobOrderId_sourceRowFingerprint: {
-              jobOrderId: session.jobOrderId,
+              jobOrderId: row.jobOrderId,
               sourceRowFingerprint: row.sourceRowFingerprint,
             },
           },
           create: {
-            jobOrderId: session.jobOrderId,
+            jobOrderId: row.jobOrderId,
             sourceRowFingerprint: row.sourceRowFingerprint,
             sourceRowFingerprintSource: row.sourceRowFingerprintSource,
             sourceAccountCode: row.sourceAccountCode,
@@ -1358,7 +1658,7 @@ export async function applyApprovedCostImportRows(sessionId: string) {
         },
       });
 
-      existingByFingerprint.add(resolvedFingerprint);
+      existingFingerprints.add(resolvedFingerprint);
       createdCount += 1;
     }
 
@@ -1371,7 +1671,9 @@ export async function applyApprovedCostImportRows(sessionId: string) {
     });
   });
 
-  await recalculateJobOrderActualCosts(session.jobOrderId);
+  for (const jobOrderId of affectedJobOrderIds) {
+    await recalculateJobOrderActualCosts(jobOrderId);
+  }
 
   return {
     createdCount,

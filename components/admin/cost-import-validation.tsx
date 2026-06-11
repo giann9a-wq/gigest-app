@@ -24,6 +24,12 @@ type SessionPayload = {
     type: string;
     status: string;
   };
+  allJobOrders: Array<{
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+  }>;
   stats: {
     total: number;
     pending: number;
@@ -37,6 +43,8 @@ type SessionPayload = {
   };
   rows: Array<{
     id: string;
+    jobOrderId: string;
+    jobOrderName: string;
     rowIndex: number;
     sourceAccountCode: string | null;
     sourceAccountDescription: string | null;
@@ -58,6 +66,13 @@ type SessionPayload = {
   }>;
 };
 
+type SplitDraftRow = {
+  jobOrderId: string;
+  amount: string;
+  finalCategory: CostActualCategory | "";
+  finalDescription: string;
+};
+
 const CATEGORY_OPTIONS: CostActualCategory[] = [
   "MATERIE_PRIME",
   "PRESTAZIONI_PROFESSIONALI",
@@ -75,6 +90,13 @@ function formatDate(value: string) {
 function categoryLabel(value: CostActualCategory | null) {
   if (!value) return "Da definire";
   return value.replaceAll("_", " ");
+}
+
+function amountToCents(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === "") return 0;
+  const parsed = typeof value === "number" ? value : Number(String(value).replace(",", "."));
+  if (!Number.isFinite(parsed)) return Number.NaN;
+  return Math.round(parsed * 100);
 }
 
 async function jsonFetch<T>(url: string, options?: RequestInit): Promise<T> {
@@ -104,6 +126,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
         amount: string;
         finalDescription: string;
         finalCategory: string;
+        jobOrderId: string;
         validationNote: string;
       }
     >
@@ -111,6 +134,8 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
   const [matchFilter, setMatchFilter] = useState<"ALL" | MatchStatus>("NEW");
   const [validationFilter, setValidationFilter] = useState<"ALL" | ValidationStatus>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<"ALL" | CostActualCategory>("ALL");
+  const [splitRow, setSplitRow] = useState<SessionPayload["rows"][number] | null>(null);
+  const [splitDraftRows, setSplitDraftRows] = useState<SplitDraftRow[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pendingRowId, setPendingRowId] = useState("");
@@ -151,6 +176,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
       amount: row.amount == null ? "" : String(row.amount),
       finalDescription: row.finalDescription ?? "",
       finalCategory: row.finalCategory ?? "",
+      jobOrderId: row.jobOrderId ?? "",
       validationNote: row.validationNote ?? "",
     };
   }
@@ -236,6 +262,40 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
     });
   }
 
+  function approveAndApplySelectedRows() {
+    if (selectedIds.length === 0) {
+      setError("Seleziona almeno una riga.");
+      return;
+    }
+
+    setError("");
+    setMessage("");
+
+    startTransition(async () => {
+      try {
+        await jsonFetch(`/api/admin/import-costi/${sessionId}/rows`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "approve",
+            rowIds: selectedIds,
+          }),
+        });
+        const result = await jsonFetch<{ createdCount: number; approvedCount: number }>(
+          `/api/admin/import-costi/${sessionId}/apply`,
+          { method: "POST" }
+        );
+        setMessage(
+          `Approvazione e conferma completate: ${result.createdCount} costi actual creati su ${result.approvedCount} righe approvate.`
+        );
+        setSelectedIds([]);
+        await loadSession();
+      } catch (actionError) {
+        setError(actionError instanceof Error ? actionError.message : "Errore in approvazione e conferma");
+      }
+    });
+  }
+
   function saveRow(rowId: string, payload: Record<string, unknown>) {
     setPendingRowId(rowId);
     setError("");
@@ -271,26 +331,87 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
       amount: draft.amount === "" ? null : Number(draft.amount),
       finalDescription: draft.finalDescription,
       finalCategory: draft.finalCategory || null,
+      jobOrderId: draft.jobOrderId,
       validationNote: draft.validationNote,
     });
   }
 
-  function applyApprovedRows() {
+  function openSplitModal(row: SessionPayload["rows"][number]) {
+    const amount = row.amount ?? 0;
+    const half = Number((amount / 2).toFixed(2));
+    const remaining = Number((amount - half).toFixed(2));
+
+    setSplitRow(row);
+    setSplitDraftRows([
+      {
+        jobOrderId: row.jobOrderId,
+        amount: half ? String(half) : "",
+        finalCategory: row.finalCategory ?? "",
+        finalDescription: row.finalDescription || row.descriptionOriginal || "",
+      },
+      {
+        jobOrderId: row.jobOrderId,
+        amount: remaining ? String(remaining) : "",
+        finalCategory: row.finalCategory ?? "",
+        finalDescription: row.finalDescription || row.descriptionOriginal || "",
+      },
+    ]);
+    setError("");
+    setMessage("");
+  }
+
+  function updateSplitDraft(index: number, field: keyof SplitDraftRow, value: string) {
+    setSplitDraftRows((current) =>
+      current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row))
+    );
+  }
+
+  function addSplitDraftRow() {
+    if (!splitRow) return;
+    setSplitDraftRows((current) => [
+      ...current,
+      {
+        jobOrderId: splitRow.jobOrderId,
+        amount: "",
+        finalCategory: splitRow.finalCategory ?? "",
+        finalDescription: splitRow.finalDescription || splitRow.descriptionOriginal || "",
+      },
+    ]);
+  }
+
+  function removeSplitDraftRow(index: number) {
+    setSplitDraftRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+  }
+
+  function applySplit() {
+    if (!splitRow) return;
+
+    setPendingRowId(splitRow.id);
     setError("");
     setMessage("");
 
     startTransition(async () => {
       try {
-        const result = await jsonFetch<{ createdCount: number; approvedCount: number }>(
-          `/api/admin/import-costi/${sessionId}/apply`,
-          { method: "POST" }
-        );
-        setMessage(
-          `Conferma completata: ${result.createdCount} costi actual creati su ${result.approvedCount} righe approvate.`
-        );
+        await jsonFetch(`/api/admin/import-costi/${sessionId}/rows/${splitRow.id}/split`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            splits: splitDraftRows.map((row) => ({
+              jobOrderId: row.jobOrderId,
+              amount: row.amount,
+              finalCategory: row.finalCategory || null,
+              finalDescription: row.finalDescription,
+            })),
+          }),
+        });
+        setMessage("Costo diviso correttamente. Le nuove righe sono da verificare e approvare.");
+        setSplitRow(null);
+        setSplitDraftRows([]);
         await loadSession();
-      } catch (applyError) {
-        setError(applyError instanceof Error ? applyError.message : "Errore nella conferma import");
+      } catch (splitError) {
+        setError(splitError instanceof Error ? splitError.message : "Errore dividendo il costo");
+      } finally {
+        setPendingRowId("");
       }
     });
   }
@@ -298,6 +419,23 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
   if (!session) {
     return <div className="card">Caricamento validazione costi...</div>;
   }
+
+  const splitOriginalCents = amountToCents(splitRow?.amount);
+  const splitDraftCents = splitDraftRows.reduce(
+    (total, row) => total + amountToCents(row.amount),
+    0
+  );
+  const splitDifferenceCents =
+    Number.isFinite(splitOriginalCents) && Number.isFinite(splitDraftCents)
+      ? splitDraftCents - splitOriginalCents
+      : Number.NaN;
+  const splitIsBalanced = splitRow != null && splitDifferenceCents === 0;
+  const splitHasInvalidRows =
+    splitDraftRows.length < 2 ||
+    splitDraftRows.some((row) => {
+      const cents = amountToCents(row.amount);
+      return !row.jobOrderId || !row.finalCategory || !Number.isFinite(cents) || cents <= 0;
+    });
 
   return (
     <div className="cost-import-validation-page">
@@ -368,44 +506,41 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
             <button type="button" className="mobile-button-secondary" onClick={toggleSelectAllVisible}>
               {filteredRows.every((row) => selectedIds.includes(row.id)) ? "Deseleziona tutto" : "Seleziona tutto"}
             </button>
-            <button type="button" className="button" onClick={() => runBulkAction("approve")} disabled={isPending}>
-              Approva selezionate
-            </button>
             <button type="button" className="mobile-button-secondary" onClick={() => runBulkAction("reject")} disabled={isPending}>
               Rifiuta selezionate
             </button>
-            <button type="button" className="button" onClick={applyApprovedRows} disabled={isPending}>
-              Conferma nei costi actual
+            <button type="button" className="button" onClick={approveAndApplySelectedRows} disabled={isPending}>
+              Approva e conferma
             </button>
           </div>
         </div>
 
-        <div className="scad-table-wrap">
+        <div className="mobile-table-shell commesse-table-shell cost-import-table-shell">
           <table className="scad-table cost-import-table">
             <colgroup>
               <col style={{ width: "72px" }} />
               <col style={{ width: "180px" }} />
-              <col style={{ width: "320px" }} />
               <col style={{ width: "280px" }} />
               <col style={{ width: "140px" }} />
-              <col style={{ width: "180px" }} />
               <col style={{ width: "260px" }} />
               <col style={{ width: "150px" }} />
+              <col style={{ width: "260px" }} />
               <col style={{ width: "210px" }} />
+              <col style={{ width: "150px" }} />
               <col style={{ width: "150px" }} />
             </colgroup>
             <thead>
               <tr>
                 <th>Sel.</th>
                 <th>Match</th>
-                <th>Conto sorgente</th>
                 <th>Fornitore</th>
                 <th>Data</th>
-                <th>Documento</th>
                 <th>Descrizione finale</th>
                 <th>Importo</th>
+                <th>Commessa</th>
                 <th>Categoria</th>
                 <th>Validazione</th>
+                <th>Azioni</th>
               </tr>
             </thead>
             <tbody>
@@ -439,10 +574,8 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                           </button>
                         ) : null}
                       </td>
-                      <td>{row.sourceAccountDescription || "-"}</td>
                       <td>{row.supplierName || "-"} </td>
                       <td>{formatDate(row.documentDate || row.registrationDate)}</td>
-                      <td>{row.documentNumber || "-"}</td>
                       <td>
                         <input
                           className="scad-table-filter-input"
@@ -456,6 +589,23 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                         {pendingRowId === row.id ? <div className="muted">Salvataggio...</div> : null}
                       </td>
                       <td>{formatCurrency(row.amount)}</td>
+                      <td>
+                        <select
+                          className="mobile-data-select"
+                          value={row.jobOrderId}
+                          onChange={(event) =>
+                            saveRow(row.id, {
+                              jobOrderId: event.target.value,
+                            })
+                          }
+                        >
+                          {session.allJobOrders.map((jobOrder) => (
+                            <option key={jobOrder.id} value={jobOrder.id}>
+                              {jobOrder.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td>
                         <select
                           className="mobile-data-select"
@@ -475,6 +625,16 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                         </select>
                       </td>
                       <td>{row.validationStatus}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="mobile-button-secondary"
+                          onClick={() => openSplitModal(row)}
+                          disabled={session.status === "APPLIED" || row.amount == null || isPending}
+                        >
+                          Dividi
+                        </button>
+                      </td>
                     </tr>
                     {isInvalid && isExpanded ? (
                       <tr>
@@ -563,6 +723,20 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                                 ))}
                               </select>
                             </label>
+                            <label className="mobile-data-field">
+                              <span className="mobile-data-label">Commessa</span>
+                              <select
+                                className="mobile-data-select"
+                                value={draft.jobOrderId}
+                                onChange={(event) => updateRowDraft(row, "jobOrderId", event.target.value)}
+                              >
+                                {session.allJobOrders.map((jobOrder) => (
+                                  <option key={jobOrder.id} value={jobOrder.id}>
+                                    {jobOrder.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
                             <label className="mobile-data-field" style={{ gridColumn: "1 / span 2" }}>
                               <span className="mobile-data-label">Descrizione finale</span>
                               <input
@@ -595,6 +769,127 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
           </table>
         </div>
       </section>
+      {splitRow ? (
+        <div className="cost-import-split-backdrop" role="dialog" aria-modal="true" aria-labelledby="cost-import-split-title">
+          <div className="cost-import-split-modal">
+            <div className="cost-import-split-head">
+              <div>
+                <p className="dashboard-kicker">Split costo</p>
+                <h3 id="cost-import-split-title">Dividi voce costo</h3>
+                <p className="mobile-section-subtitle">
+                  {splitRow.supplierName || "Fornitore non definito"} - documento {splitRow.documentNumber || "-"}
+                </p>
+              </div>
+              <button type="button" className="mobile-button-secondary" onClick={() => setSplitRow(null)} disabled={isPending}>
+                Chiudi
+              </button>
+            </div>
+
+            <div className="cost-import-split-summary">
+              <div>
+                <span>Importo origine</span>
+                <strong>{formatCurrency(splitRow.amount)}</strong>
+              </div>
+              <div>
+                <span>Totale allocato</span>
+                <strong>{formatCurrency(splitDraftCents / 100)}</strong>
+              </div>
+              <div className={splitIsBalanced ? "cost-import-split-ok" : "cost-import-split-ko"}>
+                <span>Differenza</span>
+                <strong>{Number.isFinite(splitDifferenceCents) ? formatCurrency(splitDifferenceCents / 100) : "-"}</strong>
+              </div>
+            </div>
+
+            <div className="cost-import-split-list">
+              {splitDraftRows.map((draft, index) => (
+                <div key={index} className="cost-import-split-row">
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Commessa</span>
+                    <select
+                      className="mobile-data-select"
+                      value={draft.jobOrderId}
+                      onChange={(event) => updateSplitDraft(index, "jobOrderId", event.target.value)}
+                    >
+                      {session.allJobOrders.map((jobOrder) => (
+                        <option key={jobOrder.id} value={jobOrder.id}>
+                          {jobOrder.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Importo</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="admin-password-input"
+                      value={draft.amount}
+                      onChange={(event) => updateSplitDraft(index, "amount", event.target.value)}
+                    />
+                  </label>
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Categoria</span>
+                    <select
+                      className="mobile-data-select"
+                      value={draft.finalCategory}
+                      onChange={(event) => updateSplitDraft(index, "finalCategory", event.target.value)}
+                    >
+                      <option value="">Da definire</option>
+                      {CATEGORY_OPTIONS.map((category) => (
+                        <option key={category} value={category}>
+                          {categoryLabel(category)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Descrizione</span>
+                    <input
+                      className="admin-password-input"
+                      value={draft.finalDescription}
+                      onChange={(event) => updateSplitDraft(index, "finalDescription", event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="icon-action-button icon-action-button-danger"
+                    onClick={() => removeSplitDraftRow(index)}
+                    disabled={splitDraftRows.length <= 2 || isPending}
+                    title="Rimuovi riga split"
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {!splitIsBalanced ? (
+              <div className="scad-error">
+                Lo split deve allocare esattamente il totale origine: non sono ammessi sotto-allocazione o over-allocazione.
+              </div>
+            ) : null}
+
+            <div className="cost-import-split-actions">
+              <button type="button" className="mobile-button-secondary" onClick={addSplitDraftRow} disabled={isPending}>
+                Aggiungi riga
+              </button>
+              <div>
+                <button type="button" className="mobile-button-secondary" onClick={() => setSplitRow(null)} disabled={isPending}>
+                  Annulla
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={applySplit}
+                  disabled={isPending || !splitIsBalanced || splitHasInvalidRows}
+                >
+                  {pendingRowId === splitRow.id ? "Divido..." : "Conferma split"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

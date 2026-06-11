@@ -16,9 +16,11 @@ export async function GET() {
 
   const status = await getSharedGoogleCalendarStatus(appUser.id);
 
+  const canManage = appUser.role === UserRole.ADMIN;
+
   return NextResponse.json({
     connected: status.currentUserConnected,
-    canManage: appUser.role === UserRole.ADMIN,
+    canManage,
     canConnect: true,
     integration: status.primary
       ? {
@@ -31,18 +33,20 @@ export async function GET() {
           updatedAt: status.primary.updatedAt.toISOString(),
         }
       : null,
-    connectedCount: status.connectedCount,
-    activeGoogleAccountCount: status.activeGoogleAccountCount,
-    missingAccountCount: status.missingAccountCount,
-    integrations: status.integrations.map((integration) => ({
-      calendarName: integration.calendarName,
-      connectedEmail: integration.connectedEmail,
-      externalCalendarId: integration.externalCalendarId,
-      lastSyncedAt: integration.lastSyncedAt?.toISOString() ?? null,
-      syncStatus: integration.syncStatus,
-      syncError: integration.syncError,
-      updatedAt: integration.updatedAt.toISOString(),
-    })),
+    connectedCount: canManage ? status.connectedCount : undefined,
+    activeGoogleAccountCount: canManage ? status.activeGoogleAccountCount : undefined,
+    missingAccountCount: canManage ? status.missingAccountCount : undefined,
+    integrations: canManage
+      ? status.integrations.map((integration) => ({
+          calendarName: integration.calendarName,
+          connectedEmail: integration.connectedEmail,
+          externalCalendarId: integration.externalCalendarId,
+          lastSyncedAt: integration.lastSyncedAt?.toISOString() ?? null,
+          syncStatus: integration.syncStatus,
+          syncError: integration.syncError,
+          updatedAt: integration.updatedAt.toISOString(),
+        }))
+      : [],
   });
 }
 

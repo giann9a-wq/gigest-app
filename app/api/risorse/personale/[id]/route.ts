@@ -15,6 +15,26 @@ function parseOptionalDate(value?: string | null) {
 
 const allowedStatuses: ResourceStatus[] = ["ACTIVE", "SUSPENDED", "ENDED"];
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function parseEmailRecipients(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item ?? "").trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  const raw = String(value ?? "").trim();
+  if (!raw) return [];
+
+  return raw
+    .split(/[\s,;]+/g)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -47,6 +67,12 @@ export async function GET(
       roleDescription: person.roleDescription ?? "",
       hireDate: toInputDate(person.hireDate),
       contacts: person.contacts ?? "",
+      diaryReminderRecipients: person.diaryReminderRecipients ?? [],
+      isPartTime: person.isPartTime,
+      partTimeHours: person.partTimeHours ? Number(person.partTimeHours) : "",
+      diaryAutoFillEnabled: person.diaryAutoFillEnabled,
+      diaryAutoFillJobOrderId: person.diaryAutoFillJobOrderId ?? "",
+      excludeFromChecks: person.excludeFromChecks,
       status: person.status,
     },
     costHistory: person.costHistory.map((c) => ({
@@ -55,6 +81,11 @@ export async function GET(
       validFrom: toInputDate(c.validFrom),
       validTo: toInputDate(c.validTo),
     })),
+    jobOrders: await prisma.jobOrder.findMany({
+      where: { status: ResourceStatus.ACTIVE },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
   });
 }
 
@@ -130,6 +161,16 @@ export async function POST(
 
   const person = body.person;
   const costHistory = Array.isArray(body.costHistory) ? body.costHistory : [];
+  const diaryReminderRecipients = parseEmailRecipients(person?.diaryReminderRecipients ?? person?.diaryReminderRecipientsRaw);
+  const isPartTime = person?.isPartTime === true;
+  const partTimeHoursRaw = person?.partTimeHours;
+  const partTimeHours =
+    partTimeHoursRaw === "" || partTimeHoursRaw === null || partTimeHoursRaw === undefined
+      ? null
+      : Number(partTimeHoursRaw);
+  const diaryAutoFillEnabled = person?.diaryAutoFillEnabled === true;
+  const diaryAutoFillJobOrderId = String(person?.diaryAutoFillJobOrderId ?? "").trim();
+  const excludeFromChecks = person?.excludeFromChecks === true;
 
   if (!person?.fullName?.trim()) {
     return NextResponse.json({ error: "Nome e Cognome obbligatorio" }, { status: 400 });
@@ -137,6 +178,43 @@ export async function POST(
 
   if (!allowedStatuses.includes(person.status)) {
     return NextResponse.json({ error: "Stato non valido" }, { status: 400 });
+  }
+
+  if (diaryReminderRecipients.length > 25) {
+    return NextResponse.json(
+      { error: "Troppi destinatari email (massimo 25)" },
+      { status: 400 }
+    );
+  }
+
+  const invalidRecipient = diaryReminderRecipients.find((recipient) => !isValidEmail(recipient));
+  if (invalidRecipient) {
+    return NextResponse.json(
+      { error: `Email destinatario non valida: ${invalidRecipient}` },
+      { status: 400 }
+    );
+  }
+
+  if (isPartTime && (partTimeHours === null || Number.isNaN(partTimeHours) || partTimeHours <= 0 || partTimeHours > 24)) {
+    return NextResponse.json({ error: "Ore part time non valide" }, { status: 400 });
+  }
+
+  if (diaryAutoFillEnabled && !diaryAutoFillJobOrderId) {
+    return NextResponse.json(
+      { error: "Se abiliti l'autocompilazione diario devi selezionare una commessa." },
+      { status: 400 }
+    );
+  }
+
+  if (diaryAutoFillEnabled) {
+    const jobOrder = await prisma.jobOrder.findFirst({
+      where: { id: diaryAutoFillJobOrderId, status: ResourceStatus.ACTIVE },
+      select: { id: true },
+    });
+
+    if (!jobOrder) {
+      return NextResponse.json({ error: "Commessa autocompilazione non valida." }, { status: 400 });
+    }
   }
 
 for (const row of costHistory) {
@@ -167,6 +245,12 @@ try {
         roleDescription: person.roleDescription?.trim() || null,
         hireDate: parseOptionalDate(person.hireDate),
         contacts: person.contacts?.trim() || null,
+        diaryReminderRecipients,
+        isPartTime,
+        partTimeHours: isPartTime && partTimeHours !== null ? new Prisma.Decimal(partTimeHours.toFixed(1)) : null,
+        diaryAutoFillEnabled,
+        diaryAutoFillJobOrderId: diaryAutoFillEnabled ? diaryAutoFillJobOrderId : null,
+        excludeFromChecks,
         status: person.status,
       },
     });

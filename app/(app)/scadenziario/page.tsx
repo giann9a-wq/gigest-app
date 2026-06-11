@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type DeadlineRow = {
   id: string;
@@ -10,16 +10,23 @@ type DeadlineRow = {
   startTime: string;
   endTime: string;
   isAllDay: boolean;
-  origin: "MANUAL" | "MAINTENANCE";
+  recurrenceSeriesId: string | null;
+  recurrenceLabel: string;
+  origin: "MANUAL" | "MAINTENANCE" | "TRAINING";
   originLabel: string;
   lastSource: "GIGEST" | "GOOGLE_CALENDAR";
   maintenanceId: string | null;
+  trainingId: string | null;
   canEdit: boolean;
   canDelete: boolean;
   eventKind: "DEADLINE" | "JOB_ORDER_END";
   linkedEquipment: {
     id: string;
     nameDescription: string;
+  } | null;
+  linkedPerson: {
+    id: string;
+    fullName: string;
   } | null;
   linkedJobOrder: {
     id: string;
@@ -36,15 +43,18 @@ type DeadlineFormState = {
   isAllDay: boolean;
   startTime: string;
   endTime: string;
+  recurrenceEnabled: boolean;
+  recurrenceIntervalWeeks: string;
+  recurrenceUntil: string;
 };
 
 type GoogleCalendarStatus = {
   connected: boolean;
   canManage: boolean;
   canConnect: boolean;
-  connectedCount: number;
-  activeGoogleAccountCount: number;
-  missingAccountCount: number;
+  connectedCount?: number;
+  activeGoogleAccountCount?: number;
+  missingAccountCount?: number;
   integration: {
     calendarName: string;
     connectedEmail: string | null;
@@ -77,7 +87,7 @@ type DeadlineTableFilters = {
   title: string;
   description: string;
   eventDate: string;
-  origin: "" | "MANUAL" | "MAINTENANCE";
+  origin: "" | "MANUAL" | "MAINTENANCE" | "TRAINING";
   lastSource: "" | "GIGEST" | "GOOGLE_CALENDAR";
   linkedEquipment: string;
 };
@@ -121,6 +131,10 @@ function getLinkedLabel(row: DeadlineRow) {
     return `Mezzo: ${row.linkedEquipment.nameDescription}`;
   }
 
+  if (row.linkedPerson) {
+    return `Risorsa: ${row.linkedPerson.fullName}`;
+  }
+
   if (row.linkedJobOrder) {
     return `Commessa: ${row.linkedJobOrder.name}`;
   }
@@ -133,7 +147,7 @@ function getReadonlyBadgeLabel(row: DeadlineRow) {
     return "Fine commessa";
   }
 
-  return "Da manutenzione";
+  return row.origin === "TRAINING" ? "Da formazione" : "Da manutenzione";
 }
 
 function compareDeadlineRows(a: DeadlineRow, b: DeadlineRow) {
@@ -186,6 +200,9 @@ function getEmptyForm(date: string): DeadlineFormState {
     isAllDay: true,
     startTime: "",
     endTime: "",
+    recurrenceEnabled: false,
+    recurrenceIntervalWeeks: "1",
+    recurrenceUntil: date,
   };
 }
 
@@ -202,6 +219,7 @@ function getEmptyDeadlineTableFilters(): DeadlineTableFilters {
 
 export default function ScadenziarioPage() {
   const todayIso = toIsoDate(new Date());
+  const autoSyncStartedRef = useRef(false);
 
   const [rows, setRows] = useState<DeadlineRow[]>([]);
   const [calendarStatus, setCalendarStatus] = useState<GoogleCalendarStatus | null>(null);
@@ -217,6 +235,7 @@ export default function ScadenziarioPage() {
   );
   const [tableSortKey, setTableSortKey] = useState<DeadlineTableSortKey>("eventDate");
   const [tableSortDirection, setTableSortDirection] = useState<"asc" | "desc">("asc");
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -255,17 +274,36 @@ export default function ScadenziarioPage() {
         throw new Error(data.error || "Errore caricamento stato Google Calendar");
       }
 
-      setCalendarStatus(data as GoogleCalendarStatus);
+      const status = data as GoogleCalendarStatus;
+      setCalendarStatus(status);
+      return status;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore imprevisto");
+      return null;
     } finally {
       setCalendarLoading(false);
     }
   }
 
   useEffect(() => {
-    loadRows();
-    loadCalendarStatus();
+    async function initializePage() {
+      const [, status] = await Promise.all([loadRows(), loadCalendarStatus()]);
+      const currentCalendar = status?.integration ?? null;
+      const currentCalendarHasError =
+        currentCalendar?.syncStatus === "ERROR" || Boolean(currentCalendar?.syncError);
+
+      if (
+        !autoSyncStartedRef.current &&
+        status?.connected &&
+        status.canManage &&
+        !currentCalendarHasError
+      ) {
+        autoSyncStartedRef.current = true;
+        await handleSyncGoogleCalendar({ silent: true });
+      }
+    }
+
+    void initializePage();
   }, []);
 
   useEffect(() => {
@@ -306,6 +344,11 @@ export default function ScadenziarioPage() {
     setForm(getEmptyForm(date));
   }
 
+  function openNewForm(date = selectedDate) {
+    resetForm(date);
+    setIsFormOpen(true);
+  }
+
   function handleSelectDay(iso: string) {
     setSelectedDate(iso);
     setSuccessMessage("");
@@ -322,7 +365,7 @@ export default function ScadenziarioPage() {
 
   function handleEdit(row: DeadlineRow) {
     if (!row.canEdit) {
-      setError("Le scadenze da manutenzione si modificano dalla manutenzione origine");
+      setError("Le scadenze derivate si modificano dalla scheda origine");
       return;
     }
 
@@ -343,23 +386,31 @@ export default function ScadenziarioPage() {
       isAllDay: row.isAllDay,
       startTime: row.startTime,
       endTime: row.endTime,
+      recurrenceEnabled: false,
+      recurrenceIntervalWeeks: "1",
+      recurrenceUntil: row.eventDate,
     });
+    setIsFormOpen(true);
   }
 
   async function handleDelete(row: DeadlineRow) {
     if (!row.canDelete) {
-      setError("Le scadenze da manutenzione si eliminano dalla manutenzione origine");
+      setError("Le scadenze derivate si eliminano dalla scheda origine");
       return;
     }
 
     setError("");
     setSuccessMessage("");
 
-    const confirmed = window.confirm(`Vuoi eliminare "${row.title}"?`);
+    const deleteWholeSeries =
+      row.recurrenceSeriesId && window.confirm(`"${row.title}" fa parte di una ricorrenza. Vuoi eliminare tutta la serie?`);
+    const confirmed =
+      deleteWholeSeries ||
+      window.confirm(`Vuoi eliminare "${row.title}"${row.recurrenceSeriesId ? " solo per questa data" : ""}?`);
     if (!confirmed) return;
 
     try {
-      const response = await fetch(`/api/scadenziario/${row.id}`, {
+      const response = await fetch(`/api/scadenziario/${row.id}${deleteWholeSeries ? "?scope=series" : ""}`, {
         method: "DELETE",
       });
       const data = await response.json();
@@ -370,9 +421,10 @@ export default function ScadenziarioPage() {
 
       if (form.id === row.id) {
         resetForm(selectedDate);
+        setIsFormOpen(false);
       }
 
-      setSuccessMessage("Scadenza eliminata");
+      setSuccessMessage(deleteWholeSeries ? `Serie eliminata (${data.deletedCount ?? 0} eventi)` : "Scadenza eliminata");
       await loadRows();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore imprevisto");
@@ -415,6 +467,9 @@ export default function ScadenziarioPage() {
             isAllDay: form.isAllDay,
             startTime: form.isAllDay ? "" : form.startTime,
             endTime: form.isAllDay ? "" : form.endTime,
+            recurrenceEnabled: !form.id && form.recurrenceEnabled,
+            recurrenceIntervalWeeks: form.recurrenceIntervalWeeks,
+            recurrenceUntil: form.recurrenceUntil,
           }),
         }
       );
@@ -426,8 +481,15 @@ export default function ScadenziarioPage() {
       }
 
       setSelectedDate(form.eventDate);
-      setSuccessMessage(form.id ? "Scadenza aggiornata" : "Scadenza creata");
+      setSuccessMessage(
+        form.id
+          ? "Scadenza aggiornata"
+          : data.createdCount && data.createdCount > 1
+            ? `Ricorrenza creata: ${data.createdCount} eventi`
+            : "Scadenza creata"
+      );
       resetForm(form.eventDate);
+      setIsFormOpen(false);
       await loadRows();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore imprevisto");
@@ -436,9 +498,11 @@ export default function ScadenziarioPage() {
     }
   }
 
-  async function handleSyncGoogleCalendar() {
+  async function handleSyncGoogleCalendar(options?: { silent?: boolean }) {
     setError("");
-    setSuccessMessage("");
+    if (!options?.silent) {
+      setSuccessMessage("");
+    }
 
     try {
       setSyncingCalendar(true);
@@ -454,9 +518,11 @@ export default function ScadenziarioPage() {
 
       await loadRows();
       await loadCalendarStatus();
-      setSuccessMessage(
-        `Sincronizzazione completata su ${data.integrationCount ?? 1} account: ${data.syncedCount} eventi riallineati, ${data.importedCount} importati da Google, ${data.deletedCount} rimossi${data.skippedAccountCount ? `, ${data.skippedAccountCount} account senza consenso Calendar` : ""}`
-      );
+      if (!options?.silent) {
+        setSuccessMessage(
+          `Sincronizzazione completata: ${data.syncedCount} eventi riallineati, ${data.importedCount} importati da Google, ${data.deletedCount} rimossi`
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore imprevisto");
     } finally {
@@ -578,6 +644,14 @@ export default function ScadenziarioPage() {
     return `${label} ${tableSortDirection === "asc" ? "↑" : "↓"}`;
   }
 
+  const currentCalendar = calendarStatus?.integration ?? null;
+  const currentCalendarHasError =
+    currentCalendar?.syncStatus === "ERROR" || Boolean(currentCalendar?.syncError);
+  const showConnectCalendarButton =
+    calendarStatus?.canConnect && (!calendarStatus.connected || currentCalendarHasError);
+  const showSyncCalendarButton =
+    calendarStatus?.connected && !currentCalendarHasError && calendarStatus.canManage;
+
   return (
     <div className="scad-page">
       <div className="scad-page-head">
@@ -586,7 +660,7 @@ export default function ScadenziarioPage() {
           <button
             type="button"
             className="scad-outline-btn"
-            onClick={() => resetForm(selectedDate)}
+            onClick={() => openNewForm(selectedDate)}
           >
             Nuova scadenza manuale
           </button>
@@ -596,41 +670,36 @@ export default function ScadenziarioPage() {
           ) : calendarStatus?.connected ? (
             <>
               <div className="scad-google-status">
-                <strong>{calendarStatus.integration?.calendarName}</strong>
+                <strong>{currentCalendar?.calendarName || "Google Calendar"}</strong>
                 <span className="scad-muted">
-                  {calendarStatus.connectedCount > 1
-                    ? `${calendarStatus.connectedCount} account Google collegati`
-                    : calendarStatus.integration?.connectedEmail
-                    ? `Collegato come ${calendarStatus.integration.connectedEmail}`
+                  {currentCalendar?.connectedEmail
+                    ? `Collegato come ${currentCalendar.connectedEmail}`
                     : "Collegato"}
                 </span>
-                {calendarStatus.missingAccountCount > 0 ? (
+                {currentCalendarHasError ? (
                   <span className="scad-muted">
-                    {calendarStatus.missingAccountCount} account deve rifare l'accesso con consenso Calendar
+                    Da ricollegare: {currentCalendar?.syncError || "permesso Google non valido"}
                   </span>
                 ) : null}
                 <span className="scad-muted">
-                  Account attivi: {calendarStatus.activeGoogleAccountCount}
-                </span>
-                <span className="scad-muted">
                   Ultima sync:{" "}
-                  {calendarStatus.integration?.lastSyncedAt
-                    ? new Date(calendarStatus.integration.lastSyncedAt).toLocaleString("it-IT")
+                  {currentCalendar?.lastSyncedAt
+                    ? new Date(currentCalendar.lastSyncedAt).toLocaleString("it-IT")
                     : "mai"}
                 </span>
               </div>
 
-              {calendarStatus.canManage ? (
+              {showSyncCalendarButton ? (
                 <button
                   type="button"
                   className="scad-outline-btn"
-                  onClick={handleSyncGoogleCalendar}
+                  onClick={() => handleSyncGoogleCalendar()}
                   disabled={syncingCalendar}
                 >
                   {syncingCalendar ? "Sincronizzazione..." : "Sincronizza Google"}
                 </button>
               ) : null}
-              {calendarStatus.canConnect ? (
+              {showConnectCalendarButton ? (
                 <a href="/api/google-calendar/connect" className="scad-outline-btn scad-link-btn">
                   Ricollega il mio Google Calendar
                 </a>
@@ -700,6 +769,8 @@ export default function ScadenziarioPage() {
                           ? "scad-calendar-event-joborder"
                           : row.origin === "MAINTENANCE"
                           ? "scad-calendar-event-maintenance"
+                          : row.origin === "TRAINING"
+                          ? "scad-calendar-event-training"
                           : "scad-calendar-event-manual",
                       ].join(" ")}
                       title={row.title}
@@ -738,6 +809,9 @@ export default function ScadenziarioPage() {
                         {row.description ? (
                           <div className="scad-card-description">{row.description}</div>
                         ) : null}
+                        {row.recurrenceLabel ? (
+                          <div className="scad-card-meta">{row.recurrenceLabel}</div>
+                        ) : null}
                         {getLinkedLabel(row) ? (
                           <div className="scad-card-meta">{getLinkedLabel(row)}</div>
                         ) : null}
@@ -762,124 +836,157 @@ export default function ScadenziarioPage() {
               </div>
             )}
           </div>
+        </section>
+      </div>
 
-          <div className="scad-side-section scad-side-section-form">
-            <div className="scad-side-header">
-              <h2 className="scad-section-title">
-                {form.id ? "Modifica scadenza manuale" : "Aggiungi scadenza manuale"}
-              </h2>
-              {form.id ? (
-                <button
-                  type="button"
-                  className="scad-small-btn"
-                  onClick={() => resetForm(selectedDate)}
-                >
-                  Annulla modifica
-                </button>
-              ) : null}
+      {isFormOpen ? (
+        <div className="scad-modal-backdrop" role="presentation" onMouseDown={() => setIsFormOpen(false)}>
+          <section className="scad-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="scad-modal-head">
+              <div>
+                <h2 className="scad-section-title">
+                  {form.id ? "Modifica scadenza manuale" : "Aggiungi scadenza manuale"}
+                </h2>
+                <div className="scad-muted">{formatDisplayDate(form.eventDate || selectedDate)}</div>
+              </div>
+              <button type="button" className="scad-small-btn" onClick={() => setIsFormOpen(false)}>
+                Chiudi
+              </button>
             </div>
 
-            <div className="scad-form-scroll">
-              <div className="scad-form-table">
-                <div className="scad-form-row">
-                  <div className="scad-form-label">Titolo</div>
-                  <div className="scad-form-value">
-                    <input
-                      value={form.title}
-                      onChange={(e) =>
-                        setForm((current) => ({ ...current, title: e.target.value }))
-                      }
-                      className="scad-input"
-                      placeholder="Inserisci titolo evento"
-                    />
-                  </div>
-                </div>
+            <div className="scad-modal-body">
+              <label className="scad-field scad-field-wide">
+                <span>Titolo</span>
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))}
+                  className="scad-input scad-box-input"
+                  placeholder="Inserisci titolo evento"
+                />
+              </label>
 
-                <div className="scad-form-row">
-                  <div className="scad-form-label">Descrizione</div>
-                  <div className="scad-form-value">
-                    <textarea
-                      value={form.description}
+              <label className="scad-field scad-field-wide">
+                <span>Descrizione</span>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
+                  className="scad-input scad-box-input scad-textarea"
+                  placeholder="Dettagli opzionali"
+                />
+              </label>
+
+              <label className="scad-field">
+                <span>Data</span>
+                <input
+                  type="date"
+                  value={form.eventDate}
+                  onChange={(e) => setForm((current) => ({ ...current, eventDate: e.target.value }))}
+                  className="scad-input scad-box-input"
+                />
+              </label>
+
+              <label className="scad-field scad-field-check">
+                <span>Durata</span>
+                <span className="scad-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={form.isAllDay}
+                    onChange={(e) =>
+                      setForm((current) => ({
+                        ...current,
+                        isAllDay: e.target.checked,
+                        startTime: e.target.checked ? "" : current.startTime,
+                        endTime: e.target.checked ? "" : current.endTime,
+                      }))
+                    }
+                  />
+                  <span>Tutto il giorno</span>
+                </span>
+              </label>
+
+              <label className="scad-field">
+                <span>Ora inizio</span>
+                <input
+                  type="time"
+                  value={form.startTime}
+                  onChange={(e) => setForm((current) => ({ ...current, startTime: e.target.value }))}
+                  className="scad-input scad-box-input"
+                  disabled={form.isAllDay}
+                />
+              </label>
+
+              <label className="scad-field">
+                <span>Ora fine</span>
+                <input
+                  type="time"
+                  value={form.endTime}
+                  onChange={(e) => setForm((current) => ({ ...current, endTime: e.target.value }))}
+                  className="scad-input scad-box-input"
+                  disabled={form.isAllDay}
+                />
+              </label>
+
+              {!form.id ? (
+                <div className="scad-recurrence-box scad-field-wide">
+                  <label className="scad-checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={form.recurrenceEnabled}
                       onChange={(e) =>
                         setForm((current) => ({
                           ...current,
-                          description: e.target.value,
+                          recurrenceEnabled: e.target.checked,
+                          recurrenceUntil: current.recurrenceUntil || current.eventDate,
                         }))
                       }
-                      className="scad-input scad-textarea"
-                      placeholder="Dettagli opzionali"
                     />
-                  </div>
-                </div>
+                    <span>Ripeti automaticamente</span>
+                  </label>
 
-                <div className="scad-form-row">
-                  <div className="scad-form-label">Data</div>
-                  <div className="scad-form-value">
-                    <input
-                      type="date"
-                      value={form.eventDate}
-                      onChange={(e) =>
-                        setForm((current) => ({ ...current, eventDate: e.target.value }))
-                      }
-                      className="scad-input"
-                    />
-                  </div>
+                  {form.recurrenceEnabled ? (
+                    <div className="scad-recurrence-grid">
+                      <label className="scad-field">
+                        <span>Ogni</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="52"
+                          value={form.recurrenceIntervalWeeks}
+                          onChange={(e) =>
+                            setForm((current) => ({
+                              ...current,
+                              recurrenceIntervalWeeks: e.target.value,
+                            }))
+                          }
+                          className="scad-input scad-box-input"
+                        />
+                      </label>
+                      <div className="scad-field scad-field-static">
+                        <span>Periodo</span>
+                        <strong>settimane</strong>
+                      </div>
+                      <label className="scad-field">
+                        <span>Fino al</span>
+                        <input
+                          type="date"
+                          value={form.recurrenceUntil}
+                          min={form.eventDate}
+                          onChange={(e) =>
+                            setForm((current) => ({
+                              ...current,
+                              recurrenceUntil: e.target.value,
+                            }))
+                          }
+                          className="scad-input scad-box-input"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
                 </div>
-
-                <div className="scad-form-row">
-                  <div className="scad-form-label">Durata</div>
-                  <div className="scad-form-value">
-                    <label className="scad-checkbox-row">
-                      <input
-                        type="checkbox"
-                        checked={form.isAllDay}
-                        onChange={(e) =>
-                          setForm((current) => ({
-                            ...current,
-                            isAllDay: e.target.checked,
-                            startTime: e.target.checked ? "" : current.startTime,
-                            endTime: e.target.checked ? "" : current.endTime,
-                          }))
-                        }
-                      />
-                      <span>Tutto il giorno</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="scad-form-row">
-                  <div className="scad-form-label">Ora inizio</div>
-                  <div className="scad-form-value">
-                    <input
-                      type="time"
-                      value={form.startTime}
-                      onChange={(e) =>
-                        setForm((current) => ({ ...current, startTime: e.target.value }))
-                      }
-                      className="scad-input"
-                      disabled={form.isAllDay}
-                    />
-                  </div>
-                </div>
-
-                <div className="scad-form-row">
-                  <div className="scad-form-label">Ora fine</div>
-                  <div className="scad-form-value">
-                    <input
-                      type="time"
-                      value={form.endTime}
-                      onChange={(e) =>
-                        setForm((current) => ({ ...current, endTime: e.target.value }))
-                      }
-                      className="scad-input"
-                      disabled={form.isAllDay}
-                    />
-                  </div>
-                </div>
-              </div>
+              ) : null}
             </div>
 
-            <div className="scad-actions scad-actions-between">
+            <div className="scad-modal-actions">
               {form.id ? (
                 <button
                   type="button"
@@ -897,18 +1004,18 @@ export default function ScadenziarioPage() {
                 <span className="scad-muted">Solo le scadenze manuali sono modificabili</span>
               )}
 
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={saving}
-                className="scad-outline-btn"
-              >
-                {saving ? "Salvataggio..." : form.id ? "Aggiorna" : "Salva"}
-              </button>
+              <div className="scad-modal-action-group">
+                <button type="button" className="scad-small-btn" onClick={() => setIsFormOpen(false)}>
+                  Annulla
+                </button>
+                <button type="button" onClick={handleSubmit} disabled={saving} className="scad-outline-btn">
+                  {saving ? "Salvataggio..." : form.id ? "Aggiorna" : "Salva"}
+                </button>
+              </div>
             </div>
-          </div>
-        </section>
-      </div>
+          </section>
+        </div>
+      ) : null}
 
       {error ? <div className="scad-error">{error}</div> : null}
       {successMessage ? <div className="scad-success">{successMessage}</div> : null}
@@ -929,6 +1036,9 @@ export default function ScadenziarioPage() {
                   <div className="scad-card-meta">{formatEventOriginMeta(row)}</div>
                   {row.description ? (
                     <div className="scad-card-description">{row.description}</div>
+                  ) : null}
+                  {row.recurrenceLabel ? (
+                    <div className="scad-card-meta">{row.recurrenceLabel}</div>
                   ) : null}
                   {getLinkedLabel(row) ? (
                     <div className="scad-card-meta">{getLinkedLabel(row)}</div>
@@ -957,6 +1067,9 @@ export default function ScadenziarioPage() {
                         {formatDisplayDate(row.eventDate)} · {formatTimeRange(row)}
                       </div>
                       <div className="scad-card-meta">{row.originLabel} · {row.lastSource}</div>
+                      {row.recurrenceLabel ? (
+                        <div className="scad-card-meta">{row.recurrenceLabel}</div>
+                      ) : null}
                       {getLinkedLabel(row) ? (
                         <div className="scad-card-meta">{getLinkedLabel(row)}</div>
                       ) : null}
@@ -1070,7 +1183,7 @@ export default function ScadenziarioPage() {
                         onChange={(e) =>
                           setTableFilterValue(
                             "origin",
-                            e.target.value as "" | "MANUAL" | "MAINTENANCE"
+                            e.target.value as "" | "MANUAL" | "MAINTENANCE" | "TRAINING"
                           )
                         }
                         className="scad-table-filter-input"
@@ -1078,6 +1191,7 @@ export default function ScadenziarioPage() {
                         <option value="">Tutte le origini</option>
                         <option value="MANUAL">MANUAL</option>
                         <option value="MAINTENANCE">MAINTENANCE</option>
+                        <option value="TRAINING">TRAINING</option>
                       </select>
                       <select
                         value={tableFilters.lastSource}
@@ -1113,7 +1227,10 @@ export default function ScadenziarioPage() {
                     <td>{row.description || "-"}</td>
                     <td>{formatDisplayDate(row.eventDate)}</td>
                     <td>{formatTimeRange(row) || "-"}</td>
-                    <td>{row.originLabel} · {row.lastSource}</td>
+                    <td>
+                      {row.originLabel} · {row.lastSource}
+                      {row.recurrenceLabel ? <div className="scad-card-meta">{row.recurrenceLabel}</div> : null}
+                    </td>
                     <td>{getLinkedLabel(row) || "-"}</td>
                     <td>
                       {row.canEdit ? (

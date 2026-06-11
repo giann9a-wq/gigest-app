@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/diary-reminder-summer",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/diary-reminder-winter",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

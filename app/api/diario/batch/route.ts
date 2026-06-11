@@ -18,6 +18,7 @@ type InternalBatchRowInput = {
 
 type ExternalBatchRowInput = {
   externalResourceId: string;
+  externalResourceName?: string;
   jobOrderId: string;
   days: number | string;
   activityDescription?: string;
@@ -25,6 +26,7 @@ type ExternalBatchRowInput = {
 
 type ExternalEconomyBatchRowInput = {
   externalResourceId: string;
+  externalResourceName?: string;
   jobOrderId: string;
   hours: number | string;
   activityDescription?: string;
@@ -47,6 +49,60 @@ async function getAuthorizedUser() {
   }
 
   return { appUser };
+}
+
+function looksLikeTechnicalId(value: string) {
+  return /^c[a-z0-9]{18,}$/i.test(value.trim());
+}
+
+async function resolveExternalResourceIds(rows: Array<{ externalResourceId: string; externalResourceName: string }>) {
+  const namesToCreate = new Set<string>();
+  const idsToCheck = new Set<string>();
+  const resolvedIdByInput = new Map<string, string>();
+
+  for (const row of rows) {
+    const input = (row.externalResourceName || row.externalResourceId).trim();
+    const rawId = row.externalResourceId.trim();
+    if (!input) continue;
+
+    if (rawId && looksLikeTechnicalId(rawId)) {
+      idsToCheck.add(rawId);
+    }
+
+    if (looksLikeTechnicalId(input)) {
+      idsToCheck.add(input);
+    } else {
+      namesToCreate.add(input);
+    }
+  }
+
+  if (idsToCheck.size > 0) {
+    const existingById = await prisma.externalResource.findMany({
+      where: { id: { in: [...idsToCheck] } },
+      select: { id: true },
+    });
+
+    for (const resource of existingById) {
+      resolvedIdByInput.set(resource.id, resource.id);
+    }
+  }
+
+  for (const name of namesToCreate) {
+    const existingResource = await prisma.externalResource.findFirst({
+      where: { name: { equals: name, mode: "insensitive" } },
+      select: { id: true, name: true },
+    });
+    const resource =
+      existingResource ??
+      (await prisma.externalResource.create({
+        data: { name },
+        select: { id: true, name: true },
+      }));
+
+    resolvedIdByInput.set(name, resource.id);
+  }
+
+  return resolvedIdByInput;
 }
 
 export async function GET(request: NextRequest) {
@@ -200,20 +256,22 @@ export async function POST(request: NextRequest) {
   const cleanedExternalRows = externalRows
     .map((row) => ({
       externalResourceId: row.externalResourceId?.trim() ?? "",
+      externalResourceName: row.externalResourceName?.trim() ?? "",
       jobOrderId: row.jobOrderId?.trim() ?? "",
       days: row.days,
       activityDescription: row.activityDescription?.trim() ?? "",
     }))
-    .filter((row) => row.externalResourceId || row.jobOrderId || row.days || row.activityDescription);
+    .filter((row) => row.externalResourceId || row.externalResourceName || row.jobOrderId || row.days || row.activityDescription);
 
   const cleanedExternalEconomyRows = (Array.isArray(externalEconomyRows) ? externalEconomyRows : [])
     .map((row) => ({
       externalResourceId: row.externalResourceId?.trim() ?? "",
+      externalResourceName: row.externalResourceName?.trim() ?? "",
       jobOrderId: row.jobOrderId?.trim() ?? "",
       hours: row.hours,
       activityDescription: row.activityDescription?.trim() ?? "",
     }))
-    .filter((row) => row.externalResourceId || row.jobOrderId || row.hours || row.activityDescription);
+    .filter((row) => row.externalResourceId || row.externalResourceName || row.jobOrderId || row.hours || row.activityDescription);
 
   for (const row of cleanedInternalRows) {
     if (!row.resourceValue || !row.jobOrderId || row.hours === undefined || row.hours === null || row.hours === "") {
@@ -242,7 +300,7 @@ export async function POST(request: NextRequest) {
   }
 
   for (const row of cleanedExternalRows) {
-    if (!row.externalResourceId || !row.jobOrderId || row.days === undefined || row.days === null || row.days === "") {
+    if (!(row.externalResourceName || row.externalResourceId) || !row.jobOrderId || row.days === undefined || row.days === null || row.days === "") {
       return NextResponse.json(
         { error: "Ogni riga esterna compilata deve avere risorsa, commessa e giornate" },
         { status: 400 }
@@ -259,7 +317,7 @@ export async function POST(request: NextRequest) {
   }
 
   for (const row of cleanedExternalEconomyRows) {
-    if (!row.externalResourceId || !row.jobOrderId || row.hours === undefined || row.hours === null || row.hours === "") {
+    if (!(row.externalResourceName || row.externalResourceId) || !row.jobOrderId || row.hours === undefined || row.hours === null || row.hours === "") {
       return NextResponse.json(
         { error: "Ogni riga in economia compilata deve avere risorsa, commessa e ore" },
         { status: 400 }
@@ -275,22 +333,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const externalResourceIds = [
-    ...new Set([
-      ...cleanedExternalRows.map((row) => row.externalResourceId),
-      ...cleanedExternalEconomyRows.map((row) => row.externalResourceId),
-    ]),
-  ];
-  if (externalResourceIds.length > 0) {
-    const existingResources = await prisma.externalResource.findMany({
-      where: { id: { in: externalResourceIds } },
-      select: { id: true },
-    });
-
-    if (existingResources.length !== externalResourceIds.length) {
-      return NextResponse.json({ error: "Alcune risorse esterne selezionate non esistono" }, { status: 400 });
-    }
-  }
+  const externalResourceIdByInput = await resolveExternalResourceIds([
+    ...cleanedExternalRows,
+    ...cleanedExternalEconomyRows,
+  ]);
 
   const { start, end } = getUtcDayRange(referenceDate);
   const referenceDateValue = new Date(`${referenceDate}T00:00:00.000Z`);
@@ -320,7 +366,10 @@ export async function POST(request: NextRequest) {
 
     return {
       referenceDate: referenceDateValue,
-      externalResourceId: row.externalResourceId,
+      externalResourceId:
+        externalResourceIdByInput.get(row.externalResourceName || row.externalResourceId) ??
+        externalResourceIdByInput.get(row.externalResourceId) ??
+        row.externalResourceId,
       jobOrderId: row.jobOrderId,
       activityType: "SUBCONTRACT",
       days: new Prisma.Decimal(roundedDays),
@@ -337,7 +386,10 @@ export async function POST(request: NextRequest) {
 
     return {
       referenceDate: referenceDateValue,
-      externalResourceId: row.externalResourceId,
+      externalResourceId:
+        externalResourceIdByInput.get(row.externalResourceName || row.externalResourceId) ??
+        externalResourceIdByInput.get(row.externalResourceId) ??
+        row.externalResourceId,
       jobOrderId: row.jobOrderId,
       activityType: "ECONOMY",
       days: new Prisma.Decimal(0),
@@ -351,12 +403,30 @@ export async function POST(request: NextRequest) {
   await prisma.$transaction(async (tx) => {
     await tx.diaryActivity.deleteMany({
       where: {
+        source: "MANUAL",
         referenceDate: {
-          gte: start,
-          lte: end,
+            gte: start,
+            lte: end,
         },
       },
     });
+
+    const manualPersonIds = internalCreateData
+      .map((row) => row.personId)
+      .filter((personId): personId is string => Boolean(personId));
+
+    if (manualPersonIds.length > 0) {
+      await tx.diaryActivity.deleteMany({
+        where: {
+          source: "AUTO",
+          personId: { in: manualPersonIds },
+          referenceDate: {
+            gte: start,
+            lte: end,
+          },
+        },
+      });
+    }
 
     await tx.externalDiaryActivity.deleteMany({
       where: {

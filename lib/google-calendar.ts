@@ -77,6 +77,11 @@ type GoogleAccountWithUser = {
   };
 };
 
+type ValidAccountAccessToken = {
+  accessToken: string;
+  expiresAt: Date | null;
+};
+
 function getGoogleCredentials() {
   const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID ?? process.env.AUTH_GOOGLE_ID;
   const clientSecret =
@@ -308,11 +313,14 @@ async function refreshAccessToken(integration: SharedCalendarIntegration) {
   return updated.accessToken!;
 }
 
-async function getValidAccountAccessToken(account: GoogleAccountWithUser) {
+async function getValidAccountAccessToken(account: GoogleAccountWithUser): Promise<ValidAccountAccessToken> {
   const expiresAt = account.expires_at ? account.expires_at * 1000 : 0;
 
   if (account.access_token && expiresAt > Date.now() + 60_000) {
-    return account.access_token;
+    return {
+      accessToken: account.access_token,
+      expiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
+    };
   }
 
   if (!account.refresh_token) {
@@ -320,6 +328,9 @@ async function getValidAccountAccessToken(account: GoogleAccountWithUser) {
   }
 
   const data = await requestAccessTokenFromRefreshToken(account.refresh_token);
+  const nextExpiresAt = data.expires_in
+    ? Math.floor(Date.now() / 1000) + data.expires_in
+    : account.expires_at;
 
   await prisma.account.update({
     where: {
@@ -330,13 +341,14 @@ async function getValidAccountAccessToken(account: GoogleAccountWithUser) {
     },
     data: {
       access_token: data.access_token,
-      expires_at: data.expires_in
-        ? Math.floor(Date.now() / 1000) + data.expires_in
-        : account.expires_at,
+      expires_at: nextExpiresAt,
     },
   });
 
-  return data.access_token!;
+  return {
+    accessToken: data.access_token!,
+    expiresAt: nextExpiresAt ? new Date(nextExpiresAt * 1000) : null,
+  };
 }
 
 async function getValidAccessToken(integration: SharedCalendarIntegration) {
@@ -560,19 +572,31 @@ async function getExistingIntegrationForAccount(account: GoogleAccountWithUser) 
 }
 
 async function ensureGoogleCalendarIntegrationForAccount(account: GoogleAccountWithUser) {
+  const existing = await getExistingIntegrationForAccount(account);
+
+  if (existing?.refreshToken) {
+    return prisma.calendarIntegration.update({
+      where: { provider: existing.provider },
+      data: {
+        connectedEmail: account.user.email,
+        connectedByUserId: account.user.id,
+        syncStatus: "ACTIVE",
+      },
+    }) as Promise<SharedCalendarIntegration>;
+  }
+
   if (!account.refresh_token) {
     return null;
   }
 
-  const existing = await getExistingIntegrationForAccount(account);
-  const accessToken = await getValidAccountAccessToken(account);
+  const token = await getValidAccountAccessToken(account);
 
   const calendar = existing?.externalCalendarId
     ? {
         id: existing.externalCalendarId,
         summary: existing.calendarName,
       }
-    : await createSharedCalendar(accessToken);
+    : await createSharedCalendar(token.accessToken);
 
   const provider = existing?.provider ?? getUserCalendarProvider(account.user.id);
   const integration = await prisma.calendarIntegration.upsert({
@@ -582,8 +606,8 @@ async function ensureGoogleCalendarIntegrationForAccount(account: GoogleAccountW
       calendarName: calendar.summary,
       connectedEmail: account.user.email,
       refreshToken: account.refresh_token,
-      accessToken,
-      accessTokenExpiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
+      accessToken: token.accessToken,
+      accessTokenExpiresAt: token.expiresAt,
       connectedByUserId: account.user.id,
       syncStatus: "ACTIVE",
       syncError: null,
@@ -594,8 +618,8 @@ async function ensureGoogleCalendarIntegrationForAccount(account: GoogleAccountW
       calendarName: calendar.summary,
       connectedEmail: account.user.email,
       refreshToken: account.refresh_token,
-      accessToken,
-      accessTokenExpiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
+      accessToken: token.accessToken,
+      accessTokenExpiresAt: token.expiresAt,
       connectedByUserId: account.user.id,
       syncStatus: "ACTIVE",
       syncError: null,
@@ -631,6 +655,20 @@ async function prepareGoogleCalendarIntegrationsForActiveAccounts() {
 
   for (const integration of existingIntegrations) {
     if (!integrations.some((current) => current.id === integration.id)) {
+      const isLegacyDuplicate =
+        integration.provider === GOOGLE_PROVIDER &&
+        integrations.some(
+          (current) =>
+            current.provider.startsWith(GOOGLE_USER_PROVIDER_PREFIX) &&
+            ((integration.connectedByUserId &&
+              current.connectedByUserId === integration.connectedByUserId) ||
+              (integration.connectedEmail && current.connectedEmail === integration.connectedEmail))
+        );
+
+      if (isLegacyDuplicate) {
+        continue;
+      }
+
       integrations.push(integration as SharedCalendarIntegration);
     }
   }
@@ -686,7 +724,9 @@ export async function getSharedGoogleCalendarStatus(appUserId?: string) {
           integration.provider === GOOGLE_PROVIDER && integration.connectedByUserId === appUserId
       ) ?? null
     : null;
-  const primary = currentUserIntegration ?? legacyIntegrationForCurrentUser ?? integrations[0] ?? null;
+  const primary = appUserId
+    ? currentUserIntegration ?? legacyIntegrationForCurrentUser ?? null
+    : integrations[0] ?? null;
   const currentUserConnected = Boolean(currentUserIntegration ?? legacyIntegrationForCurrentUser);
 
   return {

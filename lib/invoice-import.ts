@@ -8,6 +8,7 @@ import {
   InvoiceImportValidationStatus,
   Prisma,
 } from "@prisma/client";
+import { recalculateJobOrderActualRevenue } from "@/lib/job-order-revenue";
 import { prisma } from "@/lib/prisma";
 
 type PrismaKnownError = {
@@ -1086,24 +1087,6 @@ export async function applyApprovedInvoiceImportRows(sessionId: string) {
     createdCount,
     approvedCount: session.rows.length,
   };
-}
-
-export async function recalculateJobOrderActualRevenue(jobOrderId: string) {
-  const grouped = await prisma.issuedInvoiceActual.aggregate({
-    where: { jobOrderId },
-    _sum: {
-      netAmount: true,
-    },
-  });
-
-  const actualRevenue = Number(grouped._sum.netAmount ?? 0);
-
-  await prisma.jobOrder.update({
-    where: { id: jobOrderId },
-    data: {
-      actualRevenue: new Prisma.Decimal(actualRevenue.toFixed(2)),
-    },
-  });
 }
 
 export type InvoiceImportSessionPayload = NonNullable<InvoiceImportSessionDetails>;

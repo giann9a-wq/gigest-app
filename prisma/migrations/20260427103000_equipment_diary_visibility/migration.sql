@@ -1,0 +1,1 @@
+ALTER TABLE "Equipment" ADD COLUMN "isVisibleInDiary" BOOLEAN NOT NULL DEFAULT true;

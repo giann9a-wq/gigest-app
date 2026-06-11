@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatCurrency } from "@/lib/number-format";
@@ -17,6 +18,13 @@ type CostCategoryKey =
   | "PRESTAZIONI_PROFESSIONALI"
   | "PRESTAZIONI_TERZI"
   | "SPESE_VARIE";
+
+const CATEGORY_OPTIONS: Array<{ key: CostCategoryKey; label: string }> = [
+  { key: "MATERIE_PRIME", label: "Materie Prime" },
+  { key: "PRESTAZIONI_PROFESSIONALI", label: "Prestazioni Professionali" },
+  { key: "PRESTAZIONI_TERZI", label: "Prestazioni Terzi" },
+  { key: "SPESE_VARIE", label: "Spese Varie" },
+];
 
 type CostActualViewResponse = {
   jobOrder: {
@@ -88,6 +96,7 @@ export default function DashboardCommessaCostiPage() {
     description: string;
     amount: number;
     targetJobOrderId: string;
+    targetCategory: CostCategoryKey;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [movingCost, setMovingCost] = useState(false);
@@ -152,6 +161,7 @@ export default function DashboardCommessaCostiPage() {
         body: JSON.stringify({
           costEntryId: moveCost.id,
           targetJobOrderId: moveCost.targetJobOrderId,
+          targetCategory: moveCost.targetCategory,
         }),
       });
 
@@ -159,7 +169,7 @@ export default function DashboardCommessaCostiPage() {
       const data = await jsonFetch<CostActualViewResponse>(`/api/commesse/${view.jobOrder.id}/costi`);
       setView(data);
     } catch (moveError) {
-      setError(moveError instanceof Error ? moveError.message : "Errore spostando la spesa");
+      setError(moveError instanceof Error ? moveError.message : "Errore modificando la spesa");
     } finally {
       setMovingCost(false);
     }
@@ -171,6 +181,11 @@ export default function DashboardCommessaCostiPage() {
   );
   const canReassignCosts = Boolean(view?.canReassignCosts);
   const reassignJobOrders = view?.allJobOrders ?? [];
+
+  function exportAllCategories() {
+    if (!view) return;
+    window.location.href = `/api/commesse/${view.jobOrder.id}/costi/export`;
+  }
 
   return (
     <div className="cost-view-page">
@@ -184,7 +199,10 @@ export default function DashboardCommessaCostiPage() {
             </p>
           </div>
           <div className="admin-request-actions">
-            <Link href="/dashboard-commessa" className="mobile-button-secondary">
+            <Link
+              href={`/dashboard-commessa${selectedJobOrderId ? `?jobOrderId=${selectedJobOrderId}` : ""}` as Route}
+              className="mobile-button-secondary"
+            >
               Torna alla dashboard
             </Link>
           </div>
@@ -234,7 +252,12 @@ export default function DashboardCommessaCostiPage() {
                 <div className="muted">
                   <strong>{view.jobOrder.name}</strong> · {activeCategory.entryCount} righe validate
                 </div>
-                <div className="muted">Totale categoria: <strong>{formatCurrency(activeCategory.totalAmount)}</strong></div>
+                <div className="cost-view-table-actions">
+                  <div className="muted">Totale categoria: <strong>{formatCurrency(activeCategory.totalAmount)}</strong></div>
+                  <button type="button" className="button" onClick={exportAllCategories}>
+                    Esporta Excel
+                  </button>
+                </div>
               </div>
 
               <div className="scad-table-wrap">
@@ -282,13 +305,14 @@ export default function DashboardCommessaCostiPage() {
                                     id: row.id,
                                     description: row.description || row.documentNumber || "Spesa",
                                     amount: row.amount,
-                                    targetJobOrderId: "",
+                                    targetJobOrderId: view.jobOrder.id,
+                                    targetCategory: activeCategory.key,
                                   })
                                 }
-                                title="Cambia commessa"
-                                aria-label="Cambia commessa"
+                                title="Modifica commessa e tipologia"
+                                aria-label="Modifica commessa e tipologia"
                               >
-                                Cambia
+                                Modifica
                               </button>
                             </td>
                           ) : null}
@@ -308,8 +332,8 @@ export default function DashboardCommessaCostiPage() {
           <div className="cost-view-modal" role="dialog" aria-modal="true" aria-labelledby="move-cost-title">
             <div className="cost-view-modal-head">
               <div>
-                <p className="dashboard-kicker">Cambia commessa</p>
-                <h2 id="move-cost-title">Sposta spesa</h2>
+                <p className="dashboard-kicker">Modifica costo</p>
+                <h2 id="move-cost-title">Aggiorna spesa</h2>
               </div>
               <button
                 type="button"
@@ -334,7 +358,7 @@ export default function DashboardCommessaCostiPage() {
               </label>
 
               <label className="mobile-data-field">
-                <span className="mobile-data-label">Sposta in</span>
+                <span className="mobile-data-label">Commessa</span>
                 <select
                   className="mobile-data-select"
                   value={moveCost.targetJobOrderId}
@@ -345,14 +369,32 @@ export default function DashboardCommessaCostiPage() {
                   }
                   disabled={movingCost}
                 >
-                  <option value="">Seleziona commessa</option>
                   {reassignJobOrders
-                    .filter((jobOrder) => jobOrder.id !== view.jobOrder.id)
                     .map((jobOrder) => (
                       <option key={jobOrder.id} value={jobOrder.id}>
                         {jobOrder.name}
                       </option>
                     ))}
+                </select>
+              </label>
+
+              <label className="mobile-data-field">
+                <span className="mobile-data-label">Tipologia spesa</span>
+                <select
+                  className="mobile-data-select"
+                  value={moveCost.targetCategory}
+                  onChange={(event) =>
+                    setMoveCost((current) =>
+                      current ? { ...current, targetCategory: event.target.value as CostCategoryKey } : current
+                    )
+                  }
+                  disabled={movingCost}
+                >
+                  {CATEGORY_OPTIONS.map((category) => (
+                    <option key={category.key} value={category.key}>
+                      {category.label}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -372,7 +414,7 @@ export default function DashboardCommessaCostiPage() {
                 onClick={moveCostToJobOrder}
                 disabled={movingCost || !moveCost.targetJobOrderId}
               >
-                {movingCost ? "Spostamento..." : "Sposta spesa"}
+                {movingCost ? "Salvataggio..." : "Salva modifiche"}
               </button>
             </div>
           </div>

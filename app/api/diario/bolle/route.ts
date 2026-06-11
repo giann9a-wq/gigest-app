@@ -11,6 +11,9 @@ function parseDate(value: string) {
 function serializeDeliveryNote(row: {
   id: string;
   jobOrderId: string;
+  jobOrder?: {
+    name: string;
+  };
   supplier: string;
   description: string;
   usageDate: Date;
@@ -29,6 +32,7 @@ function serializeDeliveryNote(row: {
   return {
     id: row.id,
     jobOrderId: row.jobOrderId,
+    jobOrderLabel: row.jobOrder?.name ?? "",
     supplier: row.supplier,
     description: row.description,
     usageDate: row.usageDate.toISOString().slice(0, 10),
@@ -57,13 +61,49 @@ export async function GET(request: NextRequest) {
   }
 
   const jobOrderId = request.nextUrl.searchParams.get("jobOrderId")?.trim() || "";
+  const date = request.nextUrl.searchParams.get("date")?.trim() || "";
+  const usageDate = date ? parseDate(date) : null;
 
-  const [rows, deliveryNoteSuppliers, costSuppliers, descriptionSuggestions] = await Promise.all([
-    jobOrderId
+  const [
+    rows,
+    deliveryNoteSuppliers,
+    costSuppliers,
+    costStagingSuppliers,
+    costCorrectionSuppliers,
+    descriptionSuggestions,
+  ] = await Promise.all([
+    usageDate
+      ? prisma.deliveryNoteUsage.findMany({
+          where: { usageDate },
+          orderBy: [{ jobOrder: { name: "asc" } }, { createdAt: "asc" }],
+          include: {
+            jobOrder: {
+              select: {
+                name: true,
+              },
+            },
+            documents: {
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                fileName: true,
+                mimeType: true,
+                sizeBytes: true,
+                createdAt: true,
+              },
+            },
+          },
+        })
+      : jobOrderId
       ? prisma.deliveryNoteUsage.findMany({
           where: { jobOrderId },
           orderBy: [{ usageDate: "desc" }, { createdAt: "desc" }],
           include: {
+            jobOrder: {
+              select: {
+                name: true,
+              },
+            },
             documents: {
               orderBy: { createdAt: "desc" },
               select: {
@@ -92,6 +132,26 @@ export async function GET(request: NextRequest) {
       orderBy: { supplierName: "asc" },
       select: { supplierName: true },
     }),
+    prisma.costImportRowStaging.findMany({
+      distinct: ["supplierName"],
+      where: {
+        supplierName: {
+          not: null,
+        },
+      },
+      orderBy: { supplierName: "asc" },
+      select: { supplierName: true },
+    }),
+    prisma.costImportCorrectionRule.findMany({
+      distinct: ["supplierName"],
+      where: {
+        supplierName: {
+          not: null,
+        },
+      },
+      orderBy: { supplierName: "asc" },
+      select: { supplierName: true },
+    }),
     prisma.deliveryNoteUsage.findMany({
       distinct: ["description"],
       orderBy: { description: "asc" },
@@ -102,6 +162,8 @@ export async function GET(request: NextRequest) {
     ...new Set(
       [
         ...costSuppliers.map((item) => item.supplierName ?? ""),
+        ...costStagingSuppliers.map((item) => item.supplierName ?? ""),
+        ...costCorrectionSuppliers.map((item) => item.supplierName ?? ""),
         ...deliveryNoteSuppliers.map((item) => item.supplier),
       ]
         .map((value) => value.trim())

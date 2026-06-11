@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getEffectiveResourceHourlyCost } from "@/lib/resource-economics";
+import { Prisma } from "@prisma/client";
 
 function parseDateParam(value: string | null, fallback: Date) {
   if (!value) return fallback;
@@ -9,21 +11,6 @@ function parseDateParam(value: string | null, fallback: Date) {
     return null;
   }
   return parsed;
-}
-
-function getApplicableCost(
-  history: { hourlyCost: unknown; validFrom: Date; validTo: Date | null }[],
-  referenceDate: Date
-) {
-  const matching = history.find((item) => {
-    const start = item.validFrom.getTime();
-    const end = item.validTo ? item.validTo.getTime() : Number.POSITIVE_INFINITY;
-    const current = referenceDate.getTime();
-    return current >= start && current <= end;
-  });
-
-  if (!matching) return 0;
-  return Number(matching.hourlyCost);
 }
 
 export async function GET(request: NextRequest) {
@@ -42,12 +29,13 @@ export async function GET(request: NextRequest) {
         select: { fullName: true },
       }),
       prisma.equipment.findMany({
+        where: { status: "ACTIVE", isVisibleInDiary: true },
         orderBy: { nameDescription: "asc" },
         select: { nameDescription: true },
       }),
       prisma.jobOrder.findMany({
         orderBy: { name: "asc" },
-        select: { name: true },
+        select: { id: true, name: true },
       }),
     ]);
 
@@ -58,6 +46,7 @@ export async function GET(request: NextRequest) {
         ),
       ],
       jobOrderOptions: [...new Set(jobOrders.map((item) => item.name).filter(Boolean))],
+      jobOrderRows: jobOrders,
     });
   }
 
@@ -131,6 +120,14 @@ export async function GET(request: NextRequest) {
       jobOrderType: string;
       totalHours: number;
       totalCost: number;
+      activities: Array<{
+        id: string;
+        referenceDate: string;
+        source: "MANUAL" | "AUTO";
+        jobOrderId: string;
+        jobOrderName: string;
+        hours: number;
+      }>;
     }
   >();
 
@@ -143,18 +140,32 @@ export async function GET(request: NextRequest) {
     const resourceType = activity.resourceType;
     const key = `${resourceType}:${activity.personId ?? activity.equipmentId}:${activity.jobOrderId}`;
 
-    const hourlyCost =
-      activity.resourceType === "PERSON"
-        ? getApplicableCost(activity.person?.costHistory ?? [], activity.referenceDate)
-        : getApplicableCost(activity.equipment?.costHistory ?? [], activity.referenceDate);
+    const hourlyCost = getEffectiveResourceHourlyCost({
+      resourceType: activity.resourceType,
+      jobType: activity.jobOrder.type,
+      costHistory:
+        activity.resourceType === "PERSON"
+          ? activity.person?.costHistory ?? []
+          : activity.equipment?.costHistory ?? [],
+      referenceDate: activity.referenceDate,
+    });
 
     const totalHours = Number(activity.hours);
     const totalCost = Number((totalHours * hourlyCost).toFixed(2));
+    const activityRow = {
+      id: activity.id,
+      referenceDate: activity.referenceDate.toISOString().slice(0, 10),
+      source: activity.source as "MANUAL" | "AUTO",
+      jobOrderId: activity.jobOrderId,
+      jobOrderName: activity.jobOrder.name,
+      hours: totalHours,
+    };
     const existing = aggregation.get(key);
 
     if (existing) {
       existing.totalHours = Number((existing.totalHours + totalHours).toFixed(1));
       existing.totalCost = Number((existing.totalCost + totalCost).toFixed(2));
+      existing.activities.push(activityRow);
       continue;
     }
 
@@ -165,6 +176,7 @@ export async function GET(request: NextRequest) {
       jobOrderType: activity.jobOrder.type,
       totalHours: Number(totalHours.toFixed(1)),
       totalCost,
+      activities: [activityRow],
     });
   }
 
@@ -181,4 +193,42 @@ export async function GET(request: NextRequest) {
       to: to ? to.toISOString().slice(0, 10) : "",
     },
   });
+}
+
+export async function PATCH(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const activityId = String(body.activityId ?? "").trim();
+  const jobOrderId = String(body.jobOrderId ?? "").trim();
+  const referenceDate = String(body.referenceDate ?? "").trim();
+  const hours = Number(body.hours ?? "");
+
+  if (!activityId || !jobOrderId || !referenceDate || Number.isNaN(hours) || hours <= 0) {
+    return NextResponse.json({ error: "Dati caricamento non validi" }, { status: 400 });
+  }
+
+  const jobOrder = await prisma.jobOrder.findUnique({
+    where: { id: jobOrderId },
+    select: { id: true },
+  });
+
+  if (!jobOrder) {
+    return NextResponse.json({ error: "Commessa non valida" }, { status: 400 });
+  }
+
+  await prisma.diaryActivity.update({
+    where: { id: activityId },
+    data: {
+      jobOrderId,
+      referenceDate: new Date(`${referenceDate}T00:00:00.000Z`),
+      hours: new Prisma.Decimal((Math.round(hours * 10) / 10).toFixed(1)),
+    },
+  });
+
+  return NextResponse.json({ success: true });
 }

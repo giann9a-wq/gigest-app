@@ -1,10 +1,16 @@
 import { auth } from "@/auth";
 import { ScansSyncButton } from "@/components/dashboard/scans-sync-button";
+import { MaintenanceRollButton } from "@/components/dashboard/maintenance-roll-button";
+import { TrainingRollButton } from "@/components/dashboard/training-roll-button";
 import { getScheduleEvents, type ScheduleEventRow } from "@/lib/schedule-events";
 import { prisma } from "@/lib/prisma";
+import { getActiveAppUser } from "@/lib/app-user";
+import { getAutoDiaryProposalStatus, shouldShowAutoDiaryAlert } from "@/lib/auto-diary-proposals";
+import { getLoadingVerificationStatus, shouldShowLoadingVerificationAlert } from "@/lib/loading-verification";
 import {
   DeliveryNoteValidationStatus,
   ScannedDeliveryNoteStatus,
+  UserRole,
 } from "@prisma/client";
 
 function getUtcDateBoundsFromIso(isoDate: string) {
@@ -77,10 +83,24 @@ export default async function DashboardPage() {
   const todayBounds = getUtcDateBoundsFromIso(todayIso);
   const nextThirtyDaysEnd = new Date(todayBounds.end);
   nextThirtyDaysEnd.setUTCDate(nextThirtyDaysEnd.getUTCDate() + 30);
+  const nextFiveDaysEnd = new Date(todayBounds.end);
+  nextFiveDaysEnd.setUTCDate(nextFiveDaysEnd.getUTCDate() + 5);
   const oldPendingDeliveryNotesLimit = new Date(todayBounds.start);
   oldPendingDeliveryNotesLimit.setUTCDate(oldPendingDeliveryNotesLimit.getUTCDate() - 45);
 
-  const [scheduleEvents, oldPendingDeliveryNotesCount, newScansCount] = await Promise.all([
+  const appUser = await getActiveAppUser();
+  const canSeeAutoDiaryAlert = appUser?.role === UserRole.ADMIN && shouldShowAutoDiaryAlert();
+  const canSeeLoadingVerificationAlert = appUser?.role === UserRole.ADMIN && shouldShowLoadingVerificationAlert();
+
+  const [
+    scheduleEvents,
+    oldPendingDeliveryNotesCount,
+    newScansCount,
+    autoDiaryStatus,
+    loadingVerificationStatus,
+    recurringMaintenanceAlerts,
+    recurringTrainingAlerts,
+  ] = await Promise.all([
     getScheduleEvents({
       from: todayBounds.start,
       to: nextThirtyDaysEnd,
@@ -96,6 +116,38 @@ export default async function DashboardPage() {
     prisma.scannedDeliveryNote.count({
       where: {
         status: ScannedDeliveryNoteStatus.NEW,
+      },
+    }),
+    canSeeAutoDiaryAlert ? getAutoDiaryProposalStatus() : Promise.resolve(null),
+    canSeeLoadingVerificationAlert ? getLoadingVerificationStatus() : Promise.resolve(null),
+    prisma.maintenance.findMany({
+      where: {
+        isRecurring: true,
+        recurrenceMonths: { not: null },
+        nextIntervention: {
+          gte: todayBounds.start,
+          lte: nextFiveDaysEnd,
+        },
+        deadline: { isNot: null },
+      },
+      orderBy: { nextIntervention: "asc" },
+      include: {
+        equipment: { select: { nameDescription: true } },
+      },
+    }),
+    prisma.training.findMany({
+      where: {
+        isRecurring: true,
+        recurrenceMonths: { not: null },
+        expiresAt: {
+          gte: todayBounds.start,
+          lte: nextFiveDaysEnd,
+        },
+        deadline: { isNot: null },
+      },
+      orderBy: { expiresAt: "asc" },
+      include: {
+        person: { select: { fullName: true } },
       },
     }),
   ]);
@@ -129,8 +181,95 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      {newScansCount > 0 || oldPendingDeliveryNotesCount > 0 ? (
+      {newScansCount > 0 ||
+      oldPendingDeliveryNotesCount > 0 ||
+      (autoDiaryStatus?.pendingCount ?? 0) > 0 ||
+      (loadingVerificationStatus?.issueCount ?? 0) > 0 ||
+      recurringMaintenanceAlerts.length > 0 ||
+      recurringTrainingAlerts.length > 0 ? (
         <section className="dashboard-alert-stack" aria-label="Attivita da lavorare">
+          {recurringMaintenanceAlerts.length > 0 ? (
+            <div className="dashboard-work-alert dashboard-work-alert-maintenance">
+              <span className="dashboard-work-alert-main">
+                <span className="dashboard-work-alert-count">{recurringMaintenanceAlerts.length}</span>
+                <span>
+                  <strong>Attivita da verificare</strong>
+                  <span className="dashboard-work-alert-copy">
+                    Manutenzioni ricorrenti in scadenza nei prossimi 5 giorni.
+                  </span>
+                </span>
+              </span>
+              <div className="dashboard-maintenance-alert-list">
+                {recurringMaintenanceAlerts.map((item) => (
+                  <div key={item.id} className="dashboard-maintenance-alert-row">
+                    <span>
+                      <strong>{item.equipment.nameDescription}</strong> - {item.interventionType} -{" "}
+                      {item.nextIntervention?.toLocaleDateString("it-IT") ?? "-"} - ogni{" "}
+                      {item.recurrenceMonths} mesi
+                    </span>
+                    <MaintenanceRollButton maintenanceId={item.id} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {recurringTrainingAlerts.length > 0 ? (
+            <div className="dashboard-work-alert dashboard-work-alert-maintenance">
+              <span className="dashboard-work-alert-main">
+                <span className="dashboard-work-alert-count">{recurringTrainingAlerts.length}</span>
+                <span>
+                  <strong>Formazione da validare</strong>
+                  <span className="dashboard-work-alert-copy">
+                    Formazioni ricorrenti in scadenza nei prossimi 5 giorni.
+                  </span>
+                </span>
+              </span>
+              <div className="dashboard-maintenance-alert-list">
+                {recurringTrainingAlerts.map((item) => (
+                  <div key={item.id} className="dashboard-maintenance-alert-row">
+                    <span>
+                      <strong>{item.person.fullName}</strong> - {item.course} -{" "}
+                      {item.expiresAt?.toLocaleDateString("it-IT") ?? "-"} - ogni{" "}
+                      {item.recurrenceMonths} mesi
+                    </span>
+                    <TrainingRollButton trainingId={item.id} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {(loadingVerificationStatus?.issueCount ?? 0) > 0 ? (
+            <a className="dashboard-work-alert dashboard-work-alert-validation" href="/admin/controlli">
+              <span className="dashboard-work-alert-main">
+                <span className="dashboard-work-alert-count">{loadingVerificationStatus?.issueCount}</span>
+                <span>
+                  <strong>Verifica caricamenti di fine mese</strong>
+                  <span className="dashboard-work-alert-copy">
+                    Controlla ore sotto soglia, straordinari e giornate oltre 10 ore per {loadingVerificationStatus?.monthLabel}.
+                  </span>
+                </span>
+              </span>
+              <span className="dashboard-work-alert-action">Vai ai Controlli</span>
+            </a>
+          ) : null}
+
+          {(autoDiaryStatus?.pendingCount ?? 0) > 0 ? (
+            <a className="dashboard-work-alert dashboard-work-alert-validation" href="/admin/controlli">
+              <span className="dashboard-work-alert-main">
+                <span className="dashboard-work-alert-count">{autoDiaryStatus?.pendingCount}</span>
+                <span>
+                  <strong>Autocompilazione Diario da validare</strong>
+                  <span className="dashboard-work-alert-copy">
+                    Controlla e valida le proposte di autocompilazione per {autoDiaryStatus?.currentMonthLabel}.
+                  </span>
+                </span>
+              </span>
+              <span className="dashboard-work-alert-action">Vai ai Controlli</span>
+            </a>
+          ) : null}
+
           {newScansCount > 0 ? (
             <a className="dashboard-work-alert dashboard-work-alert-scans" href="/documentale?tab=scansioni">
               <span className="dashboard-work-alert-main">

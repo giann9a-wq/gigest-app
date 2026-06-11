@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getScheduleEvents } from "@/lib/schedule-events";
 import { DeadlineOrigin, SyncSource, UserStatus } from "@prisma/client";
+import { randomUUID } from "crypto";
 
 function toInputDate(value: Date | null | undefined) {
   if (!value) return "";
@@ -28,6 +29,29 @@ function isValidTime(value: string | null) {
   return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 }
 
+function addWeeks(date: Date, weeks: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + weeks * 7);
+  return next;
+}
+
+function buildRecurrenceDates(startDate: Date, intervalWeeks: number, untilDate: Date) {
+  const dates: Date[] = [];
+  for (let current = new Date(startDate); current <= untilDate; current = addWeeks(current, intervalWeeks)) {
+    dates.push(new Date(current));
+  }
+  return dates;
+}
+
+function buildRecurrenceRule(input: { seriesId: string; intervalWeeks: number; untilDate: Date }) {
+  return JSON.stringify({
+    kind: "WEEKLY",
+    seriesId: input.seriesId,
+    intervalWeeks: input.intervalWeeks,
+    until: toInputDate(input.untilDate),
+  });
+}
+
 function buildResponseRow(row: {
   id: string;
   title: string;
@@ -36,12 +60,18 @@ function buildResponseRow(row: {
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
+  recurrenceRule?: string | null;
   origin: DeadlineOrigin;
   lastSource: SyncSource;
   maintenanceId: string | null;
+  trainingId: string | null;
   linkedEquipment: {
     id: string;
     nameDescription: string;
+  } | null;
+  linkedPerson: {
+    id: string;
+    fullName: string;
   } | null;
   originLabel: string;
   canEdit: boolean;
@@ -53,6 +83,7 @@ function buildResponseRow(row: {
     type: string;
   } | null;
 }) {
+  const recurrence = parseRecurrenceRule(row.recurrenceRule);
   return {
     id: row.id,
     title: row.title,
@@ -61,16 +92,50 @@ function buildResponseRow(row: {
     startTime: row.startTime ?? "",
     endTime: row.endTime ?? "",
     isAllDay: row.isAllDay,
+    recurrenceSeriesId: recurrence?.seriesId ?? null,
+    recurrenceLabel: recurrence
+      ? `Ogni ${recurrence.intervalWeeks} settiman${recurrence.intervalWeeks === 1 ? "a" : "e"} fino al ${recurrence.until.split("-").reverse().join("/")}`
+      : "",
     origin: row.origin,
     originLabel: row.originLabel,
     lastSource: row.lastSource,
     maintenanceId: row.maintenanceId,
+    trainingId: row.trainingId,
     canEdit: row.canEdit,
     canDelete: row.canDelete,
     eventKind: row.eventKind,
     linkedEquipment: row.linkedEquipment,
+    linkedPerson: row.linkedPerson,
     linkedJobOrder: row.linkedJobOrder,
   };
+}
+
+function parseRecurrenceRule(value: string | null | undefined): {
+  kind: "WEEKLY";
+  seriesId: string;
+  intervalWeeks: number;
+  until: string;
+} | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (
+      parsed?.kind === "WEEKLY" &&
+      typeof parsed.seriesId === "string" &&
+      Number.isFinite(Number(parsed.intervalWeeks)) &&
+      typeof parsed.until === "string"
+    ) {
+      return {
+        kind: "WEEKLY",
+        seriesId: parsed.seriesId,
+        intervalWeeks: Number(parsed.intervalWeeks),
+        until: parsed.until,
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function buildRow(row: Awaited<ReturnType<typeof getScheduleEvents>>[number]) {
@@ -85,13 +150,21 @@ function buildDeadlineRow(row: {
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
+  recurrenceRule: string | null;
   origin: DeadlineOrigin;
   lastSource: SyncSource;
   maintenanceId: string | null;
+  trainingId: string | null;
   maintenance: {
     equipment: {
       id: string;
       nameDescription: string;
+    };
+  } | null;
+  training: {
+    person: {
+      id: string;
+      fullName: string;
     };
   } | null;
 }) {
@@ -103,10 +176,17 @@ function buildDeadlineRow(row: {
     startTime: row.startTime,
     endTime: row.endTime,
     isAllDay: row.isAllDay,
+    recurrenceRule: row.recurrenceRule,
     origin: row.origin,
-    originLabel: row.origin === DeadlineOrigin.MAINTENANCE ? "Manutenzione" : "Manuale",
+    originLabel:
+      row.origin === DeadlineOrigin.MAINTENANCE
+        ? "Manutenzione"
+        : row.origin === DeadlineOrigin.TRAINING
+        ? "Formazione"
+        : "Manuale",
     lastSource: row.lastSource,
     maintenanceId: row.maintenanceId,
+    trainingId: row.trainingId,
     canEdit: row.origin === DeadlineOrigin.MANUAL,
     canDelete: row.origin === DeadlineOrigin.MANUAL,
     eventKind: "DEADLINE",
@@ -114,6 +194,12 @@ function buildDeadlineRow(row: {
       ? {
           id: row.maintenance.equipment.id,
           nameDescription: row.maintenance.equipment.nameDescription,
+        }
+      : null,
+    linkedPerson: row.training?.person
+      ? {
+          id: row.training.person.id,
+          fullName: row.training.person.fullName,
         }
       : null,
     linkedJobOrder: null,
@@ -163,6 +249,9 @@ export async function POST(request: NextRequest) {
   const isAllDay = normalizeBoolean(body.isAllDay);
   const startTime = isAllDay ? null : normalizeOptionalString(body.startTime);
   const endTime = isAllDay ? null : normalizeOptionalString(body.endTime);
+  const recurrenceEnabled = normalizeBoolean(body.recurrenceEnabled);
+  const recurrenceIntervalWeeks = Math.max(1, Math.min(52, Number(body.recurrenceIntervalWeeks || 1)));
+  const recurrenceUntilRaw = String(body.recurrenceUntil || "").trim();
 
   if (!title) {
     return NextResponse.json({ error: "Il titolo è obbligatorio" }, { status: 400 });
@@ -199,36 +288,75 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const created = await prisma.deadline.create({
-    data: {
-      title,
-      description,
-      eventDate,
-      startTime,
-      endTime,
-      isAllDay,
-      origin: DeadlineOrigin.MANUAL,
-      createdByUserId: appUser.id,
-      updatedByUserId: appUser.id,
-      lastSource: SyncSource.GIGEST,
-      lastModifiedAt: new Date(),
-    },
-    include: {
-      maintenance: {
+  const recurrenceUntil = recurrenceEnabled ? parseOptionalDate(recurrenceUntilRaw) : null;
+
+  if (recurrenceEnabled) {
+    if (!Number.isFinite(recurrenceIntervalWeeks) || recurrenceIntervalWeeks < 1) {
+      return NextResponse.json({ error: "Intervallo ricorrenza non valido" }, { status: 400 });
+    }
+
+    if (!recurrenceUntil || Number.isNaN(recurrenceUntil.getTime())) {
+      return NextResponse.json({ error: "Inserisci una data fine ricorrenza valida" }, { status: 400 });
+    }
+
+    if (recurrenceUntil < eventDate) {
+      return NextResponse.json({ error: "La fine ricorrenza deve essere successiva alla data evento" }, { status: 400 });
+    }
+  }
+
+  const seriesId = recurrenceEnabled ? randomUUID() : null;
+  const recurrenceRule =
+    recurrenceEnabled && seriesId && recurrenceUntil
+      ? buildRecurrenceRule({ seriesId, intervalWeeks: recurrenceIntervalWeeks, untilDate: recurrenceUntil })
+      : null;
+  const dates = recurrenceEnabled && recurrenceUntil ? buildRecurrenceDates(eventDate, recurrenceIntervalWeeks, recurrenceUntil) : [eventDate];
+
+  const createdRows = await prisma.$transaction(
+    dates.map((date) =>
+      prisma.deadline.create({
+        data: {
+          title,
+          description,
+          eventDate: date,
+          startTime,
+          endTime,
+          isAllDay,
+          recurrenceRule,
+          origin: DeadlineOrigin.MANUAL,
+          createdByUserId: appUser.id,
+          updatedByUserId: appUser.id,
+          lastSource: SyncSource.GIGEST,
+          lastModifiedAt: new Date(),
+        },
         include: {
-          equipment: {
-            select: {
-              id: true,
-              nameDescription: true,
+          maintenance: {
+            include: {
+              equipment: {
+                select: {
+                  id: true,
+                  nameDescription: true,
+                },
+              },
+            },
+          },
+          training: {
+            include: {
+              person: {
+                select: {
+                  id: true,
+                  fullName: true,
+                },
+              },
             },
           },
         },
-      },
-    },
-  });
+      })
+    )
+  );
 
   return NextResponse.json({
     success: true,
-    row: buildDeadlineRow(created),
+    row: buildDeadlineRow(createdRows[0]),
+    createdCount: createdRows.length,
   });
 }

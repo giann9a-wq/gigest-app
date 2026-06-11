@@ -39,8 +39,8 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
   const navItems: NavItem[] = [
     { href: "/dashboard" as Route, label: "Dashboard" },
     { href: "/diario" as Route, label: "Diario di cantiere" },
-    { href: "/commesse" as Route, label: "Gestione Commesse" },
-    { href: "/risorse" as Route, label: "Vedi Risorse" },
+    { href: "/dashboard-commessa" as Route, label: "Gestione Commesse" },
+    { href: "/risorse" as Route, label: "Gestione Risorse" },
     { href: "/documentale" as Route, label: "Documentale" },
     { href: "/scadenziario" as Route, label: "Scadenziario" },
     { href: "/stampa-risorse-mese" as Route, label: "Stampa Risorse" },
@@ -55,6 +55,13 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
             <span className="app-brand-mark">Gi</span>
             <span className="app-brand-text">GEST</span>
           </Link>
+
+          {userLabel ? (
+            <div className="app-user-actions app-user-actions-desktop">
+              <span className="app-user-chip">{userLabel}</span>
+              {logoutAction}
+            </div>
+          ) : null}
 
           <button
             type="button"
@@ -90,13 +97,6 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
               )
             )}
           </nav>
-
-          {userLabel ? (
-            <div className="app-user-actions">
-              <span className="app-user-chip">{userLabel}</span>
-              {logoutAction}
-            </div>
-          ) : null}
         </div>
       </div>
 

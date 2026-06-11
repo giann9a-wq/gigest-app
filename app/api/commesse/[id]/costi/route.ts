@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { recalculateJobOrderActualCosts } from "@/lib/cost-actual-import";
 import { getJobOrderCostActualView } from "@/lib/job-order-dashboard";
 import { prisma } from "@/lib/prisma";
-import { Prisma, UserRole, UserStatus } from "@prisma/client";
+import { CostActualCategory, Prisma, UserRole, UserStatus } from "@prisma/client";
+
+const ALLOWED_CATEGORIES = new Set<CostActualCategory>([
+  CostActualCategory.MATERIE_PRIME,
+  CostActualCategory.PRESTAZIONI_PROFESSIONALI,
+  CostActualCategory.PRESTAZIONI_TERZI,
+  CostActualCategory.SPESE_VARIE,
+]);
 
 async function getAuthorizedUser() {
   const session = await auth();
@@ -71,16 +79,27 @@ export async function PATCH(
   const { id } = await context.params;
   const body = await request.json();
   const costEntryId = String(body.costEntryId ?? "").trim();
-  const targetJobOrderId = String(body.targetJobOrderId ?? "").trim();
+  const targetJobOrderId = String(body.targetJobOrderId ?? id).trim();
+  const targetCategory = body.targetCategory
+    ? (String(body.targetCategory) as CostActualCategory)
+    : null;
 
-  if (!costEntryId || !targetJobOrderId) {
-    return NextResponse.json({ error: "Dati spostamento incompleti" }, { status: 400 });
+  if (!costEntryId) {
+    return NextResponse.json({ error: "Dati modifica incompleti" }, { status: 400 });
+  }
+
+  if (!targetJobOrderId) {
+    return NextResponse.json({ error: "Commessa di destinazione obbligatoria" }, { status: 400 });
+  }
+
+  if (targetCategory && !ALLOWED_CATEGORIES.has(targetCategory)) {
+    return NextResponse.json({ error: "Tipologia spesa non valida" }, { status: 400 });
   }
 
   const [entry, targetJobOrder] = await Promise.all([
     prisma.costActualEntry.findUnique({
       where: { id: costEntryId },
-      select: { id: true, jobOrderId: true },
+      select: { id: true, jobOrderId: true, category: true },
     }),
     prisma.jobOrder.findUnique({
       where: { id: targetJobOrderId },
@@ -96,15 +115,26 @@ export async function PATCH(
     return NextResponse.json({ error: "Commessa di destinazione non trovata" }, { status: 404 });
   }
 
-  if (entry.jobOrderId === targetJobOrderId) {
+  const nextCategory = targetCategory ?? entry.category;
+
+  if (entry.jobOrderId === targetJobOrderId && entry.category === nextCategory) {
     return NextResponse.json({ success: true });
   }
 
   try {
     await prisma.costActualEntry.update({
       where: { id: costEntryId },
-      data: { jobOrderId: targetJobOrderId },
+      data: {
+        jobOrderId: targetJobOrderId,
+        category: nextCategory,
+      },
     });
+
+    await Promise.all(
+      [...new Set([entry.jobOrderId, targetJobOrderId])].map((jobOrderId) =>
+        recalculateJobOrderActualCosts(jobOrderId)
+      )
+    );
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return NextResponse.json(

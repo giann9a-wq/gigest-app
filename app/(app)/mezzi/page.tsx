@@ -2,15 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ResourceTabs } from "@/components/layout/resource-tabs";
 
 type EquipmentTypeValue = "VEHICLE" | "EQUIPMENT";
 type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
-type EquipmentSortKey =
-  | "nameDescription"
-  | "type"
-  | "purchaseDate"
-  | "status"
-  | "hourlyCost";
+type EquipmentSortKey = "nameDescription" | "type" | "status" | "hourlyCost";
 type SortDirection = "asc" | "desc";
 
 type EditableEquipmentRow = {
@@ -20,13 +16,13 @@ type EditableEquipmentRow = {
   type: EquipmentTypeValue | "";
   purchaseDate: string;
   status: ResourceStatusValue | "";
+  isVisibleInDiary: boolean;
   hourlyCost: string;
 };
 
 type EquipmentFilters = {
   nameDescription: string;
   type: EquipmentTypeValue | "";
-  purchaseDate: string;
   status: ResourceStatusValue | "";
   hourlyCost: string;
 };
@@ -38,6 +34,7 @@ function makeEmptyRow(): EditableEquipmentRow {
     type: "",
     purchaseDate: "",
     status: "",
+    isVisibleInDiary: true,
     hourlyCost: "",
   };
 }
@@ -46,7 +43,6 @@ function getEmptyFilters(): EquipmentFilters {
   return {
     nameDescription: "",
     type: "",
-    purchaseDate: "",
     status: "",
     hourlyCost: "",
   };
@@ -102,25 +98,36 @@ function compareNumberString(a: string, b: string) {
   return Number(a || 0) - Number(b || 0);
 }
 
+function equipmentTypeRank(type: EquipmentTypeValue | "") {
+  if (type === "VEHICLE") return 0;
+  if (type === "EQUIPMENT") return 1;
+  return 2;
+}
+
+function sortArrow(direction: SortDirection) {
+  return direction === "asc" ? "\u2191" : "\u2193";
+}
+
 export default function MezziPage() {
   const router = useRouter();
+
   const [rows, setRows] = useState<EditableEquipmentRow[]>([
     makeEmptyRow(),
     makeEmptyRow(),
     makeEmptyRow(),
   ]);
   const [filters, setFilters] = useState<EquipmentFilters>(getEmptyFilters());
-  const [sortKey, setSortKey] = useState<EquipmentSortKey>("nameDescription");
+  const [sortKey, setSortKey] = useState<EquipmentSortKey>("type");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   function setRowValue(localId: string, patch: Partial<EditableEquipmentRow>) {
-    setRows((current) =>
-      current.map((row) => (row.localId === localId ? { ...row, ...patch } : row))
-    );
+    setRows((current) => current.map((row) => (row.localId === localId ? { ...row, ...patch } : row)));
   }
 
   function setFilterValue<K extends keyof EquipmentFilters>(key: K, value: EquipmentFilters[K]) {
@@ -138,14 +145,65 @@ export default function MezziPage() {
   }
 
   function addRow() {
-    setRows((current) => [...current, makeEmptyRow()]);
+    const nextRow = makeEmptyRow();
+    setRows((current) => [...current, nextRow]);
+    setEditingRowId(nextRow.localId);
   }
 
-  function removeRow(localId: string) {
+  async function persistRows(nextRows: EditableEquipmentRow[], successMessage: string) {
+    const payloadRows = nextRows.map((row) => ({
+      id: row.id,
+      nameDescription: row.nameDescription,
+      type: row.type,
+      purchaseDate: row.purchaseDate,
+      status: row.status,
+      isVisibleInDiary: row.isVisibleInDiary,
+      hourlyCost: row.hourlyCost,
+    }));
+
+    const data = await safeJsonFetch("/api/risorse/mezzi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: payloadRows }),
+    });
+
+    setMessage(successMessage || `Salvataggio completato. Righe salvate: ${data.savedRows}.`);
+    await loadRows();
+  }
+
+  async function deleteRow(row: EditableEquipmentRow, index: number) {
+    const label = row.nameDescription || `riga ${index + 1}`;
+    const confirmed = window.confirm(`Eliminare "${label}"?`);
+    if (!confirmed) return;
+
+    setSaving(true);
+    setSavingRowId(row.localId);
+    setMessage("");
+    setError("");
+
+    try {
+      const updated = rows.filter((current) => current.localId !== row.localId);
+      const nextRows = updated.length > 0 ? updated : [makeEmptyRow()];
+      setRows(nextRows);
+      await persistRows(nextRows, "Elemento eliminato.");
+      if (editingRowId === row.localId) {
+        setEditingRowId(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore eliminazione");
+      await loadRows();
+    } finally {
+      setSaving(false);
+      setSavingRowId(null);
+    }
+  }
+
+  function removeUnsavedRow(localId: string) {
     setRows((current) => {
       const updated = current.filter((row) => row.localId !== localId);
       return updated.length > 0 ? updated : [makeEmptyRow()];
     });
+    setEditingRowId(null);
   }
 
   async function loadRows() {
@@ -166,10 +224,12 @@ export default function MezziPage() {
             type: row.type ?? "",
             purchaseDate: row.purchaseDate ?? "",
             status: row.status ?? "",
+            isVisibleInDiary: row.isVisibleInDiary ?? true,
             hourlyCost: row.hourlyCost?.toString() ?? "",
           }))
         );
       }
+      setEditingRowId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nel caricamento mezzi");
     } finally {
@@ -181,36 +241,31 @@ export default function MezziPage() {
     loadRows();
   }, []);
 
-  async function handleSave() {
+  async function saveRow(row: EditableEquipmentRow) {
     setSaving(true);
+    setSavingRowId(row.localId);
     setMessage("");
     setError("");
 
     try {
-      const payloadRows = rows.map((row) => ({
-        id: row.id,
-        nameDescription: row.nameDescription,
-        type: row.type,
-        purchaseDate: row.purchaseDate,
-        status: row.status,
-        hourlyCost: row.hourlyCost,
-      }));
-
-      await safeJsonFetch("/api/risorse/mezzi", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ rows: payloadRows }),
-      });
-
-      setMessage("Salvataggio completato.");
-      await loadRows();
+      await persistRows(rows, "Elemento salvato.");
+      setEditingRowId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nel salvataggio");
     } finally {
       setSaving(false);
+      setSavingRowId(null);
     }
+  }
+
+  function cancelEdit(row: EditableEquipmentRow) {
+    if (!row.id) {
+      removeUnsavedRow(row.localId);
+      return;
+    }
+
+    setEditingRowId(null);
+    void loadRows();
   }
 
   const visibleRows = useMemo(() => {
@@ -218,9 +273,8 @@ export default function MezziPage() {
       return (
         matchesFilter(row.nameDescription, filters.nameDescription) &&
         (filters.type ? row.type === filters.type : true) &&
-        matchesFilter(row.purchaseDate, filters.purchaseDate) &&
         (filters.status ? row.status === filters.status : true) &&
-        matchesFilter(row.hourlyCost, filters.hourlyCost)
+        (filters.hourlyCost ? matchesFilter(String(row.hourlyCost), filters.hourlyCost) : true)
       );
     });
 
@@ -232,10 +286,7 @@ export default function MezziPage() {
           result = compareText(a.nameDescription, b.nameDescription);
           break;
         case "type":
-          result = compareText(a.type, b.type);
-          break;
-        case "purchaseDate":
-          result = compareText(a.purchaseDate, b.purchaseDate);
+          result = equipmentTypeRank(a.type) - equipmentTypeRank(b.type) || compareText(a.nameDescription, b.nameDescription);
           break;
         case "status":
           result = compareText(a.status, b.status);
@@ -247,340 +298,368 @@ export default function MezziPage() {
 
       return sortDirection === "asc" ? result : -result;
     });
-  }, [filters, rows, sortDirection, sortKey]);
+  }, [rows, filters, sortKey, sortDirection]);
 
   function renderSortLabel(label: string, key: EquipmentSortKey) {
     if (sortKey !== key) return label;
-    return `${label} ${sortDirection === "asc" ? "↑" : "↓"}`;
+    return `${label} ${sortArrow(sortDirection)}`;
   }
 
   return (
     <div className="grid gap-4">
-      <div className="card">
-        <h1 style={{ marginTop: 0 }}>Mezzi e Attrezzature</h1>
-
-        <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-          <button className="button" type="button" onClick={() => router.push("/risorse")}>
-            Personale
-          </button>
-          <button className="button" type="button">
-            Mezzi e Attrezzature
-          </button>
+      <div className="card commesse-page-card">
+        <div className="mobile-section-header">
+          <div>
+            <h1 className="mobile-section-title">Gestione Risorse</h1>
+          </div>
         </div>
+
+        <ResourceTabs current="equipment" />
 
         {message ? <div style={{ color: "#166534", fontWeight: 700, marginBottom: 16 }}>{message}</div> : null}
         {error ? <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 16 }}>{error}</div> : null}
 
-        <div style={tableToolsWrapStyle}>
-          <div style={{ color: "#6b7280", fontSize: 14 }}>
-            Righe visibili: <strong>{visibleRows.length}</strong> su {rows.length}
-          </div>
-          <button type="button" style={secondaryButtonStyle} onClick={() => setFilters(getEmptyFilters())}>
+        <div className="commesse-filter-bar">
+          <label className="report-control commesse-filter-name">
+            <span>Mezzo / Attrezzatura</span>
+            <input
+              value={filters.nameDescription}
+              onChange={(e) => setFilterValue("nameDescription", e.target.value)}
+              placeholder="Filtra nome"
+            />
+          </label>
+
+          <label className="report-control">
+            <span>Tipologia</span>
+            <select
+              value={filters.type}
+              onChange={(e) => setFilterValue("type", e.target.value as EquipmentTypeValue | "")}
+            >
+              <option value="">Tutte</option>
+              <option value="VEHICLE">{equipmentTypeLabel("VEHICLE")}</option>
+              <option value="EQUIPMENT">{equipmentTypeLabel("EQUIPMENT")}</option>
+            </select>
+          </label>
+
+          <label className="report-control">
+            <span>Stato</span>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")}
+            >
+              <option value="">Tutti</option>
+              <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
+              <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
+              <option value="ENDED">{statusLabel("ENDED")}</option>
+            </select>
+          </label>
+
+          <label className="report-control">
+            <span>Costo Orario</span>
+            <input
+              value={filters.hourlyCost}
+              onChange={(e) => setFilterValue("hourlyCost", e.target.value)}
+              placeholder="Filtra costo"
+            />
+          </label>
+
+          <button type="button" className="report-print-btn" onClick={() => setFilters(getEmptyFilters())}>
             Azzera filtri
           </button>
         </div>
 
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="mobile-toolbar">
+          <div className="mobile-table-meta commesse-table-meta">
+            Righe visibili: <strong>{visibleRows.length}</strong> su {rows.length}
+          </div>
+        </div>
+
+        <div className="mobile-table-shell commesse-table-shell">
+          <table className="commesse-table mezzi-table">
+            <colgroup>
+              <col className="mezzi-col-name" />
+              <col className="mezzi-col-type" />
+              <col className="mezzi-col-status" />
+              <col className="mezzi-col-cost" />
+              <col className="mezzi-col-action" />
+            </colgroup>
             <thead>
               <tr>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("nameDescription")} style={headerButtonStyle}>
-                    {renderSortLabel("Attrezzatura", "nameDescription")}
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("nameDescription")} className="commesse-sort-button">
+                    {renderSortLabel("Mezzo / Attrezzatura", "nameDescription")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("type")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("type")} className="commesse-sort-button">
                     {renderSortLabel("Tipologia", "type")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("purchaseDate")} style={headerButtonStyle}>
-                    {renderSortLabel("Data Acquisto", "purchaseDate")}
-                  </button>
-                </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("status")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("status")} className="commesse-sort-button">
                     {renderSortLabel("Stato", "status")}
                   </button>
                 </th>
-                <th style={headerCell}>
-                  <button type="button" onClick={() => toggleSort("hourlyCost")} style={headerButtonStyle}>
+                <th className="commesse-header-cell">
+                  <button type="button" onClick={() => toggleSort("hourlyCost")} className="commesse-sort-button">
                     {renderSortLabel("Costo Orario", "hourlyCost")}
                   </button>
                 </th>
-                <th style={headerCell}>Apri Scheda</th>
-                <th style={headerCellTiny}></th>
-              </tr>
-              <tr>
-                <th style={filterHeaderCell}>
-                  <input
-                    value={filters.nameDescription}
-                    onChange={(e) => setFilterValue("nameDescription", e.target.value)}
-                    placeholder="Filtra nome"
-                    style={filterInputStyle}
-                  />
-                </th>
-                <th style={filterHeaderCell}>
-                  <select
-                    value={filters.type}
-                    onChange={(e) => setFilterValue("type", e.target.value as EquipmentTypeValue | "")}
-                    style={filterInputStyle}
-                  >
-                    <option value="">Tutte</option>
-                    <option value="VEHICLE">{equipmentTypeLabel("VEHICLE")}</option>
-                    <option value="EQUIPMENT">{equipmentTypeLabel("EQUIPMENT")}</option>
-                  </select>
-                </th>
-                <th style={filterHeaderCell}>
-                  <input
-                    value={filters.purchaseDate}
-                    onChange={(e) => setFilterValue("purchaseDate", e.target.value)}
-                    placeholder="AAAA-MM-GG"
-                    style={filterInputStyle}
-                  />
-                </th>
-                <th style={filterHeaderCell}>
-                  <select
-                    value={filters.status}
-                    onChange={(e) => setFilterValue("status", e.target.value as ResourceStatusValue | "")}
-                    style={filterInputStyle}
-                  >
-                    <option value="">Tutti</option>
-                    <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
-                    <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
-                    <option value="ENDED">{statusLabel("ENDED")}</option>
-                  </select>
-                </th>
-                <th style={filterHeaderCell}>
-                  <input
-                    value={filters.hourlyCost}
-                    onChange={(e) => setFilterValue("hourlyCost", e.target.value)}
-                    placeholder="Filtra costo"
-                    style={filterInputStyle}
-                  />
-                </th>
-                <th style={filterHeaderCell}></th>
-                <th style={filterHeaderCell}></th>
+                <th className="commesse-header-cell commesse-actions-header">Menu Azioni</th>
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map((row, index) => (
-                <tr key={row.localId}>
-                  <td style={bodyCell}>
+              {visibleRows.map((row, index) => {
+                const isEditing = editingRowId === row.localId;
+
+                return (
+                  <tr key={row.localId}>
+                    <td className="commesse-body-cell">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={row.nameDescription}
+                          onChange={(e) => setRowValue(row.localId, { nameDescription: e.target.value })}
+                          className="commesse-table-input"
+                          placeholder="Nome"
+                          disabled={loading || saving}
+                        />
+                      ) : (
+                        <span className="commesse-table-value commesse-table-value-strong">{row.nameDescription || "-"}</span>
+                      )}
+                    </td>
+                    <td className="commesse-body-cell">
+                      {isEditing ? (
+                        <select
+                          value={row.type}
+                          onChange={(e) => setRowValue(row.localId, { type: e.target.value as EquipmentTypeValue | "" })}
+                          className="commesse-table-input"
+                          disabled={loading || saving}
+                        >
+                          <option value="">Seleziona tipologia</option>
+                          <option value="VEHICLE">{equipmentTypeLabel("VEHICLE")}</option>
+                          <option value="EQUIPMENT">{equipmentTypeLabel("EQUIPMENT")}</option>
+                        </select>
+                      ) : (
+                        <span className="commesse-table-value">{row.type ? equipmentTypeLabel(row.type as EquipmentTypeValue) : "-"}</span>
+                      )}
+                    </td>
+                    <td className="commesse-body-cell">
+                      {isEditing ? (
+                        <select
+                          value={row.status}
+                          onChange={(e) => setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })}
+                          className="commesse-table-input"
+                          disabled={loading || saving}
+                        >
+                          <option value="">Seleziona stato</option>
+                          <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
+                          <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
+                          <option value="ENDED">{statusLabel("ENDED")}</option>
+                        </select>
+                      ) : (
+                        <span className="commesse-table-value">{row.status ? statusLabel(row.status as ResourceStatusValue) : "-"}</span>
+                      )}
+                    </td>
+                    <td className="commesse-body-cell">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={row.hourlyCost}
+                          onChange={(e) => setRowValue(row.localId, { hourlyCost: e.target.value })}
+                          className="commesse-table-input"
+                          placeholder="0.00"
+                          disabled={loading || saving}
+                        />
+                      ) : (
+                        <span className="commesse-table-value">{row.hourlyCost || "-"}</span>
+                      )}
+                    </td>
+                    <td className="commesse-body-cell commesse-actions-cell">
+                      <div className="commesse-row-actions">
+                        <button
+                          className="open-sheet-link-button"
+                          type="button"
+                          disabled={!row.id || isEditing}
+                          onClick={() => row.id && router.push(`/mezzi/${row.id}`)}
+                        >
+                          Apri Scheda
+                        </button>
+                        {isEditing ? (
+                          <>
+                            <button
+                              className="button commesse-save-row-button"
+                              type="button"
+                              onClick={() => void saveRow(row)}
+                              disabled={saving || loading}
+                            >
+                              {savingRowId === row.localId ? "Salvo..." : "Salva"}
+                            </button>
+                            <button
+                              type="button"
+                              className="mobile-button-secondary commesse-cancel-row-button"
+                              onClick={() => cancelEdit(row)}
+                              disabled={saving}
+                            >
+                              Annulla
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="icon-action-button"
+                            aria-label="Modifica"
+                            title="Modifica"
+                            onClick={() => setEditingRowId(row.localId)}
+                            disabled={loading || !row.id}
+                          >
+                            ✎
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => (row.id ? void deleteRow(row, index) : removeUnsavedRow(row.localId))}
+                          className="icon-action-button icon-action-button-danger"
+                          aria-label="Elimina"
+                          title={`Elimina riga ${index + 1}`}
+                          disabled={saving}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mobile-data-cards">
+          {visibleRows.map((row, index) => (
+            <article key={row.localId} className="card mobile-data-card">
+              <div className="mobile-data-card-head">
+                <div>
+                  <div className="mobile-data-label">Elemento</div>
+                  <strong>{row.nameDescription || `Riga ${index + 1}`}</strong>
+                </div>
+              </div>
+
+              {editingRowId === row.localId ? (
+                <div className="mobile-data-card-grid">
+                  <label className="mobile-data-field mobile-data-field-full">
+                    <span className="mobile-data-label">Nome</span>
                     <input
                       type="text"
                       value={row.nameDescription}
                       onChange={(e) => setRowValue(row.localId, { nameDescription: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Nome mezzo / attrezzatura"
-                      disabled={loading}
+                      className="mobile-data-input"
+                      disabled={loading || saving}
                     />
-                  </td>
-
-                  <td style={bodyCell}>
+                  </label>
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Tipologia</span>
                     <select
                       value={row.type}
-                      onChange={(e) =>
-                        setRowValue(row.localId, { type: e.target.value as EquipmentTypeValue | "" })
-                      }
-                      style={inputStyle}
-                      disabled={loading}
+                      onChange={(e) => setRowValue(row.localId, { type: e.target.value as EquipmentTypeValue | "" })}
+                      className="mobile-data-select"
+                      disabled={loading || saving}
                     >
-                      <option value="">Seleziona tipologia</option>
+                      <option value="">Seleziona</option>
                       <option value="VEHICLE">{equipmentTypeLabel("VEHICLE")}</option>
                       <option value="EQUIPMENT">{equipmentTypeLabel("EQUIPMENT")}</option>
                     </select>
-                  </td>
-
-                  <td style={bodyCell}>
-                    <input
-                      type="date"
-                      value={row.purchaseDate}
-                      onChange={(e) => setRowValue(row.localId, { purchaseDate: e.target.value })}
-                      style={inputStyle}
-                      disabled={loading}
-                    />
-                  </td>
-
-                  <td style={bodyCell}>
+                  </label>
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Stato</span>
                     <select
                       value={row.status}
-                      onChange={(e) =>
-                        setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })
-                      }
-                      style={inputStyle}
-                      disabled={loading}
+                      onChange={(e) => setRowValue(row.localId, { status: e.target.value as ResourceStatusValue | "" })}
+                      className="mobile-data-select"
+                      disabled={loading || saving}
                     >
-                      <option value="">Seleziona stato</option>
+                      <option value="">Seleziona</option>
                       <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                       <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
                       <option value="ENDED">{statusLabel("ENDED")}</option>
                     </select>
-                  </td>
-
-                  <td style={bodyCell}>
+                  </label>
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Data acquisto</span>
+                    <input
+                      type="date"
+                      value={row.purchaseDate}
+                      onChange={(e) => setRowValue(row.localId, { purchaseDate: e.target.value })}
+                      className="mobile-data-input"
+                      disabled={loading || saving}
+                    />
+                  </label>
+                  <label className="mobile-data-field">
+                    <span className="mobile-data-label">Costo Orario</span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       value={row.hourlyCost}
                       onChange={(e) => setRowValue(row.localId, { hourlyCost: e.target.value })}
-                      style={inputStyle}
-                      placeholder="0.00"
-                      disabled={loading}
+                      className="mobile-data-input"
+                      disabled={loading || saving}
                     />
-                  </td>
+                  </label>
+                </div>
+              ) : (
+                <div className="mobile-data-card-grid">
+                  <div className="mobile-data-field">
+                    <span className="mobile-data-label">Tipologia</span>
+                    <strong>{row.type ? equipmentTypeLabel(row.type as EquipmentTypeValue) : "-"}</strong>
+                  </div>
+                  <div className="mobile-data-field">
+                    <span className="mobile-data-label">Stato</span>
+                    <strong>{row.status ? statusLabel(row.status as ResourceStatusValue) : "-"}</strong>
+                  </div>
+                  <div className="mobile-data-field">
+                    <span className="mobile-data-label">Data acquisto</span>
+                    <strong>{row.purchaseDate || "-"}</strong>
+                  </div>
+                  <div className="mobile-data-field">
+                    <span className="mobile-data-label">Costo Orario</span>
+                    <strong>{row.hourlyCost || "-"}</strong>
+                  </div>
+                </div>
+              )}
 
-                  <td style={bodyCell}>
-                    <button
-                      className="button"
-                      type="button"
-                      disabled={!row.id}
-                      onClick={() => row.id && router.push(`/mezzi/${row.id}`)}
-                    >
-                      Apri Scheda
+              <div className="mobile-data-actions">
+                <button
+                  className="open-sheet-link-button"
+                  type="button"
+                  disabled={!row.id || editingRowId === row.localId}
+                  onClick={() => row.id && router.push(`/mezzi/${row.id}`)}
+                >
+                  Apri Scheda
+                </button>
+                {editingRowId === row.localId ? (
+                  <>
+                    <button className="button" type="button" onClick={() => void saveRow(row)} disabled={saving || loading}>
+                      {savingRowId === row.localId ? "Salvo..." : "Salva"}
                     </button>
-                  </td>
-
-                  <td style={bodyCellTiny}>
-                    <button
-                      type="button"
-                      onClick={() => removeRow(row.localId)}
-                      style={removeButtonStyle}
-                      title={`Rimuovi riga ${index + 1}`}
-                    >
-                      ×
+                    <button className="mobile-button-secondary" type="button" onClick={() => cancelEdit(row)} disabled={saving}>
+                      Annulla
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </>
+                ) : null}
+              </div>
+            </article>
+          ))}
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 18,
-          }}
-        >
-          <button type="button" onClick={addRow} style={plusButtonStyle}>
+        <div className="mobile-footer-actions" style={{ marginTop: 18 }}>
+          <button type="button" onClick={addRow} className="mobile-button-success" aria-label="Aggiungi riga">
             +
           </button>
-
-          <div style={{ display: "flex", gap: 12 }}>
-            <button className="button" type="button" disabled>
-              Modifica
-            </button>
-            <button className="button" type="button" onClick={handleSave} disabled={saving || loading}>
-              {saving ? "Salvataggio..." : "Salva"}
-            </button>
-          </div>
         </div>
       </div>
     </div>
   );
 }
-
-const headerCell: React.CSSProperties = {
-  background: "#f97316",
-  color: "white",
-  textAlign: "left",
-  padding: "12px 10px",
-  fontWeight: 700,
-  border: "2px solid white",
-};
-
-const filterHeaderCell: React.CSSProperties = {
-  background: "#ffd9c2",
-  padding: "8px 10px",
-  border: "2px solid white",
-};
-
-const headerCellTiny: React.CSSProperties = {
-  ...headerCell,
-  width: 56,
-};
-
-const bodyCell: React.CSSProperties = {
-  background: "#fdf2f2",
-  border: "2px solid white",
-  padding: 6,
-};
-
-const bodyCellTiny: React.CSSProperties = {
-  ...bodyCell,
-  width: 56,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 8px",
-  borderRadius: 8,
-  border: "1px solid #d1d5db",
-  background: "white",
-};
-
-const filterInputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 8px",
-  borderRadius: 8,
-  border: "1px solid #f08a54",
-  background: "white",
-};
-
-const headerButtonStyle: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "white",
-  padding: 0,
-  font: "inherit",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const tableToolsWrapStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  flexWrap: "wrap",
-  marginBottom: 14,
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  border: "1px solid #f08a54",
-  background: "#fff7f2",
-  color: "#9a3f12",
-  borderRadius: 10,
-  padding: "0.55rem 0.9rem",
-  cursor: "pointer",
-  fontWeight: 600,
-};
-
-const plusButtonStyle: React.CSSProperties = {
-  width: 42,
-  height: 42,
-  borderRadius: "999px",
-  border: "none",
-  background: "#22c55e",
-  color: "white",
-  fontSize: 28,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const removeButtonStyle: React.CSSProperties = {
-  width: 34,
-  height: 34,
-  borderRadius: 8,
-  border: "none",
-  background: "#ef4444",
-  color: "white",
-  fontSize: 22,
-  lineHeight: 1,
-  cursor: "pointer",
-};

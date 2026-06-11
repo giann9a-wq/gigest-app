@@ -146,6 +146,22 @@ export async function ensureScannedDeliveryNotesFolder() {
   return ensureFolder(accessToken, "Bolle da inserire", documentTypeId);
 }
 
+export async function ensurePersonTrainingFolder(input: {
+  personName: string;
+  trainingDate: Date;
+}) {
+  const accessToken = await getGoogleDriveAccessToken();
+  const configuredRootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
+  const rootId =
+    configuredRootId ||
+    (await ensureFolder(accessToken, sanitizeDriveName(process.env.GOOGLE_DRIVE_ROOT_FOLDER_NAME || "GiGEST Documentale")));
+  const documentTypeId = await ensureFolder(accessToken, "Formazione", rootId);
+  const personId = await ensureFolder(accessToken, sanitizeDriveName(input.personName), documentTypeId);
+  const year = String(input.trainingDate.getUTCFullYear());
+
+  return ensureFolder(accessToken, year, personId);
+}
+
 export async function uploadDocumentBufferToDrive(input: {
   fileName: string;
   mimeType: string;
@@ -195,6 +211,15 @@ export async function uploadDocumentBufferToDrive(input: {
 }
 
 export async function uploadDeliveryNoteDocumentToDrive(input: {
+  fileName: string;
+  mimeType: string;
+  buffer: Buffer;
+  folderId: string;
+}) {
+  return uploadDocumentBufferToDrive(input);
+}
+
+export async function uploadTrainingDocumentToDrive(input: {
   fileName: string;
   mimeType: string;
   buffer: Buffer;

@@ -20,6 +20,7 @@ export async function GET() {
       },
     }),
     prisma.equipment.findMany({
+      where: { status: "ACTIVE", isVisibleInDiary: true },
       orderBy: { nameDescription: "asc" },
       select: {
         id: true,

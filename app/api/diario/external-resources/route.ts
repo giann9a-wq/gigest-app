@@ -22,6 +22,10 @@ async function getAuthorizedUser() {
   return { appUser };
 }
 
+function looksLikeTechnicalId(value: string) {
+  return /^c[a-z0-9]{18,}$/i.test(value.trim());
+}
+
 export async function POST(request: NextRequest) {
   const authResult = await getAuthorizedUser();
   if (authResult.error) return authResult.error;
@@ -31,6 +35,10 @@ export async function POST(request: NextRequest) {
 
   if (!name) {
     return NextResponse.json({ error: "Il nome della risorsa esterna e obbligatorio" }, { status: 400 });
+  }
+
+  if (looksLikeTechnicalId(name)) {
+    return NextResponse.json({ error: "Il nome della risorsa esterna non puo essere un codice tecnico" }, { status: 400 });
   }
 
   const existing = await prisma.externalResource.findFirst({

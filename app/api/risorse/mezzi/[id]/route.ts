@@ -98,6 +98,7 @@ export async function GET(
       type: equipment.type,
       purchaseDate: toInputDate(equipment.purchaseDate),
       status: equipment.status,
+      isVisibleInDiary: equipment.isVisibleInDiary,
     },
     costHistory: equipment.costHistory.map((c) => ({
       id: c.id,
@@ -173,6 +174,7 @@ export async function POST(
         type: equipment.type,
         purchaseDate: parseOptionalDate(equipment.purchaseDate),
         status: equipment.status,
+        isVisibleInDiary: equipment.isVisibleInDiary ?? true,
       },
     });
 

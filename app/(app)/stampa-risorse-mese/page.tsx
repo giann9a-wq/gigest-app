@@ -16,12 +16,24 @@ type ReportGroup = {
   total: number;
 };
 
+type ReportWorkDetail = {
+  jobOrderId: string;
+  jobOrderName: string;
+  values: number[];
+  total: number;
+};
+
 type ReportResource = {
   id: string;
   fullName: string;
+  roleDescription: string;
+  expectedDailyHours: number;
   groups: ReportGroup[];
+  workDetails: ReportWorkDetail[];
   total: number;
   hasHours: boolean;
+  isAlwaysSelectable: boolean;
+  isWorker: boolean;
 };
 
 type MonthlyReportResponse = {
@@ -52,15 +64,6 @@ function formatHours(value: number) {
   });
 }
 
-function splitResourceName(fullName: string) {
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length <= 1) return { firstLine: fullName, secondLine: "" };
-  return {
-    firstLine: parts[0],
-    secondLine: parts.slice(1).join(" "),
-  };
-}
-
 function formatMonthLabel(month: number, year: number) {
   return new Date(year, month - 1, 1).toLocaleDateString("it-IT", {
     month: "long",
@@ -86,6 +89,7 @@ export default function StampaRisorseMesePage() {
   const [report, setReport] = useState<MonthlyReportResponse | null>(null);
   const [selectedResourceIds, setSelectedResourceIds] = useState<string[] | null>(null);
   const [isResourceFilterOpen, setIsResourceFilterOpen] = useState(false);
+  const [expandedWorkResourceIds, setExpandedWorkResourceIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -111,20 +115,25 @@ export default function StampaRisorseMesePage() {
 
   const visibleResources = useMemo(
     () => {
-      const resourcesWithHours = (report?.resources ?? []).filter((resource) => resource.hasHours);
+      const printableResources = (report?.resources ?? []).filter(
+        (resource) => resource.hasHours || resource.isAlwaysSelectable
+      );
 
       if (selectedResourceIds === null) {
-        return resourcesWithHours;
+        return printableResources;
       }
 
       const selectedIds = new Set(selectedResourceIds);
-      return resourcesWithHours.filter((resource) => selectedIds.has(resource.id));
+      return printableResources.filter((resource) => selectedIds.has(resource.id));
     },
     [report, selectedResourceIds]
   );
 
   const filterableResources = useMemo(
-    () => (report?.resources ?? []).filter((resource) => resource.hasHours),
+    () =>
+      (report?.resources ?? []).filter(
+        (resource) => resource.hasHours || resource.isAlwaysSelectable
+      ),
     [report]
   );
 
@@ -169,6 +178,23 @@ export default function StampaRisorseMesePage() {
     return selectedResourceIds === null || selectedResourceIds.includes(resourceId);
   }
 
+  function toggleWorkDetails(resourceId: string) {
+    setExpandedWorkResourceIds((current) =>
+      current.includes(resourceId)
+        ? current.filter((id) => id !== resourceId)
+        : [...current, resourceId]
+    );
+  }
+
+  function printReport() {
+    setExpandedWorkResourceIds(
+      visibleResources
+        .filter((resource) => resource.isWorker && resource.workDetails.length > 0)
+        .map((resource) => resource.id)
+    );
+    window.setTimeout(() => window.print(), 0);
+  }
+
   const selectedResourceCount =
     selectedResourceIds === null ? filterableResources.length : visibleResources.length;
 
@@ -209,7 +235,7 @@ export default function StampaRisorseMesePage() {
           <button type="button" className="button" onClick={() => loadReport()}>
             Visualizza
           </button>
-          <button type="button" className="report-print-btn" onClick={() => window.print()}>
+          <button type="button" className="report-print-btn" onClick={printReport}>
             Stampa / PDF
           </button>
         </div>
@@ -274,7 +300,6 @@ export default function StampaRisorseMesePage() {
       <div className="card report-sheet">
         <div className="report-sheet-header">
           <div className="report-title-block">
-            <div className="report-kicker">GiGEST</div>
             <strong className="report-main-title">Stampa risorse mese</strong>
             <div className="muted">Report mensile personale per tipologia ore</div>
           </div>
@@ -297,9 +322,6 @@ export default function StampaRisorseMesePage() {
             <table className="report-table">
               <thead>
                 <tr>
-                  <th rowSpan={2} className="report-fixed-col report-resource-col">
-                    Risorsa
-                  </th>
                   <th rowSpan={2} className="report-fixed-col report-group-col">
                     Tipo
                   </th>
@@ -327,29 +349,25 @@ export default function StampaRisorseMesePage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleResources.map((resource) =>
-                  resource.groups.map((group, groupIndex) => (
-                    <tr key={`${resource.id}-${group.key}`}>
-                      {groupIndex === 0 ? (
-                        <>
-                          <td rowSpan={resource.groups.length} className="report-resource-name">
-                            <div className="report-resource-block">
-                              {(() => {
-                                const name = splitResourceName(resource.fullName);
-                                return (
-                                  <strong>
-                                    <span>{name.firstLine}</span>
-                                    {name.secondLine ? <span>{name.secondLine}</span> : null}
-                                  </strong>
-                                );
-                              })()}
-                              <span className="report-resource-total">
-                                Totale mese: {formatHours(resource.total)}
-                              </span>
-                            </div>
-                          </td>
-                        </>
-                      ) : null}
+                {visibleResources.map((resource) => {
+                  const isWorkExpanded = expandedWorkResourceIds.includes(resource.id);
+                  const hasWorkDetails = resource.isWorker && resource.workDetails.length > 0;
+                  const resourceHeader = (
+                    <tr key={`${resource.id}-header`} className="report-resource-header-row">
+                      <td colSpan={report.days.length + 2}>
+                        <strong>{resource.fullName}</strong>
+                        <span>(Totale mese: {formatHours(resource.total) || "0"})</span>
+                      </td>
+                    </tr>
+                  );
+
+                  const resourceRows = resource.groups.flatMap((group, groupIndex) => {
+                    const isWorkTotalRow = group.key === "WORK" && hasWorkDetails;
+                    const groupRow = (
+                    <tr
+                      key={`${resource.id}-${group.key}`}
+                      className={isWorkTotalRow ? "report-work-total-row" : ""}
+                    >
                       <td
                         className={[
                           "report-group-name",
@@ -359,13 +377,26 @@ export default function StampaRisorseMesePage() {
                           .filter(Boolean)
                           .join(" ")}
                       >
-                        {group.label}
+                        {group.key === "WORK" && hasWorkDetails ? (
+                          <button
+                            type="button"
+                            className="report-work-accordion-trigger"
+                            onClick={() => toggleWorkDetails(resource.id)}
+                            aria-expanded={isWorkExpanded}
+                          >
+                            <span>{group.label}</span>
+                            <span>{isWorkExpanded ? "-" : "+"}</span>
+                          </button>
+                        ) : (
+                          group.label
+                        )}
                       </td>
                       {group.values.map((value, valueIndex) => (
                         <td
                           key={`${resource.id}-${group.key}-${valueIndex}`}
                           className={[
                             report.days[valueIndex]?.isWeekend ? "report-weekend" : "",
+                            value > resource.expectedDailyHours ? "report-overtime-cell" : "",
                             groupIndex === 0 ? "report-resource-start" : "",
                             groupIndex === resource.groups.length - 1 ? "report-resource-end" : "",
                           ]
@@ -387,8 +418,42 @@ export default function StampaRisorseMesePage() {
                         <span className="report-hour-value">{formatHours(group.total)}</span>
                       </td>
                     </tr>
-                  ))
-                )}
+                    );
+
+                    if (group.key !== "WORK" || !hasWorkDetails) {
+                      return [groupRow];
+                    }
+
+                    const detailRows = resource.workDetails.map((detail) => (
+                      <tr
+                        key={`${resource.id}-work-detail-${detail.jobOrderId}`}
+                        className={[
+                          "report-work-detail-row",
+                          isWorkExpanded ? "report-work-detail-row-open" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        <td className="report-work-detail-name">{detail.jobOrderName}</td>
+                        {detail.values.map((value, valueIndex) => (
+                          <td
+                            key={`${resource.id}-${detail.jobOrderId}-${valueIndex}`}
+                            className={report.days[valueIndex]?.isWeekend ? "report-weekend" : ""}
+                          >
+                            <span className="report-hour-value">{formatHours(value)}</span>
+                          </td>
+                        ))}
+                        <td className="report-total-value">
+                          <span className="report-hour-value">{formatHours(detail.total)}</span>
+                        </td>
+                      </tr>
+                    ));
+
+                    return [groupRow, ...detailRows];
+                  });
+
+                  return [resourceHeader, ...resourceRows];
+                })}
               </tbody>
             </table>
           </div>

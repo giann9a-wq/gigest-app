@@ -52,6 +52,8 @@ export async function PATCH(
       : body.finalCategory === null || body.finalCategory === ""
         ? null
         : (String(body.finalCategory) as CostActualCategory);
+  const jobOrderId =
+    body.jobOrderId === undefined ? undefined : String(body.jobOrderId ?? "").trim();
   const validationNote =
     body.validationNote === undefined ? undefined : String(body.validationNote ?? "");
 
@@ -71,6 +73,7 @@ export async function PATCH(
       amount,
       finalDescription,
       finalCategory,
+      jobOrderId,
       validationNote,
     });
 

@@ -11,7 +11,7 @@ export async function getImportDomain() {
       },
     }),
     prisma.equipment.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", isVisibleInDiary: true },
       orderBy: { nameDescription: "asc" },
       select: {
         id: true,

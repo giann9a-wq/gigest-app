@@ -18,6 +18,9 @@ function parseQuantity(value: unknown) {
 function serializeMaterial(row: {
   id: string;
   jobOrderId: string;
+  jobOrder?: {
+    name: string;
+  };
   description: string;
   unitOfMeasure: string;
   quantity: Prisma.Decimal;
@@ -28,6 +31,7 @@ function serializeMaterial(row: {
   return {
     id: row.id,
     jobOrderId: row.jobOrderId,
+    jobOrderLabel: row.jobOrder?.name ?? "",
     description: row.description,
     unitOfMeasure: row.unitOfMeasure,
     quantity: Number(row.quantity),
@@ -45,12 +49,33 @@ export async function GET(request: NextRequest) {
   }
 
   const jobOrderId = request.nextUrl.searchParams.get("jobOrderId")?.trim() || "";
+  const date = request.nextUrl.searchParams.get("date")?.trim() || "";
+  const usageDate = date ? parseDate(date) : null;
 
   const [rows, materialSuggestions, unitSuggestions] = await Promise.all([
-    jobOrderId
+    usageDate
+      ? prisma.materialUsage.findMany({
+          where: { usageDate },
+          orderBy: [{ jobOrder: { name: "asc" } }, { createdAt: "asc" }],
+          include: {
+            jobOrder: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        })
+      : jobOrderId
       ? prisma.materialUsage.findMany({
           where: { jobOrderId },
           orderBy: [{ usageDate: "desc" }, { createdAt: "desc" }],
+          include: {
+            jobOrder: {
+              select: {
+                name: true,
+              },
+            },
+          },
         })
       : Promise.resolve([]),
     prisma.materialUsage.findMany({

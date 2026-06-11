@@ -18,6 +18,8 @@ type MaintenanceRowInput = {
   interventionType?: string;
   interventionDate?: string;
   nextIntervention?: string;
+  isRecurring?: boolean;
+  recurrenceMonths?: string | number | null;
   cost?: string | number | null;
   notes?: string;
 };
@@ -50,6 +52,8 @@ export async function GET(
       interventionType: row.interventionType,
       interventionDate: toInputDate(row.interventionDate),
       nextIntervention: toInputDate(row.nextIntervention),
+      isRecurring: row.isRecurring,
+      recurrenceMonths: row.recurrenceMonths ?? "",
       cost: row.cost !== null ? Number(row.cost) : "",
       notes: row.notes ?? "",
       documents: row.documents.map((doc) => ({
@@ -90,6 +94,11 @@ export async function POST(
       interventionType: row.interventionType?.trim() || "",
       interventionDate: row.interventionDate || "",
       nextIntervention: row.nextIntervention || "",
+      isRecurring: row.isRecurring ?? false,
+      recurrenceMonths:
+        row.recurrenceMonths === "" || row.recurrenceMonths === null || row.recurrenceMonths === undefined
+          ? ""
+          : String(row.recurrenceMonths),
       cost:
         row.cost === "" || row.cost === null || row.cost === undefined
           ? ""
@@ -101,6 +110,8 @@ export async function POST(
         row.interventionType ||
         row.interventionDate ||
         row.nextIntervention ||
+        row.isRecurring ||
+        row.recurrenceMonths ||
         row.cost ||
         row.notes
       );
@@ -126,6 +137,23 @@ export async function POST(
       if (Number.isNaN(parsed) || parsed < 0) {
         return NextResponse.json(
           { error: "Il costo intervento deve essere un numero maggiore o uguale a zero" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (row.isRecurring) {
+      const parsedMonths = Number(row.recurrenceMonths);
+      if (!Number.isInteger(parsedMonths) || parsedMonths <= 0) {
+        return NextResponse.json(
+          { error: "Le manutenzioni ricorrenti devono avere un numero di mesi maggiore di zero" },
+          { status: 400 }
+        );
+      }
+
+      if (!row.nextIntervention) {
+        return NextResponse.json(
+          { error: "Le manutenzioni ricorrenti devono avere una prossima scadenza pianificata" },
           { status: 400 }
         );
       }
@@ -172,6 +200,8 @@ export async function POST(
         interventionType: row.interventionType,
         interventionDate: parseOptionalDate(row.interventionDate)!,
         nextIntervention: parseOptionalDate(row.nextIntervention),
+        isRecurring: row.isRecurring,
+        recurrenceMonths: row.isRecurring ? Number(row.recurrenceMonths) : null,
         cost: row.cost !== "" ? new Prisma.Decimal(Number(row.cost).toFixed(2)) : null,
         notes: row.notes || null,
         createdByUserId: appUser.id,
@@ -194,6 +224,9 @@ export async function POST(
         const deadlineTitle = `Manutenzione ${equipment.nameDescription}`;
         const deadlineDescription = [
           `Tipo intervento: ${savedMaintenance.interventionType}`,
+          savedMaintenance.isRecurring && savedMaintenance.recurrenceMonths
+            ? `Ricorrente ogni ${savedMaintenance.recurrenceMonths} mesi`
+            : null,
           savedMaintenance.notes ? `Note: ${savedMaintenance.notes}` : null,
         ]
           .filter(Boolean)

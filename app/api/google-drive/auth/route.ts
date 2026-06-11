@@ -4,6 +4,7 @@ const GOOGLE_OAUTH_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_DOCUMENTALE_SCOPES = [
   "https://www.googleapis.com/auth/drive",
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
 ].join(" ");
 
 export async function GET() {

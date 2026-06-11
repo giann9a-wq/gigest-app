@@ -11,6 +11,16 @@ type StatisticsRow = {
   jobOrderType: string;
   totalHours: number;
   totalCost: number;
+  activities: StatisticsActivity[];
+};
+
+type StatisticsActivity = {
+  id: string;
+  referenceDate: string;
+  source: "MANUAL" | "AUTO";
+  jobOrderId: string;
+  jobOrderName: string;
+  hours: number;
 };
 
 type StatisticsResponse = {
@@ -24,6 +34,7 @@ type StatisticsResponse = {
 type StatisticsOptionsResponse = {
   resourceOptions: string[];
   jobOrderOptions: string[];
+  jobOrderRows: Array<{ id: string; name: string }>;
 };
 
 type SortKey = "resourceLabel" | "jobOrderName" | "totalHours" | "totalCost";
@@ -149,6 +160,9 @@ export default function StatisticheRisorseCommessePage() {
   const [selectedJobOrders, setSelectedJobOrders] = useState<string[]>([]);
   const [resourceOptions, setResourceOptions] = useState<string[]>([]);
   const [jobOrderOptions, setJobOrderOptions] = useState<string[]>([]);
+  const [jobOrderRows, setJobOrderRows] = useState<Array<{ id: string; name: string }>>([]);
+  const [editingRow, setEditingRow] = useState<StatisticsRow | null>(null);
+  const [savingActivityId, setSavingActivityId] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("resourceLabel");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
@@ -160,6 +174,7 @@ export default function StatisticheRisorseCommessePage() {
         const data = await safeOptionsFetch("/api/statistiche-risorse-commesse?mode=options");
         setResourceOptions(data.resourceOptions);
         setJobOrderOptions(data.jobOrderOptions);
+        setJobOrderRows(data.jobOrderRows ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Errore caricamento opzioni");
       } finally {
@@ -243,6 +258,45 @@ export default function StatisticheRisorseCommessePage() {
   function renderSortLabel(label: string, key: SortKey) {
     if (sortKey !== key) return label;
     return `${label} ${sortDirection === "asc" ? "↑" : "↓"}`;
+  }
+
+  async function updateActivity(activity: StatisticsActivity, formData: FormData) {
+    setSavingActivityId(activity.id);
+    setError("");
+
+    try {
+      const response = await fetch("/api/statistiche-risorse-commesse", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activityId: activity.id,
+          referenceDate: String(formData.get("referenceDate") ?? ""),
+          jobOrderId: String(formData.get("jobOrderId") ?? ""),
+          hours: String(formData.get("hours") ?? ""),
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Errore salvataggio caricamento");
+      }
+
+      setEditingRow(null);
+      await loadRows();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore salvataggio caricamento");
+    } finally {
+      setSavingActivityId("");
+    }
+  }
+
+  function PencilIcon() {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    );
   }
 
   function handleExportExcelCompat() {
@@ -365,24 +419,25 @@ export default function StatisticheRisorseCommessePage() {
                     {renderSortLabel("Totale costo", "totalCost")}
                   </button>
                 </th>
+                <th>Azioni</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="stats-empty-cell">
+                  <td colSpan={5} className="stats-empty-cell">
                     Caricamento...
                   </td>
                 </tr>
               ) : !hasSearched ? (
                 <tr>
-                  <td colSpan={4} className="stats-empty-cell">
+                  <td colSpan={5} className="stats-empty-cell">
                     Seleziona i filtri e premi Applica filtri per visualizzare i dati
                   </td>
                 </tr>
               ) : visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="stats-empty-cell">
+                  <td colSpan={5} className="stats-empty-cell">
                     Nessun risultato per i filtri selezionati
                   </td>
                 </tr>
@@ -393,6 +448,17 @@ export default function StatisticheRisorseCommessePage() {
                     <td>{row.jobOrderName}</td>
                     <td>{formatHours(row.totalHours)}</td>
                     <td>{formatCurrency(row.totalCost)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="stats-icon-action"
+                        onClick={() => setEditingRow(row)}
+                        title="Modifica caricamenti"
+                        aria-label="Modifica caricamenti"
+                      >
+                        <PencilIcon />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -400,6 +466,58 @@ export default function StatisticheRisorseCommessePage() {
           </table>
         </div>
       </div>
+
+      {editingRow ? (
+        <div className="stats-edit-backdrop" role="dialog" aria-modal="true">
+          <section className="stats-edit-modal">
+            <div className="stats-edit-head">
+              <div>
+                <h2>Modifica caricamenti</h2>
+                <p className="muted">
+                  {editingRow.resourceLabel} - {editingRow.jobOrderName}
+                </p>
+              </div>
+              <button type="button" className="mobile-button-secondary" onClick={() => setEditingRow(null)}>
+                Chiudi
+              </button>
+            </div>
+            <div className="stats-edit-list">
+              {editingRow.activities.map((activity) => (
+                <form
+                  key={activity.id}
+                  className="stats-edit-row"
+                  action={(formData) => void updateActivity(activity, formData)}
+                >
+                  <label>
+                    <span>Data</span>
+                    <input name="referenceDate" type="date" defaultValue={activity.referenceDate} />
+                  </label>
+                  <label>
+                    <span>Ore</span>
+                    <input name="hours" type="number" step="0.5" min="0.5" max="24" defaultValue={activity.hours} />
+                  </label>
+                  <label>
+                    <span>Commessa</span>
+                    <select name="jobOrderId" defaultValue={activity.jobOrderId}>
+                      {jobOrderRows.map((jobOrder) => (
+                        <option key={jobOrder.id} value={jobOrder.id}>
+                          {jobOrder.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="stats-source-pill">
+                    {activity.source === "AUTO" ? "Automatico" : "Manuale"}
+                  </span>
+                  <button type="submit" className="button" disabled={savingActivityId === activity.id}>
+                    {savingActivityId === activity.id ? "Salvataggio..." : "Salva"}
+                  </button>
+                </form>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,7 @@ type EquipmentRowInput = {
   type?: EquipmentType | string;
   purchaseDate?: string;
   status?: ResourceStatus | string;
+  isVisibleInDiary?: boolean;
   hourlyCost?: number | string | null;
 };
 
@@ -49,6 +50,7 @@ export async function GET() {
       type: item.type,
       purchaseDate: toInputDate(item.purchaseDate),
       status: item.status,
+      isVisibleInDiary: item.isVisibleInDiary,
       hourlyCost:
         item.costHistory.length > 0 ? Number(item.costHistory[0].hourlyCost) : "",
     })),
@@ -85,6 +87,7 @@ export async function POST(request: NextRequest) {
       type: (row.type || "") as EquipmentType | "",
       purchaseDate: row.purchaseDate || "",
       status: (row.status || "") as ResourceStatus | "",
+      isVisibleInDiary: row.isVisibleInDiary ?? true,
       hourlyCost:
         row.hourlyCost === "" || row.hourlyCost === null || row.hourlyCost === undefined
           ? ""
@@ -141,6 +144,7 @@ export async function POST(request: NextRequest) {
             type: row.type as EquipmentType,
             purchaseDate: parseOptionalDate(row.purchaseDate),
             status: row.status as ResourceStatus,
+            isVisibleInDiary: row.isVisibleInDiary,
           },
         });
       } else {
@@ -150,6 +154,7 @@ export async function POST(request: NextRequest) {
             type: row.type as EquipmentType,
             purchaseDate: parseOptionalDate(row.purchaseDate),
             status: row.status as ResourceStatus,
+            isVisibleInDiary: row.isVisibleInDiary,
           },
         });
         equipmentId = created.id;
@@ -158,13 +163,22 @@ export async function POST(request: NextRequest) {
       if (equipmentId && row.hourlyCost !== "") {
         const parsedCost = Number(row.hourlyCost);
 
-        await tx.equipmentCost.create({
-          data: {
-            equipmentId,
-            hourlyCost: new Prisma.Decimal(parsedCost.toFixed(2)),
-            validFrom: new Date(),
-          },
+        const latestCost = await tx.equipmentCost.findFirst({
+          where: { equipmentId },
+          orderBy: { validFrom: "desc" },
         });
+
+        const latestValue = latestCost ? Number(latestCost.hourlyCost) : null;
+
+        if (latestValue === null || latestValue !== parsedCost) {
+          await tx.equipmentCost.create({
+            data: {
+              equipmentId,
+              hourlyCost: new Prisma.Decimal(parsedCost.toFixed(2)),
+              validFrom: new Date(),
+            },
+          });
+        }
       }
     }
   });

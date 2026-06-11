@@ -126,6 +126,8 @@ export default function DocumentalePage() {
   const [loading, setLoading] = useState(true);
   const [scansLoading, setScansLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
+  const [bulkValidating, setBulkValidating] = useState(false);
+  const [selectedDeliveryNoteIds, setSelectedDeliveryNoteIds] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [selectedScan, setSelectedScan] = useState<ScannedDeliveryNoteRow | null>(null);
   const [scanForm, setScanForm] = useState<ScanFormState>(emptyScanForm());
@@ -160,6 +162,14 @@ export default function DocumentalePage() {
 
       const data = await safeJsonFetch(`/api/documentale/bolle?${params.toString()}`);
       setRows(data.rows ?? []);
+      setSelectedDeliveryNoteIds((current) => {
+        const pendingIds = new Set(
+          ((data.rows ?? []) as DeliveryNoteDocumentRow[])
+            .filter((row) => row.validationStatus === "PENDING")
+            .map((row) => row.id)
+        );
+        return current.filter((id) => pendingIds.has(id));
+      });
       setJobOrders((current) => (data.jobOrders?.length ? data.jobOrders : current));
       setSuppliers(data.suppliers ?? []);
     } catch (err) {
@@ -216,6 +226,47 @@ export default function DocumentalePage() {
       setError(err instanceof Error ? err.message : "Errore nella validazione");
     } finally {
       setSavingId("");
+    }
+  }
+
+  function toggleDeliveryNoteSelection(id: string) {
+    setSelectedDeliveryNoteIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  }
+
+  function toggleSelectAllPendingDeliveryNotes() {
+    const pendingIds = rows.filter((row) => row.validationStatus === "PENDING").map((row) => row.id);
+    const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selectedDeliveryNoteIds.includes(id));
+
+    setSelectedDeliveryNoteIds((current) =>
+      allSelected ? current.filter((id) => !pendingIds.includes(id)) : [...new Set([...current, ...pendingIds])]
+    );
+  }
+
+  async function validateSelectedDeliveryNotes() {
+    if (selectedDeliveryNoteIds.length === 0) {
+      setError("Seleziona almeno una bolla da validare.");
+      return;
+    }
+
+    setBulkValidating(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const data = await safeJsonFetch("/api/documentale/bolle/valida", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedDeliveryNoteIds }),
+      });
+      setMessage(`Validazione multipla completata: ${data.validatedCount} bolle validate.`);
+      setSelectedDeliveryNoteIds([]);
+      await loadRows();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nella validazione multipla");
+    } finally {
+      setBulkValidating(false);
     }
   }
 
@@ -280,6 +331,7 @@ export default function DocumentalePage() {
     try {
       await safeJsonFetch(`/api/documentale/bolle/${row.id}`, { method: "DELETE" });
       setMessage("Bolla eliminata.");
+      setSelectedDeliveryNoteIds((current) => current.filter((id) => id !== row.id));
       if (editingDeliveryNoteId === row.id) {
         cancelEditDeliveryNote();
       }
@@ -381,6 +433,7 @@ export default function DocumentalePage() {
         <button
           type="button"
           className={`documentale-tab ${activeTab === "bolle" ? "documentale-tab-active" : ""}`}
+          aria-current={activeTab === "bolle" ? "page" : undefined}
           onClick={() => selectTab("bolle")}
         >
           Bolle di Cantiere
@@ -388,6 +441,7 @@ export default function DocumentalePage() {
         <button
           type="button"
           className={`documentale-tab ${activeTab === "scansioni" ? "documentale-tab-active" : ""}`}
+          aria-current={activeTab === "scansioni" ? "page" : undefined}
           onClick={() => selectTab("scansioni")}
         >
           Bolle da inserire
@@ -466,7 +520,21 @@ export default function DocumentalePage() {
           <section className="card documentale-results">
             <div className="dashboard-card-head">
               <strong>Bolle di Cantiere</strong>
-              <span className="dashboard-pill">{rows.length} risultati</span>
+              <div className="documentale-filter-actions">
+                <span className="dashboard-pill">{rows.length} risultati</span>
+                <button
+                  type="button"
+                  className="mobile-button-secondary"
+                  onClick={toggleSelectAllPendingDeliveryNotes}
+                  disabled={loading || rows.every((row) => row.validationStatus !== "PENDING")}
+                >
+                  {rows
+                    .filter((row) => row.validationStatus === "PENDING")
+                    .every((row) => selectedDeliveryNoteIds.includes(row.id))
+                    ? "Deseleziona da validare"
+                    : "Seleziona da validare"}
+                </button>
+              </div>
             </div>
             <div className="documentale-table-wrap">
               <table className="documentale-table">
@@ -580,9 +648,32 @@ export default function DocumentalePage() {
                             <td>
                               <div className="documentale-row-actions documentale-bolle-actions">
                                 {row.validationStatus === "PENDING" ? (
+                                  <label className="documentale-select-note" title="Seleziona per validazione multipla">
+                                    <input
+                                      type="checkbox"
+                                      className="documentale-small-checkbox"
+                                      checked={selectedDeliveryNoteIds.includes(row.id)}
+                                      onChange={() => toggleDeliveryNoteSelection(row.id)}
+                                      disabled={bulkValidating || savingId === row.id}
+                                      aria-label={`Seleziona bolla ${row.supplier} del ${formatDate(row.usageDate)}`}
+                                    />
+                                  </label>
+                                ) : null}
+                                {row.validationStatus === "PENDING" && selectedDeliveryNoteIds.length === 0 ? (
                                   <button type="button" className="button" onClick={() => void validateDeliveryNote(row.id)} disabled={savingId === row.id}>
                                     {savingId === row.id ? "Validazione..." : "Valida"}
                                   </button>
+                                ) : row.validationStatus === "PENDING" && selectedDeliveryNoteIds.includes(row.id) ? (
+                                  <button
+                                    type="button"
+                                    className="button"
+                                    onClick={() => void validateSelectedDeliveryNotes()}
+                                    disabled={bulkValidating || savingId === row.id}
+                                  >
+                                    {bulkValidating ? "Validazione..." : "Valida selezionate"}
+                                  </button>
+                                ) : row.validationStatus === "PENDING" ? (
+                                  <span className="muted">Seleziona per validare</span>
                                 ) : (
                                   <span className="muted">Validata</span>
                                 )}

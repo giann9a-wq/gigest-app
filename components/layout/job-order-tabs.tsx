@@ -1,11 +1,13 @@
 import Link from "next/link";
 import type { Route } from "next";
 
-type JobOrderTabKey = "list" | "dashboard" | "statistics";
+type JobOrderTabKey = "list" | "dashboard" | "overview" | "statistics" | "costs";
 
 const JOB_ORDER_TABS: Array<{ key: JobOrderTabKey; href: Route; label: string }> = [
-  { key: "list", href: "/commesse" as Route, label: "Elenco commesse" },
   { key: "dashboard", href: "/dashboard-commessa" as Route, label: "Dashboard commesse" },
+  { key: "overview", href: "/commesse/overview" as Route, label: "Overview commesse" },
+  { key: "list", href: "/commesse" as Route, label: "Elenco commesse" },
+  { key: "costs", href: "/commesse/costi" as Route, label: "Costi" },
   { key: "statistics", href: "/statistiche-risorse-commesse" as Route, label: "Estrazione Statistiche" },
 ];
 
