@@ -3162,7 +3162,7 @@ a {
 
 .dashboard-weather-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.9fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(420px, 0.85fr);
   gap: 1.25rem;
   align-items: stretch;
   padding: 1.35rem 1.45rem;
@@ -3173,6 +3173,15 @@ a {
     radial-gradient(circle at 88% 0%, rgba(56, 189, 248, 0.14), transparent 30%),
     linear-gradient(135deg, rgba(255, 247, 237, 0.98), rgba(255, 255, 255, 0.94) 58%, rgba(240, 249, 255, 0.9));
   box-shadow: var(--shadow-soft);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.dashboard-weather-hero:hover {
+  border-color: rgba(234, 88, 12, 0.45);
+  box-shadow: 0 24px 60px rgba(14, 116, 144, 0.14);
+  transform: translateY(-1px);
 }
 
 .dashboard-weather-main {
@@ -3195,6 +3204,29 @@ a {
   font-size: clamp(3.2rem, 7vw, 5.2rem);
   line-height: 0.9;
   letter-spacing: -0.04em;
+}
+
+.weather-icon {
+  width: 2rem;
+  height: 2rem;
+  color: #0284c7;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.weather-icon circle {
+  fill: rgba(251, 146, 60, 0.16);
+}
+
+.weather-icon-current {
+  width: clamp(4rem, 7vw, 5.6rem);
+  height: clamp(4rem, 7vw, 5.6rem);
+  flex: 0 0 auto;
+  color: #f97316;
+  filter: drop-shadow(0 14px 22px rgba(249, 115, 22, 0.22));
 }
 
 .dashboard-weather-title-row strong {
@@ -3237,10 +3269,10 @@ a {
   text-transform: uppercase;
 }
 
-.dashboard-weather-day strong {
-  color: #075985;
-  font-size: 1rem;
-  line-height: 1.15;
+.dashboard-weather-day .weather-icon {
+  width: 2.45rem;
+  height: 2.45rem;
+  color: #0ea5e9;
 }
 
 .dashboard-weather-day small,
@@ -3255,6 +3287,95 @@ a {
   color: var(--text);
   font-size: 1.25rem;
   line-height: 1;
+}
+
+.dashboard-weather-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+
+.dashboard-weather-detail-panel {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(186, 230, 253, 0.8);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.dashboard-weather-detail-panel > span {
+  color: var(--brand);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.dashboard-weather-hour-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.dashboard-weather-hour,
+.dashboard-weather-part {
+  min-width: 0;
+  border-radius: 10px;
+  background: rgba(240, 249, 255, 0.72);
+}
+
+.dashboard-weather-hour {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.35rem;
+  text-align: center;
+}
+
+.dashboard-weather-hour b,
+.dashboard-weather-part b {
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.dashboard-weather-hour small,
+.dashboard-weather-hour em,
+.dashboard-weather-part small {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  line-height: 1.2;
+}
+
+.dashboard-weather-hour .weather-icon {
+  width: 1.55rem;
+  height: 1.55rem;
+}
+
+.dashboard-weather-part-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.dashboard-weather-part {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.dashboard-weather-part .weather-icon {
+  flex: 0 0 auto;
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+.dashboard-weather-part small {
+  display: block;
+  margin-top: 0.12rem;
 }
 
 .dashboard-alert-stack {
@@ -8127,6 +8248,10 @@ a {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .dashboard-weather-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-grid,
   .dashboard-actions-grid,
   .job-dashboard-panels,
@@ -8704,8 +8829,16 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .dashboard-weather-hour-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .dashboard-weather-day {
     min-height: 126px;
+    border-radius: 8px;
+  }
+
+  .dashboard-weather-detail-panel {
     border-radius: 8px;
   }
 
