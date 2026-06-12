@@ -6,6 +6,7 @@ import { getScheduleEvents, type ScheduleEventRow } from "@/lib/schedule-events"
 import { prisma } from "@/lib/prisma";
 import { getActiveAppUser } from "@/lib/app-user";
 import { getAutoDiaryProposalStatus, shouldShowAutoDiaryAlert } from "@/lib/auto-diary-proposals";
+import { runGmailScansSync } from "@/lib/gmail-scans-sync-runner";
 import { getLoadingVerificationStatus, shouldShowLoadingVerificationAlert } from "@/lib/loading-verification";
 import {
   DeliveryNoteValidationStatus,
@@ -536,6 +537,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const appUser = await getActiveAppUser();
   const canSeeAutoDiaryAlert = appUser?.role === UserRole.ADMIN && shouldShowAutoDiaryAlert();
   const canSeeLoadingVerificationAlert = appUser?.role === UserRole.ADMIN && shouldShowLoadingVerificationAlert();
+
+  if (appUser?.role === UserRole.ADMIN) {
+    await runGmailScansSync().catch((error) => {
+      console.error("Sync Gmail scansioni dashboard non completato", error);
+    });
+  }
 
   const [
     scheduleEvents,
