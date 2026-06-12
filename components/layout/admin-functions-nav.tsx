@@ -8,6 +8,7 @@ type AdminSection =
   | "import-fatture"
   | "acconti"
   | "controlli"
+  | "news"
   | "gestione-db";
 
 const ADMIN_FUNCTIONS: Array<{
@@ -44,6 +45,11 @@ const ADMIN_FUNCTIONS: Array<{
     key: "acconti",
     href: "/admin/acconti" as Route,
     title: "Gestione Acconti",
+  },
+  {
+    key: "news",
+    href: "/admin/news" as Route,
+    title: "News",
   },
   {
     key: "gestione-db",

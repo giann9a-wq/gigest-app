@@ -16,9 +16,13 @@ type AppHeaderProps = {
   userLabel?: string | null;
   showAdminLink: boolean;
   logoutAction: React.ReactNode;
+  news: {
+    title: string;
+    description: string;
+  };
 };
 
-export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderProps) {
+export function AppHeader({ userLabel, showAdminLink, logoutAction, news }: AppHeaderProps) {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -51,10 +55,17 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
     <header className="app-header">
       <div className="app-header-inner">
         <div className="app-header-top">
-          <Link href="/dashboard" className="app-brand">
-            <span className="app-brand-mark">Gi</span>
-            <span className="app-brand-text">GEST</span>
-          </Link>
+          <div className="app-brand-news-row">
+            <Link href="/dashboard" className="app-brand">
+              <span className="app-brand-mark">Gi</span>
+              <span className="app-brand-text">GEST</span>
+            </Link>
+
+            <section className="app-header-news-card" aria-label="News">
+              <span>{news.title}</span>
+              <p>{news.description}</p>
+            </section>
+          </div>
 
           {userLabel ? (
             <div className="app-user-actions app-user-actions-desktop">
