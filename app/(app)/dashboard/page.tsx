@@ -1,5 +1,5 @@
-import { auth } from "@/auth";
 import { ScansSyncButton } from "@/components/dashboard/scans-sync-button";
+import { WeatherCityPicker } from "@/components/dashboard/weather-city-picker";
 import { MaintenanceRollButton } from "@/components/dashboard/maintenance-roll-button";
 import { TrainingRollButton } from "@/components/dashboard/training-roll-button";
 import { getScheduleEvents, type ScheduleEventRow } from "@/lib/schedule-events";
@@ -337,7 +337,7 @@ async function getWeatherForecast(city: string): Promise<WeatherForecast | null>
     latitude: location.latitude,
     longitude: location.longitude,
     timezone: "Europe/Rome",
-    forecast_days: "5",
+    forecast_days: "4",
     current: "temperature_2m,apparent_temperature,weather_code,wind_speed_10m",
     hourly: "temperature_2m,weather_code,precipitation_probability,wind_speed_10m",
     daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max",
@@ -354,7 +354,7 @@ async function getWeatherForecast(city: string): Promise<WeatherForecast | null>
     const currentCondition = getWeatherCondition(Number(data.current?.weather_code ?? -1));
     const times: string[] = data.daily?.time ?? [];
     const hourlyTimes: string[] = data.hourly?.time ?? [];
-    const days = times.slice(1, 5).map((date, offset) => {
+    const days = times.slice(1, 4).map((date, offset) => {
       const index = offset + 1;
       const code = Number(data.daily.weather_code?.[index] ?? -1);
       const condition = getWeatherCondition(code);
@@ -408,7 +408,7 @@ async function getWeatherForecast(city: string): Promise<WeatherForecast | null>
   }
 }
 
-function WeatherHero({ weather, userLabel }: { weather: WeatherForecast | null; userLabel: string }) {
+function WeatherHero({ weather, searchedCity }: { weather: WeatherForecast | null; searchedCity: string }) {
   return (
     <section className="dashboard-weather-hero">
       <ScansSyncButton />
@@ -421,19 +421,10 @@ function WeatherHero({ weather, userLabel }: { weather: WeatherForecast | null; 
                 Meteo AM
               </a>
             ) : null}
-            <details className="dashboard-weather-city-picker">
-              <summary>Cambia città</summary>
-              <form action="/dashboard" className="dashboard-weather-city-form">
-                <input
-                  name="meteo"
-                  type="search"
-                  placeholder="Es. Milano"
-                  defaultValue={weather?.location.name ?? ""}
-                  aria-label="Città meteo"
-                />
-                <button type="submit">Aggiorna</button>
-              </form>
-            </details>
+            <WeatherCityPicker
+              currentCity={weather?.location.name ?? DEFAULT_WEATHER_LOCATION.name}
+              searchedCity={searchedCity}
+            />
           </div>
         </div>
         <div className="dashboard-weather-title-row">
@@ -450,9 +441,6 @@ function WeatherHero({ weather, userLabel }: { weather: WeatherForecast | null; 
             </span>
           </div>
         </div>
-        <p className="dashboard-subtitle">
-          Benvenuto, {userLabel}. Previsioni rapide per organizzare cantiere, mezzi e caricamenti.
-        </p>
         {weather ? (
           <div className="dashboard-weather-detail-panel dashboard-weather-today-panel">
             <span>Oggi, prossime ore</span>
@@ -473,7 +461,14 @@ function WeatherHero({ weather, userLabel }: { weather: WeatherForecast | null; 
       {weather ? (
         <div className="dashboard-weather-days" aria-label="Previsioni prossimi giorni">
           {weather.days.map((day) => (
-            <article key={day.date} className="dashboard-weather-day">
+            <a
+              key={day.date}
+              className="dashboard-weather-day"
+              href={weather.location.detailUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Apri Meteo AM per ${weather.location.name}, ${day.label}`}
+            >
               <span>{day.label}</span>
               <WeatherIcon code={day.code} />
               <small>{day.condition}</small>
@@ -494,7 +489,7 @@ function WeatherHero({ weather, userLabel }: { weather: WeatherForecast | null; 
                   </div>
                 ))}
               </div>
-            </article>
+            </a>
           ))}
         </div>
       ) : null}
@@ -532,10 +527,8 @@ function EventList({ events }: { events: ScheduleEventRow[] }) {
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const session = await auth();
   const resolvedSearchParams: Record<string, string | string[] | undefined> = searchParams ? await searchParams : {};
   const weatherCity = getSingleSearchParam(resolvedSearchParams.meteo);
-  const userLabel = session?.user?.name ?? session?.user?.email ?? "utente";
   const todayIso = new Date().toISOString().slice(0, 10);
   const todayBounds = getUtcDateBoundsFromIso(todayIso);
   const nextThirtyDaysEnd = new Date(todayBounds.end);
@@ -624,7 +617,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="dashboard-page">
-      <WeatherHero weather={weather} userLabel={userLabel} />
+      <WeatherHero weather={weather} searchedCity={weatherCity} />
 
       {newScansCount > 0 ||
       oldPendingDeliveryNotesCount > 0 ||
