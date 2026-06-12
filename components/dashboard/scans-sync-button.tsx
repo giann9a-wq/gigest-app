@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 async function readJsonResponse(response: Response) {
   const data = await response.json();
@@ -17,8 +17,18 @@ async function readJsonResponse(response: Response) {
     skipped?: number;
     errors?: number;
     throttled?: boolean;
+    skippedReason?: string;
     nextAllowedAt?: string;
   };
+}
+
+function formatRetryTime(value?: string) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleTimeString("it-IT", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function ScansSyncButton() {
@@ -48,7 +58,12 @@ export function ScansSyncButton() {
 
       if (options.showFeedback) {
         if (result.throttled) {
-          setMessage("Sync gia recente: riprovo automaticamente tra poco.");
+          const retryLabel = formatRetryTime(result.nextAllowedAt);
+          setMessage(
+            result.skippedReason === "gmail-rate-limit" && retryLabel
+              ? `Gmail in pausa temporanea fino alle ${retryLabel}.`
+              : "Sync gia recente: riprovo automaticamente tra poco."
+          );
         } else {
           setMessage(`Sync completato: ${result.imported ?? 0} nuove scansioni.`);
         }
@@ -58,9 +73,7 @@ export function ScansSyncButton() {
     } catch (err) {
       const nextAllowedAt =
         err instanceof Error ? (err as Error & { nextAllowedAt?: string }).nextAllowedAt : undefined;
-      const retryLabel = nextAllowedAt
-        ? new Date(nextAllowedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
-        : "";
+      const retryLabel = formatRetryTime(nextAllowedAt);
       const text =
         err instanceof Error ? err.message : "Errore sincronizzazione Gmail";
 
@@ -76,16 +89,6 @@ export function ScansSyncButton() {
       }
     }
   }, [router]);
-
-  useEffect(() => {
-    void syncScans();
-
-    const intervalId = window.setInterval(() => {
-      void syncScans();
-    }, 5 * 60_000);
-
-    return () => window.clearInterval(intervalId);
-  }, [syncScans]);
 
   return (
     <div className="dashboard-sync-control">

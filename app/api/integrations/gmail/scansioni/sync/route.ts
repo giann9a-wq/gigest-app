@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 const GMAIL_SCANS_SYNC_SETTING_KEY = "gmailScansSync";
 const AUTO_SYNC_MIN_INTERVAL_MS = 5 * 60 * 1000;
+const GMAIL_RATE_LIMIT_GRACE_MS = 2 * 60 * 1000;
 
 type GmailScansSyncState = {
   lastAttemptAt?: string;
@@ -37,6 +38,10 @@ function extractRetryAfterIso(error: unknown) {
   return match?.[1] ?? null;
 }
 
+function withGracePeriod(isoValue: string) {
+  return new Date(new Date(isoValue).getTime() + GMAIL_RATE_LIMIT_GRACE_MS).toISOString();
+}
+
 async function getSyncState() {
   const setting = await prisma.appSetting.findUnique({
     where: { key: GMAIL_SCANS_SYNC_SETTING_KEY },
@@ -59,13 +64,20 @@ async function saveSyncState(state: GmailScansSyncState) {
   });
 }
 
-export async function POST(request: Request) {
-  const appUser = await getActiveAppUser();
-  const configuredSecret = process.env.GMAIL_SCANS_SYNC_SECRET;
-  const bearerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  const hasValidSecret = Boolean(configuredSecret && bearerToken === configuredSecret);
+function getBearerToken(request: Request) {
+  const header = request.headers.get("authorization") || "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || "";
+}
 
-  if (!hasValidSecret && (!appUser || appUser.role !== UserRole.ADMIN)) {
+async function runSync(request: Request, options: { allowVercelCron: boolean }) {
+  const appUser = await getActiveAppUser();
+  const configuredSecret = process.env.GMAIL_SCANS_SYNC_SECRET || process.env.CRON_SECRET;
+  const bearerToken = getBearerToken(request);
+  const hasValidSecret = Boolean(configuredSecret && bearerToken === configuredSecret);
+  const isVercelCron = options.allowVercelCron && request.headers.get("x-vercel-cron") === "1";
+
+  if (!hasValidSecret && !isVercelCron && (!appUser || appUser.role !== UserRole.ADMIN)) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
@@ -75,15 +87,13 @@ export async function POST(request: Request) {
   const state = await getSyncState();
 
   if (isFutureIso(state.cooldownUntil, now)) {
-    return NextResponse.json(
-      {
-        success: false,
-        throttled: true,
-        error: "Gmail ha imposto un limite temporaneo. Riprova piu tardi.",
-        nextAllowedAt: state.cooldownUntil,
-      },
-      { status: 429 }
-    );
+    return NextResponse.json({
+      success: true,
+      throttled: true,
+      skippedReason: "gmail-rate-limit",
+      message: "Gmail e in pausa temporanea.",
+      nextAllowedAt: state.cooldownUntil,
+    });
   }
 
   if (!force && state.lastAttemptAt) {
@@ -121,7 +131,9 @@ export async function POST(request: Request) {
   } catch (error) {
     const retryAfter = extractRetryAfterIso(error);
     const message = error instanceof Error ? error.message : "Errore sincronizzazione Gmail";
-    const cooldownUntil = retryAfter ?? new Date(Date.now() + AUTO_SYNC_MIN_INTERVAL_MS).toISOString();
+    const cooldownUntil = retryAfter
+      ? withGracePeriod(retryAfter)
+      : new Date(Date.now() + AUTO_SYNC_MIN_INTERVAL_MS).toISOString();
 
     await saveSyncState({
       ...state,
@@ -130,16 +142,31 @@ export async function POST(request: Request) {
       lastError: message,
     });
 
+    if (retryAfter) {
+      return NextResponse.json({
+        success: true,
+        throttled: true,
+        skippedReason: "gmail-rate-limit",
+        message: "Gmail e in pausa temporanea.",
+        nextAllowedAt: cooldownUntil,
+      });
+    }
+
     return NextResponse.json(
       {
         success: false,
-        throttled: Boolean(retryAfter),
-        error: retryAfter
-          ? "Gmail ha imposto un limite temporaneo. Riprova piu tardi."
-          : message,
+        error: message,
         nextAllowedAt: cooldownUntil,
       },
-      { status: retryAfter ? 429 : 500 }
+      { status: 500 }
     );
   }
+}
+
+export async function GET(request: Request) {
+  return runSync(request, { allowVercelCron: true });
+}
+
+export async function POST(request: Request) {
+  return runSync(request, { allowVercelCron: false });
 }
