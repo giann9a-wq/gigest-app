@@ -22,6 +22,7 @@ type WeatherDay = {
   max: number;
   rainMm: number;
   windKmh: number;
+  parts: WeatherDayPart[];
 };
 
 type WeatherHour = {
@@ -44,6 +45,7 @@ type WeatherDayPart = {
 };
 
 type WeatherForecast = {
+  location: WeatherLocation;
   current: {
     temperature: number;
     apparentTemperature: number;
@@ -53,12 +55,32 @@ type WeatherForecast = {
   };
   days: WeatherDay[];
   todayHours: WeatherHour[];
-  tomorrowParts: WeatherDayPart[];
   updatedAt: string;
 };
 
-const WEATHER_DETAIL_URL =
-  "https://www.google.com/search?q=meteo+Cornate+d%27Adda+Meteo+AM";
+type WeatherHourlyData = {
+  weather_code?: number[];
+  temperature_2m?: number[];
+  precipitation_probability?: number[];
+};
+
+type WeatherLocation = {
+  name: string;
+  latitude: string;
+  longitude: string;
+  detailUrl: string;
+};
+
+type DashboardPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+const DEFAULT_WEATHER_LOCATION: WeatherLocation = {
+  name: "Cornate d'Adda",
+  latitude: "45.65",
+  longitude: "9.47",
+  detailUrl: "https://www.meteoam.it/it/meteo-citta/cornate-d-adda",
+};
 
 function getUtcDateBoundsFromIso(isoDate: string) {
   return {
@@ -120,6 +142,63 @@ function formatWeatherHour(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getSingleSearchParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] ?? "";
+  return value ?? "";
+}
+
+function slugifyWeatherCity(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function resolveWeatherLocation(city: string): Promise<WeatherLocation> {
+  const normalizedCity = city.trim();
+
+  if (!normalizedCity || slugifyWeatherCity(normalizedCity) === "cornate-dadda") {
+    return DEFAULT_WEATHER_LOCATION;
+  }
+
+  const params = new URLSearchParams({
+    name: normalizedCity,
+    count: "1",
+    language: "it",
+    format: "json",
+  });
+
+  try {
+    const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params.toString()}`, {
+      next: { revalidate: 24 * 60 * 60 },
+    });
+
+    if (!response.ok) return DEFAULT_WEATHER_LOCATION;
+
+    const data = await response.json();
+    const result = data.results?.[0];
+
+    if (!result?.latitude || !result?.longitude || !result?.name) {
+      return DEFAULT_WEATHER_LOCATION;
+    }
+
+    const countrySuffix = result.admin1 ? `, ${result.admin1}` : "";
+    const name = `${result.name}${countrySuffix}`;
+
+    return {
+      name,
+      latitude: String(result.latitude),
+      longitude: String(result.longitude),
+      detailUrl: `https://www.meteoam.it/it/meteo-citta/${slugifyWeatherCity(result.name)}`,
+    };
+  } catch {
+    return DEFAULT_WEATHER_LOCATION;
+  }
 }
 
 function average(values: number[]) {
@@ -223,10 +302,40 @@ function WeatherIcon({ code, className = "" }: { code: number; className?: strin
   );
 }
 
-async function getCornateWeather(): Promise<WeatherForecast | null> {
+function getWeatherDayParts(date: string, hourlyTimes: string[], hourly: WeatherHourlyData): WeatherDayPart[] {
+  return [
+    { label: "Mattina", start: 6, end: 12 },
+    { label: "Pomeriggio", start: 12, end: 18 },
+  ].map((part) => {
+    const partRows = hourlyTimes
+      .map((time, index) => ({
+        date: time.slice(0, 10),
+        hour: Number(time.slice(11, 13)),
+        code: Number(hourly.weather_code?.[index] ?? -1),
+        temperature: Number(hourly.temperature_2m?.[index] ?? 0),
+        rainProbability: Number(hourly.precipitation_probability?.[index] ?? 0),
+      }))
+      .filter((row) => row.date === date && row.hour >= part.start && row.hour < part.end);
+    const code = getRepresentativeWeatherCode(partRows.map((row) => row.code));
+    const condition = getWeatherCondition(code);
+    const temperatures = partRows.map((row) => row.temperature);
+
+    return {
+      label: part.label,
+      code,
+      condition: condition.label,
+      min: temperatures.length > 0 ? Math.round(Math.min(...temperatures)) : 0,
+      max: temperatures.length > 0 ? Math.round(Math.max(...temperatures)) : 0,
+      rainProbability: Math.round(average(partRows.map((row) => row.rainProbability))),
+    };
+  });
+}
+
+async function getWeatherForecast(city: string): Promise<WeatherForecast | null> {
+  const location = await resolveWeatherLocation(city);
   const params = new URLSearchParams({
-    latitude: "45.65",
-    longitude: "9.47",
+    latitude: location.latitude,
+    longitude: location.longitude,
     timezone: "Europe/Rome",
     forecast_days: "5",
     current: "temperature_2m,apparent_temperature,weather_code,wind_speed_10m",
@@ -244,6 +353,7 @@ async function getCornateWeather(): Promise<WeatherForecast | null> {
     const data = await response.json();
     const currentCondition = getWeatherCondition(Number(data.current?.weather_code ?? -1));
     const times: string[] = data.daily?.time ?? [];
+    const hourlyTimes: string[] = data.hourly?.time ?? [];
     const days = times.slice(1, 5).map((date, offset) => {
       const index = offset + 1;
       const code = Number(data.daily.weather_code?.[index] ?? -1);
@@ -258,9 +368,9 @@ async function getCornateWeather(): Promise<WeatherForecast | null> {
         max: Math.round(Number(data.daily.temperature_2m_max?.[index] ?? 0)),
         rainMm: Number(Number(data.daily.precipitation_sum?.[index] ?? 0).toFixed(1)),
         windKmh: Math.round(Number(data.daily.wind_speed_10m_max?.[index] ?? 0)),
+        parts: getWeatherDayParts(date, hourlyTimes, data.hourly),
       };
     });
-    const hourlyTimes: string[] = data.hourly?.time ?? [];
     const now = new Date(data.current?.time ?? Date.now()).getTime();
     const todayHours = hourlyTimes
       .map((time, index) => {
@@ -278,36 +388,10 @@ async function getCornateWeather(): Promise<WeatherForecast | null> {
         };
       })
       .filter((hour) => new Date(hour.time).getTime() >= now)
-      .slice(0, 4);
-    const tomorrowDate = times[1];
-    const tomorrowParts = [
-      { label: "Domani mattina", start: 6, end: 12 },
-      { label: "Domani pomeriggio", start: 12, end: 18 },
-    ].map((part) => {
-      const partRows = hourlyTimes
-        .map((time, index) => ({
-          date: time.slice(0, 10),
-          hour: Number(time.slice(11, 13)),
-          code: Number(data.hourly.weather_code?.[index] ?? -1),
-          temperature: Number(data.hourly.temperature_2m?.[index] ?? 0),
-          rainProbability: Number(data.hourly.precipitation_probability?.[index] ?? 0),
-        }))
-        .filter((row) => row.date === tomorrowDate && row.hour >= part.start && row.hour < part.end);
-      const code = getRepresentativeWeatherCode(partRows.map((row) => row.code));
-      const condition = getWeatherCondition(code);
-      const temperatures = partRows.map((row) => row.temperature);
-
-      return {
-        label: part.label,
-        code,
-        condition: condition.label,
-        min: temperatures.length > 0 ? Math.round(Math.min(...temperatures)) : 0,
-        max: temperatures.length > 0 ? Math.round(Math.max(...temperatures)) : 0,
-        rainProbability: Math.round(average(partRows.map((row) => row.rainProbability))),
-      };
-    });
+      .slice(0, 6);
 
     return {
+      location,
       current: {
         temperature: Math.round(Number(data.current?.temperature_2m ?? 0)),
         apparentTemperature: Math.round(Number(data.current?.apparent_temperature ?? 0)),
@@ -317,7 +401,6 @@ async function getCornateWeather(): Promise<WeatherForecast | null> {
       },
       days,
       todayHours,
-      tomorrowParts,
       updatedAt: data.current?.time ?? new Date().toISOString(),
     };
   } catch {
@@ -327,16 +410,32 @@ async function getCornateWeather(): Promise<WeatherForecast | null> {
 
 function WeatherHero({ weather, userLabel }: { weather: WeatherForecast | null; userLabel: string }) {
   return (
-    <a
-      className="dashboard-weather-hero"
-      href={WEATHER_DETAIL_URL}
-      target="_blank"
-      rel="noreferrer"
-      aria-label="Apri le previsioni complete per Cornate d'Adda"
-    >
+    <section className="dashboard-weather-hero">
       <ScansSyncButton />
       <div className="dashboard-weather-main">
-        <p className="dashboard-kicker">Meteo Cornate d'Adda</p>
+        <div className="dashboard-weather-topline">
+          <p className="dashboard-kicker">Meteo {weather?.location.name ?? DEFAULT_WEATHER_LOCATION.name}</p>
+          <div className="dashboard-weather-actions">
+            {weather ? (
+              <a className="dashboard-weather-link" href={weather.location.detailUrl} target="_blank" rel="noreferrer">
+                Meteo AM
+              </a>
+            ) : null}
+            <details className="dashboard-weather-city-picker">
+              <summary>Cambia città</summary>
+              <form action="/dashboard" className="dashboard-weather-city-form">
+                <input
+                  name="meteo"
+                  type="search"
+                  placeholder="Es. Milano"
+                  defaultValue={weather?.location.name ?? ""}
+                  aria-label="Città meteo"
+                />
+                <button type="submit">Aggiorna</button>
+              </form>
+            </details>
+          </div>
+        </div>
         <div className="dashboard-weather-title-row">
           {weather ? <WeatherIcon code={weather.current.code} className="weather-icon-current" /> : null}
           <h1 className="dashboard-weather-title">
@@ -355,35 +454,17 @@ function WeatherHero({ weather, userLabel }: { weather: WeatherForecast | null; 
           Benvenuto, {userLabel}. Previsioni rapide per organizzare cantiere, mezzi e caricamenti.
         </p>
         {weather ? (
-          <div className="dashboard-weather-detail-grid">
-            <div className="dashboard-weather-detail-panel">
-              <span>Oggi, prossime ore</span>
-              <div className="dashboard-weather-hour-list">
-                {weather.todayHours.map((hour) => (
-                  <div key={hour.time} className="dashboard-weather-hour">
-                    <b>{hour.label}</b>
-                    <WeatherIcon code={hour.code} />
-                    <small>{hour.temperature}°</small>
-                    <em>{hour.rainProbability}% pioggia</em>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="dashboard-weather-detail-panel">
-              <span>Domani</span>
-              <div className="dashboard-weather-part-list">
-                {weather.tomorrowParts.map((part) => (
-                  <div key={part.label} className="dashboard-weather-part">
-                    <WeatherIcon code={part.code} />
-                    <div>
-                      <b>{part.label}</b>
-                      <small>
-                        {part.condition} · {part.min}°/{part.max}° · {part.rainProbability}% pioggia
-                      </small>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <div className="dashboard-weather-detail-panel dashboard-weather-today-panel">
+            <span>Oggi, prossime ore</span>
+            <div className="dashboard-weather-hour-list">
+              {weather.todayHours.map((hour) => (
+                <div key={hour.time} className="dashboard-weather-hour">
+                  <b>{hour.label}</b>
+                  <WeatherIcon code={hour.code} />
+                  <small>{hour.temperature}°</small>
+                  <em>{hour.rainProbability}% pioggia</em>
+                </div>
+              ))}
             </div>
           </div>
         ) : null}
@@ -400,11 +481,24 @@ function WeatherHero({ weather, userLabel }: { weather: WeatherForecast | null; 
                 {day.min}° / {day.max}°
               </b>
               <em>{day.rainMm} mm · {day.windKmh} km/h</em>
+              <div className="dashboard-weather-part-list">
+                {day.parts.map((part) => (
+                  <div key={part.label} className="dashboard-weather-part">
+                    <WeatherIcon code={part.code} />
+                    <div>
+                      <b>{part.label}</b>
+                      <small>
+                        {part.condition} · {part.min}°/{part.max}° · {part.rainProbability}%
+                      </small>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </article>
           ))}
         </div>
       ) : null}
-    </a>
+    </section>
   );
 }
 
@@ -437,8 +531,10 @@ function EventList({ events }: { events: ScheduleEventRow[] }) {
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const session = await auth();
+  const resolvedSearchParams: Record<string, string | string[] | undefined> = searchParams ? await searchParams : {};
+  const weatherCity = getSingleSearchParam(resolvedSearchParams.meteo);
   const userLabel = session?.user?.name ?? session?.user?.email ?? "utente";
   const todayIso = new Date().toISOString().slice(0, 10);
   const todayBounds = getUtcDateBoundsFromIso(todayIso);
@@ -512,7 +608,7 @@ export default async function DashboardPage() {
         person: { select: { fullName: true } },
       },
     }),
-    getCornateWeather(),
+    getWeatherForecast(weatherCity),
   ]);
 
   const todayEvents = scheduleEvents.filter((event) => {
