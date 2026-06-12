@@ -3769,6 +3769,10 @@ a {
   margin-top: 0.65rem;
 }
 
+.dashboard-weather-actions .dashboard-sync-control {
+  margin-top: 0;
+}
+
 .dashboard-sync-button {
   min-height: 32px;
   padding: 0.45rem 0.7rem;

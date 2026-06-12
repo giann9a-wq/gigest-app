@@ -411,7 +411,6 @@ async function getWeatherForecast(city: string): Promise<WeatherForecast | null>
 function WeatherHero({ weather, searchedCity }: { weather: WeatherForecast | null; searchedCity: string }) {
   return (
     <section className="dashboard-weather-hero">
-      <ScansSyncButton />
       <div className="dashboard-weather-main">
         <div className="dashboard-weather-topline">
           <p className="dashboard-kicker">Meteo {weather?.location.name ?? DEFAULT_WEATHER_LOCATION.name}</p>
@@ -420,6 +419,7 @@ function WeatherHero({ weather, searchedCity }: { weather: WeatherForecast | nul
               currentCity={weather?.location.name ?? DEFAULT_WEATHER_LOCATION.name}
               searchedCity={searchedCity}
             />
+            <ScansSyncButton />
           </div>
         </div>
         <div className="dashboard-weather-title-row">
