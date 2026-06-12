@@ -57,7 +57,6 @@ export function WeatherCityPicker({ currentCity, searchedCity }: WeatherCityPick
       <div className="dashboard-weather-city-popover">
         <form action="/dashboard" className="dashboard-weather-city-form">
           <label>
-            <span>Scrivi una nuova citta</span>
             <input
               name="meteo"
               type="search"
