@@ -15,18 +15,12 @@ async function readJsonResponse(response: Response) {
 
 export function ScansSyncButton() {
   const router = useRouter();
-  const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState("");
   const syncingRef = useRef(false);
 
-  const syncScans = useCallback(async ({ showLoading = true } = {}) => {
+  const syncScans = useCallback(async () => {
     if (syncingRef.current) return;
 
     syncingRef.current = true;
-    setSyncing(true);
-    if (showLoading) {
-      setError("");
-    }
 
     try {
       await readJsonResponse(
@@ -34,31 +28,21 @@ export function ScansSyncButton() {
       );
       router.refresh();
     } catch (err) {
-      if (showLoading) {
-        setError(err instanceof Error ? err.message : "Errore sincronizzazione Gmail");
-      }
+      console.error(err instanceof Error ? err.message : "Errore sincronizzazione Gmail");
     } finally {
       syncingRef.current = false;
-      setSyncing(false);
     }
   }, [router]);
 
   useEffect(() => {
-    void syncScans({ showLoading: false });
+    void syncScans();
 
     const intervalId = window.setInterval(() => {
-      void syncScans({ showLoading: false });
+      void syncScans();
     }, 60_000);
 
     return () => window.clearInterval(intervalId);
   }, [syncScans]);
 
-  return (
-    <div className="dashboard-sync-control">
-      <button type="button" className="dashboard-sync-button" onClick={() => void syncScans()} disabled={syncing}>
-        {syncing ? "Sync..." : "Sync Gmail"}
-      </button>
-      {error ? <span className="dashboard-sync-error">{error}</span> : null}
-    </div>
-  );
+  return null;
 }

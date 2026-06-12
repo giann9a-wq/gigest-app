@@ -13,6 +13,31 @@ import {
   UserRole,
 } from "@prisma/client";
 
+type WeatherDay = {
+  date: string;
+  label: string;
+  code: number;
+  condition: string;
+  icon: string;
+  min: number;
+  max: number;
+  rainMm: number;
+  windKmh: number;
+};
+
+type WeatherForecast = {
+  current: {
+    temperature: number;
+    apparentTemperature: number;
+    windKmh: number;
+    code: number;
+    condition: string;
+    icon: string;
+  };
+  days: WeatherDay[];
+  updatedAt: string;
+};
+
 function getUtcDateBoundsFromIso(isoDate: string) {
   return {
     start: new Date(`${isoDate}T00:00:00.000Z`),
@@ -48,6 +73,123 @@ function getLinkedLabel(event: ScheduleEventRow) {
   return "";
 }
 
+function getWeatherCondition(code: number) {
+  if (code === 0) return { label: "Sereno", icon: "Sole" };
+  if ([1, 2].includes(code)) return { label: "Poco nuvoloso", icon: "Sole velato" };
+  if (code === 3) return { label: "Nuvoloso", icon: "Nubi" };
+  if ([45, 48].includes(code)) return { label: "Nebbia", icon: "Nebbia" };
+  if ([51, 53, 55, 56, 57].includes(code)) return { label: "Pioviggine", icon: "Pioggia fine" };
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { label: "Pioggia", icon: "Pioggia" };
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return { label: "Neve", icon: "Neve" };
+  if ([95, 96, 99].includes(code)) return { label: "Temporale", icon: "Temporale" };
+  return { label: "Variabile", icon: "Meteo" };
+}
+
+function formatWeatherDate(value: string) {
+  return new Date(`${value}T12:00:00`).toLocaleDateString("it-IT", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
+
+async function getCornateWeather(): Promise<WeatherForecast | null> {
+  const params = new URLSearchParams({
+    latitude: "45.65",
+    longitude: "9.47",
+    timezone: "Europe/Rome",
+    forecast_days: "4",
+    current: "temperature_2m,apparent_temperature,weather_code,wind_speed_10m",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max",
+  });
+
+  try {
+    const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, {
+      next: { revalidate: 30 * 60 },
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const currentCondition = getWeatherCondition(Number(data.current?.weather_code ?? -1));
+    const times: string[] = data.daily?.time ?? [];
+    const days = times.slice(0, 4).map((date, index) => {
+      const code = Number(data.daily.weather_code?.[index] ?? -1);
+      const condition = getWeatherCondition(code);
+
+      return {
+        date,
+        label: index === 0 ? "Oggi" : formatWeatherDate(date),
+        code,
+        condition: condition.label,
+        icon: condition.icon,
+        min: Math.round(Number(data.daily.temperature_2m_min?.[index] ?? 0)),
+        max: Math.round(Number(data.daily.temperature_2m_max?.[index] ?? 0)),
+        rainMm: Number(Number(data.daily.precipitation_sum?.[index] ?? 0).toFixed(1)),
+        windKmh: Math.round(Number(data.daily.wind_speed_10m_max?.[index] ?? 0)),
+      };
+    });
+
+    return {
+      current: {
+        temperature: Math.round(Number(data.current?.temperature_2m ?? 0)),
+        apparentTemperature: Math.round(Number(data.current?.apparent_temperature ?? 0)),
+        windKmh: Math.round(Number(data.current?.wind_speed_10m ?? 0)),
+        code: Number(data.current?.weather_code ?? -1),
+        condition: currentCondition.label,
+        icon: currentCondition.icon,
+      },
+      days,
+      updatedAt: data.current?.time ?? new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function WeatherHero({ weather, userLabel }: { weather: WeatherForecast | null; userLabel: string }) {
+  return (
+    <section className="dashboard-weather-hero">
+      <ScansSyncButton />
+      <div className="dashboard-weather-main">
+        <p className="dashboard-kicker">Meteo Cornate d'Adda</p>
+        <div className="dashboard-weather-title-row">
+          <h1 className="dashboard-weather-title">
+            {weather ? `${weather.current.temperature}°` : "Meteo non disponibile"}
+          </h1>
+          <div>
+            <strong>{weather?.current.condition ?? "Dati temporaneamente non disponibili"}</strong>
+            <span>
+              {weather
+                ? `Percepita ${weather.current.apparentTemperature}° · vento ${weather.current.windKmh} km/h`
+                : "La dashboard resta operativa; riprovo al prossimo caricamento."}
+            </span>
+          </div>
+        </div>
+        <p className="dashboard-subtitle">
+          Benvenuto, {userLabel}. Previsioni rapide per organizzare cantiere, mezzi e caricamenti.
+        </p>
+      </div>
+
+      {weather ? (
+        <div className="dashboard-weather-days" aria-label="Previsioni prossimi giorni">
+          {weather.days.map((day) => (
+            <article key={day.date} className="dashboard-weather-day">
+              <span>{day.label}</span>
+              <strong>{day.icon}</strong>
+              <small>{day.condition}</small>
+              <b>
+                {day.min}° / {day.max}°
+              </b>
+              <em>{day.rainMm} mm · {day.windKmh} km/h</em>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function EventList({ events }: { events: ScheduleEventRow[] }) {
   if (events.length === 0) {
     return <p className="muted">Nessun evento da mostrare.</p>;
@@ -79,6 +221,7 @@ function EventList({ events }: { events: ScheduleEventRow[] }) {
 
 export default async function DashboardPage() {
   const session = await auth();
+  const userLabel = session?.user?.name ?? session?.user?.email ?? "utente";
   const todayIso = new Date().toISOString().slice(0, 10);
   const todayBounds = getUtcDateBoundsFromIso(todayIso);
   const nextThirtyDaysEnd = new Date(todayBounds.end);
@@ -100,6 +243,7 @@ export default async function DashboardPage() {
     loadingVerificationStatus,
     recurringMaintenanceAlerts,
     recurringTrainingAlerts,
+    weather,
   ] = await Promise.all([
     getScheduleEvents({
       from: todayBounds.start,
@@ -150,6 +294,7 @@ export default async function DashboardPage() {
         person: { select: { fullName: true } },
       },
     }),
+    getCornateWeather(),
   ]);
 
   const todayEvents = scheduleEvents.filter((event) => {
@@ -165,21 +310,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="dashboard-page">
-      <section className="dashboard-hero">
-        <div>
-          <p className="dashboard-kicker">Panoramica Operativa</p>
-          <h1 className="dashboard-title">Dashboard</h1>
-          <p className="dashboard-subtitle">
-            Benvenuto, {session?.user?.name ?? session?.user?.email ?? "utente"}. Da qui puoi
-            raggiungere velocemente le aree principali del gestionale.
-          </p>
-        </div>
-        <div className="dashboard-hero-badge">
-          <span className="dashboard-hero-badge-label">Workspace</span>
-          <strong>GiGEST</strong>
-          <ScansSyncButton />
-        </div>
-      </section>
+      <WeatherHero weather={weather} userLabel={userLabel} />
 
       {newScansCount > 0 ||
       oldPendingDeliveryNotesCount > 0 ||
