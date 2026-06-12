@@ -1,29 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getActiveAppUser } from "@/lib/app-user";
+import {
+  deleteDriveFile,
+  ensureEquipmentMaintenanceFolder,
+  uploadMaintenanceDocumentToDrive,
+} from "@/lib/google-drive-document-storage";
 import { prisma } from "@/lib/prisma";
-import { UserStatus } from "@prisma/client";
+
+const DRIVE_FILE_PREFIX = "drive:";
+
+function drivePath(fileId: string) {
+  return `${DRIVE_FILE_PREFIX}${fileId}`;
+}
+
+function driveFileIdFromPath(filePath: string) {
+  return filePath.startsWith(DRIVE_FILE_PREFIX) ? filePath.slice(DRIVE_FILE_PREFIX.length) : null;
+}
 
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const appUser = await getActiveAppUser();
 
-  if (!session?.user?.email) {
+  if (!appUser) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
-  const appUser = await prisma.user.findUnique({
-    where: { email: session.user.email.toLowerCase() },
-    select: { id: true, status: true },
-  });
-
-  if (!appUser || appUser.status !== UserStatus.ACTIVE) {
-    return NextResponse.json({ error: "Utente non autorizzato" }, { status: 403 });
-  }
-
   const { id: equipmentId } = await context.params;
-
   const formData = await request.formData();
   const maintenanceId = String(formData.get("maintenanceId") || "");
   const file = formData.get("file");
@@ -41,65 +45,80 @@ export async function POST(
       id: maintenanceId,
       equipmentId,
     },
-    select: { id: true },
+    include: {
+      equipment: {
+        select: { nameDescription: true },
+      },
+      documents: {
+        select: { id: true, filePath: true },
+      },
+    },
   });
 
   if (!maintenance) {
     return NextResponse.json({ error: "Manutenzione non trovata" }, { status: 404 });
   }
 
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let uploadedDriveFileId: string | null = null;
 
-    if (!bucket || !supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json({ error: "Configurazione Supabase mancante" }, { status: 500 });
-    }
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const folderId = await ensureEquipmentMaintenanceFolder({
+      equipmentName: maintenance.equipment.nameDescription,
+      interventionDate: maintenance.interventionDate,
+    });
+    const uploaded = await uploadMaintenanceDocumentToDrive({
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      buffer,
+      folderId,
+    });
+    uploadedDriveFileId = uploaded.driveFileId;
 
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
+    const document = await prisma.$transaction(async (tx) => {
+      if (maintenance.documents.length > 0) {
+        await tx.maintenanceDocument.deleteMany({
+          where: { maintenanceId: maintenance.id },
+        });
+      }
 
-  const safeName = file.name.replace(/[^\w.\-]/g, "_");
-  const filePath = `maintenance/${equipmentId}/${maintenanceId}/${Date.now()}_${safeName}`;
-
-    const uploadResponse = await fetch(
-    `${supabaseUrl}/storage/v1/object/${bucket}/${filePath}`,
-    {
-        method: "POST",
-        headers: {
-        Authorization: `Bearer ${serviceRoleKey}`,
-        apikey: serviceRoleKey,
-        "Content-Type": file.type || "application/octet-stream",
-        "x-upsert": "true",
+      return tx.maintenanceDocument.create({
+        data: {
+          maintenanceId,
+          fileName: uploaded.fileName,
+          filePath: drivePath(uploaded.driveFileId),
+          mimeType: uploaded.mimeType,
+          sizeBytes: uploaded.sizeBytes,
         },
-        body: buffer,
-    }
-    );
+      });
+    });
 
-  if (!uploadResponse.ok) {
-    const raw = await uploadResponse.text();
+    const previousDriveFileIds = maintenance.documents
+      .map((item) => driveFileIdFromPath(item.filePath))
+      .filter((item): item is string => Boolean(item));
+
+    if (previousDriveFileIds.length > 0) {
+      await Promise.allSettled(previousDriveFileIds.map((fileId) => deleteDriveFile(fileId)));
+    }
+
+    return NextResponse.json({
+      success: true,
+      document: {
+        id: document.id,
+        fileName: document.fileName,
+        filePath: document.filePath,
+        mimeType: document.mimeType,
+        sizeBytes: document.sizeBytes,
+      },
+    });
+  } catch (err) {
+    if (uploadedDriveFileId) {
+      await deleteDriveFile(uploadedDriveFileId).catch(() => undefined);
+    }
+
     return NextResponse.json(
-      { error: `Upload Supabase fallito: ${raw}` },
+      { error: err instanceof Error ? err.message : "Errore upload documento" },
       { status: 500 }
     );
   }
-
-  const created = await prisma.maintenanceDocument.create({
-    data: {
-      maintenanceId,
-      fileName: file.name,
-      filePath,
-      mimeType: file.type || null,
-      sizeBytes: file.size,
-    },
-  });
-
-  return NextResponse.json({
-    success: true,
-    document: {
-      id: created.id,
-      fileName: created.fileName,
-      filePath: created.filePath,
-    },
-  });
 }

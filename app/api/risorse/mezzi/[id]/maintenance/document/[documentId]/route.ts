@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getActiveAppUser } from "@/lib/app-user";
+import { downloadDriveFile } from "@/lib/google-drive-document-storage";
 import { prisma } from "@/lib/prisma";
 
+const DRIVE_FILE_PREFIX = "drive:";
+
+function driveFileIdFromPath(filePath: string) {
+  return filePath.startsWith(DRIVE_FILE_PREFIX) ? filePath.slice(DRIVE_FILE_PREFIX.length) : null;
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string; documentId: string }> }
 ) {
-  const session = await auth();
+  const appUser = await getActiveAppUser();
 
-  if (!session?.user?.email) {
+  if (!appUser) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
@@ -32,6 +39,31 @@ export async function GET(
 
   if (!document) {
     return NextResponse.json({ error: "Documento non trovato" }, { status: 404 });
+  }
+
+  const driveFileId = driveFileIdFromPath(document.filePath);
+
+  if (driveFileId) {
+    const wantsRawFile = request.nextUrl.searchParams.get("raw") === "1";
+    const documentUrl = `/api/risorse/mezzi/${equipmentId}/maintenance/document/${documentId}?raw=1`;
+
+    if (!wantsRawFile) {
+      return NextResponse.json({
+        url: documentUrl,
+        fileName: document.fileName,
+      });
+    }
+
+    const buffer = await downloadDriveFile(driveFileId);
+    const encodedName = encodeURIComponent(document.fileName);
+
+    return new NextResponse(buffer, {
+      headers: {
+        "Content-Type": document.mimeType || "application/octet-stream",
+        "Content-Disposition": `inline; filename*=UTF-8''${encodedName}`,
+        "Cache-Control": "private, max-age=60",
+      },
+    });
   }
 
   const bucket = process.env.SUPABASE_STORAGE_BUCKET;
