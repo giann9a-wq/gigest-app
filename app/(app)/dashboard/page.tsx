@@ -416,11 +416,6 @@ function WeatherHero({ weather, searchedCity }: { weather: WeatherForecast | nul
         <div className="dashboard-weather-topline">
           <p className="dashboard-kicker">Meteo {weather?.location.name ?? DEFAULT_WEATHER_LOCATION.name}</p>
           <div className="dashboard-weather-actions">
-            {weather ? (
-              <a className="dashboard-weather-link" href={weather.location.detailUrl} target="_blank" rel="noreferrer">
-                Meteo AM
-              </a>
-            ) : null}
             <WeatherCityPicker
               currentCity={weather?.location.name ?? DEFAULT_WEATHER_LOCATION.name}
               searchedCity={searchedCity}

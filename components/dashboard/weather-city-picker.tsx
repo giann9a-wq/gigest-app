@@ -49,27 +49,28 @@ export function WeatherCityPicker({ currentCity, searchedCity }: WeatherCityPick
     setFavorites(nextFavorites);
   }, [currentCity, searchedCity]);
 
-  const visibleFavorites = useMemo(
-    () => favorites.slice(0, 3),
-    [favorites]
-  );
+  const visibleFavorites = useMemo(() => favorites.slice(0, 3), [favorites]);
 
   return (
     <details className="dashboard-weather-city-picker">
-      <summary>Cambia città</summary>
+      <summary>Cambia citta</summary>
       <div className="dashboard-weather-city-popover">
         <form action="/dashboard" className="dashboard-weather-city-form">
-          <input
-            name="meteo"
-            type="search"
-            placeholder="Es. Milano"
-            defaultValue={currentCity}
-            aria-label="Città meteo"
-          />
-          <button type="submit">Aggiorna</button>
+          <label>
+            <span>Scrivi una nuova citta</span>
+            <input
+              name="meteo"
+              type="search"
+              placeholder="Cancella e digita, es. Milano"
+              defaultValue={currentCity}
+              aria-label="Nuova citta meteo"
+            />
+          </label>
+          <small>Cancella il testo attuale o selezionalo, poi inserisci la localita.</small>
+          <button type="submit">Mostra meteo</button>
         </form>
         {visibleFavorites.length > 0 ? (
-          <div className="dashboard-weather-favorites" aria-label="Città meteo recenti">
+          <div className="dashboard-weather-favorites" aria-label="Citta meteo recenti">
             <span>Preferiti recenti</span>
             <div>
               {visibleFavorites.map((city) => (

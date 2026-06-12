@@ -3263,19 +3263,35 @@ a {
 }
 
 .dashboard-weather-city-form {
-  display: flex;
+  display: grid;
   gap: 0.45rem;
+}
+
+.dashboard-weather-city-form label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dashboard-weather-city-form label span {
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 900;
 }
 
 .dashboard-weather-city-form input {
   min-width: 0;
-  flex: 1 1 auto;
   min-height: 38px;
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0 0.75rem;
   color: var(--text);
   font-weight: 700;
+}
+
+.dashboard-weather-city-form small {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  line-height: 1.25;
 }
 
 .dashboard-weather-city-form button {
