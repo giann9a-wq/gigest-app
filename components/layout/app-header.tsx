@@ -17,6 +17,7 @@ type AppHeaderProps = {
   showAdminLink: boolean;
   logoutAction: React.ReactNode;
   news: {
+    enabled: boolean;
     title: string;
     description: string;
   };
@@ -55,17 +56,10 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction, news }: AppH
     <header className="app-header">
       <div className="app-header-inner">
         <div className="app-header-top">
-          <div className="app-brand-news-row">
-            <Link href="/dashboard" className="app-brand">
-              <span className="app-brand-mark">Gi</span>
-              <span className="app-brand-text">GEST</span>
-            </Link>
-
-            <section className="app-header-news-card" aria-label="News">
-              <span>{news.title}</span>
-              <p>{news.description}</p>
-            </section>
-          </div>
+          <Link href="/dashboard" className="app-brand">
+            <span className="app-brand-mark">Gi</span>
+            <span className="app-brand-text">GEST</span>
+          </Link>
 
           {userLabel ? (
             <div className="app-user-actions app-user-actions-desktop">
@@ -109,6 +103,13 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction, news }: AppH
             )}
           </nav>
         </div>
+
+        {news.enabled ? (
+          <section className="app-header-news-banner" aria-label="News">
+            <span>{news.title}</span>
+            <p>{news.description}</p>
+          </section>
+        ) : null}
       </div>
 
       <div className={`app-mobile-drawer-shell ${isMenuOpen ? "app-mobile-drawer-shell-open" : ""}`}>

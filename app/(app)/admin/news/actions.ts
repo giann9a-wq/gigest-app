@@ -25,6 +25,7 @@ export async function saveHeaderNewsAction(formData: FormData) {
 
   try {
     await saveHeaderNews({
+      enabled: formData.get("enabled") === "on",
       title: String(formData.get("title") ?? ""),
       description: String(formData.get("description") ?? ""),
     });

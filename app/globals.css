@@ -76,13 +76,6 @@ a {
   gap: 18px;
 }
 
-.app-brand-news-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  min-width: 0;
-}
-
 .app-header-desktop {
   display: block;
 }
@@ -109,41 +102,35 @@ a {
   color: #111827;
 }
 
-.app-header-news-card {
+.app-header-news-banner,
+.admin-news-preview-card {
   display: grid;
-  gap: 0.12rem;
-  width: min(420px, 42vw);
-  min-width: 220px;
-  max-height: 54px;
-  padding: 0.5rem 0.8rem;
-  overflow: hidden;
-  border: 1px solid rgba(240, 176, 137, 0.55);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.78);
+  gap: 0.18rem;
+  width: 100%;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid rgba(235, 91, 25, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 241, 231, 0.96) 0%, rgba(255, 255, 255, 0.88) 100%);
   box-shadow: 0 8px 22px rgba(126, 77, 40, 0.08);
 }
 
-.app-header-news-card span {
+.app-header-news-banner span,
+.admin-news-preview-card span {
   color: var(--brand);
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   font-weight: 900;
   letter-spacing: 0.07em;
-  line-height: 1.1;
-  overflow: hidden;
   text-transform: uppercase;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.app-header-news-card p {
+.app-header-news-banner p,
+.admin-news-preview-card p {
   margin: 0;
   color: var(--text-main);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
 }
 
 .app-nav {
@@ -793,8 +780,33 @@ a {
 }
 
 .admin-news-preview-card {
-  width: 100%;
-  min-width: 0;
+  box-shadow: none;
+}
+
+.admin-news-disabled-preview {
+  padding: 0.9rem;
+  border: 1px dashed rgba(107, 114, 128, 0.4);
+  border-radius: 8px;
+  background: rgba(249, 250, 251, 0.8);
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.admin-news-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 0.55rem !important;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(240, 176, 137, 0.5);
+  border-radius: 8px;
+  background: rgba(255, 246, 239, 0.8);
+}
+
+.admin-news-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand);
 }
 
 .admin-news-form label {
@@ -8577,16 +8589,6 @@ a {
     font-size: 0.88rem;
   }
 
-  .app-brand-news-row {
-    flex: 1 1 auto;
-    gap: 0.7rem;
-  }
-
-  .app-header-news-card {
-    width: min(48vw, 320px);
-    min-width: 0;
-  }
-
   .admin-news-grid {
     grid-template-columns: 1fr;
   }
@@ -9078,13 +9080,12 @@ a {
     gap: 0.85rem;
   }
 
-  .app-header-news-card {
-    width: min(44vw, 230px);
-    padding: 0.45rem 0.6rem;
+  .app-header-news-banner {
+    padding: 0.65rem 0.75rem;
   }
 
-  .app-header-news-card p {
-    font-size: 0.76rem;
+  .app-header-news-banner p {
+    font-size: 0.82rem;
   }
 
   .dashboard-weather-hero {

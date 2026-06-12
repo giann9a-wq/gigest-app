@@ -34,9 +34,10 @@ export default async function AdminNewsPage({
         <div className="mobile-section-header">
           <div>
             <p className="dashboard-kicker">Area Riservata</p>
-            <h1 className="mobile-section-title">News Header</h1>
+            <h1 className="mobile-section-title">News</h1>
             <p className="mobile-section-subtitle">
-              Configura titolo e descrizione della card News mostrata accanto al logo GiGEST.
+              Configura il banner News mostrato sotto al navigatore oppure spegnilo quando non ci
+              sono comunicazioni.
             </p>
           </div>
           <div className="admin-request-actions">
@@ -92,20 +93,30 @@ export default async function AdminNewsPage({
             <div className="admin-news-grid">
               <section className="admin-news-preview">
                 <p className="dashboard-kicker">Anteprima</p>
-                <div className="app-header-news-card admin-news-preview-card">
-                  <span>{news?.title}</span>
-                  <p>{news?.description}</p>
-                </div>
+                {news?.enabled ? (
+                  <div className="admin-news-preview-card">
+                    <span>{news.title}</span>
+                    <p>{news.description}</p>
+                  </div>
+                ) : (
+                  <div className="admin-news-disabled-preview">
+                    La card News è disattivata e non sarà mostrata nell'app.
+                  </div>
+                )}
               </section>
 
               <form action={saveHeaderNewsAction} className="admin-news-form">
+                <label className="admin-news-toggle">
+                  <input type="checkbox" name="enabled" defaultChecked={news?.enabled} />
+                  <span>Mostra la card News</span>
+                </label>
                 <label>
                   <span>Titolo</span>
                   <input
                     name="title"
                     className="admin-password-input"
                     defaultValue={news?.title}
-                    maxLength={48}
+                    maxLength={64}
                     placeholder="News"
                   />
                 </label>
@@ -115,9 +126,9 @@ export default async function AdminNewsPage({
                     name="description"
                     className="admin-password-input"
                     defaultValue={news?.description}
-                    maxLength={160}
+                    maxLength={240}
                     rows={3}
-                    placeholder="Scrivi una comunicazione breve per l'header"
+                    placeholder="Scrivi una comunicazione breve"
                   />
                 </label>
                 <button type="submit" className="button">
