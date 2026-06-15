@@ -45,6 +45,31 @@ type ScannedDeliveryNoteRow = {
   importedAt: string;
 };
 
+type ResourceAttachmentItem = {
+  id: string;
+  kind: "training" | "maintenance";
+  title: string;
+  date: string;
+  fileName: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+  openUrl: string;
+};
+
+type ResourceAttachmentFolder = {
+  id: string;
+  name: string;
+  subtitle: string;
+  items: ResourceAttachmentItem[];
+};
+
+type ResourceAttachmentGroup = {
+  key: "people" | "equipment";
+  label: string;
+  folders: ResourceAttachmentFolder[];
+};
+
 type ScanFormState = {
   jobOrderId: string;
   usageDate: string;
@@ -60,7 +85,7 @@ type PdfPreviewState = {
   subtitle?: string;
 };
 
-type DocumentaleTab = "bolle" | "scansioni";
+type DocumentaleTab = "bolle" | "scansioni" | "risorse";
 
 async function safeJsonFetch(url: string, options?: RequestInit) {
   const response = await fetch(url, options);
@@ -111,11 +136,17 @@ export default function DocumentalePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const source = searchParams.get("source") || "";
-  const initialTab = searchParams.get("tab") === "scansioni" ? "scansioni" : "bolle";
+  const initialTab: DocumentaleTab =
+    searchParams.get("tab") === "scansioni"
+      ? "scansioni"
+      : searchParams.get("tab") === "risorse"
+        ? "risorse"
+        : "bolle";
   const showReturnToDiary = source === "diario-bolle";
   const [activeTab, setActiveTab] = useState<DocumentaleTab>(initialTab);
   const [rows, setRows] = useState<DeliveryNoteDocumentRow[]>([]);
   const [scanRows, setScanRows] = useState<ScannedDeliveryNoteRow[]>([]);
+  const [resourceGroups, setResourceGroups] = useState<ResourceAttachmentGroup[]>([]);
   const [jobOrders, setJobOrders] = useState<JobOrderOption[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
   const [supplier, setSupplier] = useState("");
@@ -125,6 +156,7 @@ export default function DocumentalePage() {
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [scansLoading, setScansLoading] = useState(true);
+  const [resourcesLoading, setResourcesLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [bulkValidating, setBulkValidating] = useState(false);
   const [selectedDeliveryNoteIds, setSelectedDeliveryNoteIds] = useState<string[]>([]);
@@ -197,9 +229,24 @@ export default function DocumentalePage() {
     }
   }
 
+  async function loadResourceAttachments() {
+    setResourcesLoading(true);
+    setError("");
+
+    try {
+      const data = await safeJsonFetch("/api/documentale/risorse-allegati");
+      setResourceGroups(data.groups ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel caricamento allegati risorse");
+    } finally {
+      setResourcesLoading(false);
+    }
+  }
+
   useEffect(() => {
     void loadRows();
     void loadScans();
+    void loadResourceAttachments();
   }, []);
 
   function selectTab(tab: DocumentaleTab) {
@@ -207,10 +254,30 @@ export default function DocumentalePage() {
     const params = new URLSearchParams(searchParams.toString());
     if (tab === "scansioni") {
       params.set("tab", "scansioni");
+    } else if (tab === "risorse") {
+      params.set("tab", "risorse");
     } else {
       params.delete("tab");
     }
     router.replace(`/documentale${params.toString() ? `?${params.toString()}` : ""}` as Route);
+  }
+
+  async function openResourceDocument(folder: ResourceAttachmentFolder, item: ResourceAttachmentItem) {
+    if (item.kind === "maintenance") {
+      const data = await safeJsonFetch(item.openUrl);
+      setPdfPreview({
+        title: data.fileName || item.fileName,
+        url: data.url,
+        subtitle: `${folder.name} - ${item.title}`,
+      });
+      return;
+    }
+
+    setPdfPreview({
+      title: item.fileName,
+      url: item.openUrl,
+      subtitle: `${folder.name} - ${item.title}`,
+    });
   }
 
   async function validateDeliveryNote(id: string) {
@@ -446,6 +513,14 @@ export default function DocumentalePage() {
         >
           Bolle da inserire
           {scanRows.length > 0 ? <span className="documentale-tab-badge">{scanRows.length}</span> : null}
+        </button>
+        <button
+          type="button"
+          className={`documentale-tab ${activeTab === "risorse" ? "documentale-tab-active" : ""}`}
+          aria-current={activeTab === "risorse" ? "page" : undefined}
+          onClick={() => selectTab("risorse")}
+        >
+          Allegati Risorse
         </button>
       </section>
 
@@ -708,7 +783,7 @@ export default function DocumentalePage() {
             </div>
           </section>
         </>
-      ) : (
+      ) : activeTab === "scansioni" ? (
         <section className="card documentale-results">
           <div className="dashboard-card-head">
             <strong>Bolle da inserire</strong>
@@ -754,6 +829,78 @@ export default function DocumentalePage() {
               </tbody>
             </table>
           </div>
+        </section>
+      ) : (
+        <section className="card documentale-results">
+          <div className="dashboard-card-head">
+            <strong>Allegati Risorse</strong>
+            <span className="dashboard-pill">
+              {resourceGroups.reduce(
+                (total, group) => total + group.folders.reduce((sum, folder) => sum + folder.items.length, 0),
+                0
+              )}{" "}
+              documenti
+            </span>
+          </div>
+
+          {resourcesLoading ? (
+            <p className="muted">Caricamento allegati...</p>
+          ) : resourceGroups.every((group) => group.folders.length === 0) ? (
+            <p className="muted">Nessun allegato presente nelle schede personale o mezzi.</p>
+          ) : (
+            <div className="resource-doc-tree">
+              {resourceGroups.map((group) => (
+                <section key={group.key} className="resource-doc-group">
+                  <div className="resource-doc-group-head">
+                    <strong>{group.label}</strong>
+                    <span>{group.folders.length} cartelle</span>
+                  </div>
+
+                  {group.folders.length === 0 ? (
+                    <p className="muted">Nessun allegato.</p>
+                  ) : (
+                    group.folders.map((folder) => (
+                      <details key={folder.id} className="resource-doc-folder">
+                        <summary>
+                          <span className="resource-doc-folder-icon" aria-hidden="true">
+                            DIR
+                          </span>
+                          <span>
+                            <strong>{folder.name}</strong>
+                            {folder.subtitle ? <small>{folder.subtitle}</small> : null}
+                          </span>
+                          <span className="resource-doc-count">{folder.items.length} file</span>
+                        </summary>
+
+                        <div className="resource-doc-list">
+                          {folder.items.map((item) => (
+                            <button
+                              key={`${item.kind}-${item.id}`}
+                              type="button"
+                              className="resource-doc-item"
+                              onClick={() => void openResourceDocument(folder, item)}
+                            >
+                              <span className="resource-doc-file-icon" aria-hidden="true">
+                                PDF
+                              </span>
+                              <span>
+                                <strong>{item.fileName}</strong>
+                                <small>
+                                  {item.kind === "training" ? "Formazione" : "Manutenzione"} - {item.title}
+                                  {item.date ? ` - ${formatDate(item.date)}` : ""}
+                                  {item.sizeBytes ? ` - ${formatFileSize(item.sizeBytes)}` : ""}
+                                </small>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </details>
+                    ))
+                  )}
+                </section>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
