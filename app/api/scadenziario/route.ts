@@ -76,7 +76,7 @@ function buildResponseRow(row: {
   originLabel: string;
   canEdit: boolean;
   canDelete: boolean;
-  eventKind: "DEADLINE" | "JOB_ORDER_END";
+  eventKind: "DEADLINE" | "JOB_ORDER_END" | "TRAINING_DATE";
   linkedJobOrder: {
     id: string;
     name: string;

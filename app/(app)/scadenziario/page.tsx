@@ -19,7 +19,7 @@ type DeadlineRow = {
   trainingId: string | null;
   canEdit: boolean;
   canDelete: boolean;
-  eventKind: "DEADLINE" | "JOB_ORDER_END";
+  eventKind: "DEADLINE" | "JOB_ORDER_END" | "TRAINING_DATE";
   linkedEquipment: {
     id: string;
     nameDescription: string;
@@ -145,6 +145,10 @@ function getLinkedLabel(row: DeadlineRow) {
 function getReadonlyBadgeLabel(row: DeadlineRow) {
   if (row.eventKind === "JOB_ORDER_END") {
     return "Fine commessa";
+  }
+
+  if (row.eventKind === "TRAINING_DATE") {
+    return "Data corso";
   }
 
   return row.origin === "TRAINING" ? "Da formazione" : "Da manutenzione";

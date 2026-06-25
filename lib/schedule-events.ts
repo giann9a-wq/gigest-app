@@ -1,7 +1,7 @@
 import { DeadlineOrigin, SyncSource } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
-export type ScheduleEventKind = "DEADLINE" | "JOB_ORDER_END";
+export type ScheduleEventKind = "DEADLINE" | "JOB_ORDER_END" | "TRAINING_DATE";
 
 export type ScheduleEventRow = {
   id: string;
@@ -39,6 +39,10 @@ function getDayEnd(date: Date) {
   return new Date(`${date.toISOString().slice(0, 10)}T23:59:59.999Z`);
 }
 
+function getTodayStart() {
+  return new Date(new Date().toISOString().slice(0, 10));
+}
+
 function toDeadlineOriginLabel(origin: DeadlineOrigin) {
   if (origin === DeadlineOrigin.MAINTENANCE) return "Manutenzione";
   if (origin === DeadlineOrigin.TRAINING) return "Formazione";
@@ -52,7 +56,9 @@ export async function getScheduleEvents({
   from?: Date;
   to?: Date;
 } = {}): Promise<ScheduleEventRow[]> {
-  const [deadlines, jobOrders] = await Promise.all([
+  const trainingDateFrom = from ?? getTodayStart();
+
+  const [deadlines, jobOrders, trainings] = await Promise.all([
     prisma.deadline.findMany({
       where: {
         eventDate: {
@@ -97,6 +103,22 @@ export async function getScheduleEvents({
         type: true,
         endDate: true,
         description: true,
+      },
+    }),
+    prisma.training.findMany({
+      where: {
+        trainingDate: {
+          gte: trainingDateFrom,
+          ...(to ? { lte: getDayEnd(to) } : {}),
+        },
+      },
+      include: {
+        person: {
+          select: {
+            id: true,
+            fullName: true,
+          },
+        },
       },
     }),
   ]);
@@ -161,7 +183,42 @@ export async function getScheduleEvents({
       },
     }));
 
-  return [...deadlineRows, ...jobOrderRows].sort((a, b) => {
+  const trainingDateRows: ScheduleEventRow[] = trainings.map((training) => ({
+    id: `training-date:${training.id}`,
+    title: `Corso formazione: ${training.course}`,
+    description:
+      [
+        training.description ? `Descrizione: ${training.description}` : null,
+        training.mandatory ? "Obbligatorio: si" : "Obbligatorio: no",
+        training.expiresAt ? `Scadenza: ${training.expiresAt.toLocaleDateString("it-IT")}` : null,
+        training.isRecurring && training.recurrenceMonths
+          ? `Ricorrente ogni ${training.recurrenceMonths} mesi`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" | ") || null,
+    eventDate: training.trainingDate,
+    startTime: null,
+    endTime: null,
+    isAllDay: true,
+    recurrenceRule: null,
+    origin: DeadlineOrigin.TRAINING,
+    originLabel: "Data corso",
+    lastSource: SyncSource.GIGEST,
+    maintenanceId: null,
+    trainingId: training.id,
+    canEdit: false,
+    canDelete: false,
+    eventKind: "TRAINING_DATE",
+    linkedEquipment: null,
+    linkedPerson: {
+      id: training.person.id,
+      fullName: training.person.fullName,
+    },
+    linkedJobOrder: null,
+  }));
+
+  return [...deadlineRows, ...jobOrderRows, ...trainingDateRows].sort((a, b) => {
     const byDate = a.eventDate.getTime() - b.eventDate.getTime();
     if (byDate !== 0) return byDate;
 

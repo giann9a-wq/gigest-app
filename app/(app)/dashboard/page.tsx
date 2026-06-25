@@ -111,6 +111,10 @@ function getLinkedLabel(event: ScheduleEventRow) {
     return event.linkedEquipment.nameDescription;
   }
 
+  if (event.linkedPerson) {
+    return `Risorsa: ${event.linkedPerson.fullName}`;
+  }
+
   if (event.linkedJobOrder) {
     return `Commessa: ${event.linkedJobOrder.name}`;
   }
