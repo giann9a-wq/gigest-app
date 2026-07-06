@@ -1,11 +1,16 @@
-import { ScansSyncButton } from "@/components/dashboard/scans-sync-button";
 import { WeatherCityPicker } from "@/components/dashboard/weather-city-picker";
 import { MaintenanceRollButton } from "@/components/dashboard/maintenance-roll-button";
 import { TrainingRollButton } from "@/components/dashboard/training-roll-button";
 import { getScheduleEvents, type ScheduleEventRow } from "@/lib/schedule-events";
 import { prisma } from "@/lib/prisma";
+import { DashboardTasksCard } from "@/components/dashboard/dashboard-tasks-card";
 import { getActiveAppUser } from "@/lib/app-user";
+import { getHeaderNews } from "@/lib/app-news";
 import { getAutoDiaryProposalStatus, shouldShowAutoDiaryAlert } from "@/lib/auto-diary-proposals";
+import {
+  getDashboardTasksForUser,
+  getDashboardTaskUserOptions,
+} from "@/lib/dashboard-tasks";
 import { runGmailScansSync } from "@/lib/gmail-scans-sync-runner";
 import { getLoadingVerificationStatus, shouldShowLoadingVerificationAlert } from "@/lib/loading-verification";
 import {
@@ -74,6 +79,11 @@ type WeatherLocation = {
 
 type DashboardPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+type DashboardExperienceProps = DashboardPageProps & {
+  variant?: "standard" | "wide";
+  weatherActionPath?: "/dashboard" | "/dashboard2" | "/dashboard_old";
 };
 
 const DEFAULT_WEATHER_LOCATION: WeatherLocation = {
@@ -413,7 +423,15 @@ async function getWeatherForecast(city: string): Promise<WeatherForecast | null>
   }
 }
 
-function WeatherHero({ weather, searchedCity }: { weather: WeatherForecast | null; searchedCity: string }) {
+function WeatherHero({
+  weather,
+  searchedCity,
+  actionPath = "/dashboard",
+}: {
+  weather: WeatherForecast | null;
+  searchedCity: string;
+  actionPath?: "/dashboard" | "/dashboard2" | "/dashboard_old";
+}) {
   return (
     <section className="dashboard-weather-hero">
       <div className="dashboard-weather-main">
@@ -423,8 +441,8 @@ function WeatherHero({ weather, searchedCity }: { weather: WeatherForecast | nul
             <WeatherCityPicker
               currentCity={weather?.location.name ?? DEFAULT_WEATHER_LOCATION.name}
               searchedCity={searchedCity}
+              actionPath={actionPath}
             />
-            <ScansSyncButton />
           </div>
         </div>
         <div className="dashboard-weather-title-row">
@@ -526,9 +544,15 @@ function EventList({ events }: { events: ScheduleEventRow[] }) {
   );
 }
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export async function DashboardExperience({
+  searchParams,
+  variant = "standard",
+  weatherActionPath,
+}: DashboardExperienceProps) {
   const resolvedSearchParams: Record<string, string | string[] | undefined> = searchParams ? await searchParams : {};
   const weatherCity = getSingleSearchParam(resolvedSearchParams.meteo);
+  const showArchivedTasks = getSingleSearchParam(resolvedSearchParams.archiviate) === "1";
+  const isWideDashboard = variant === "wide";
   const todayIso = new Date().toISOString().slice(0, 10);
   const todayBounds = getUtcDateBoundsFromIso(todayIso);
   const nextThirtyDaysEnd = new Date(todayBounds.end);
@@ -557,6 +581,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     recurringMaintenanceAlerts,
     recurringTrainingAlerts,
     weather,
+    headerNews,
+    dashboardTasks,
+    dashboardTaskUsers,
   ] = await Promise.all([
     getScheduleEvents({
       from: todayBounds.start,
@@ -608,6 +635,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       },
     }),
     getWeatherForecast(weatherCity),
+    isWideDashboard ? getHeaderNews() : Promise.resolve(null),
+    isWideDashboard && appUser
+      ? getDashboardTasksForUser(appUser.id, { includeArchived: showArchivedTasks })
+      : Promise.resolve([]),
+    isWideDashboard ? getDashboardTaskUserOptions() : Promise.resolve([]),
   ]);
 
   const todayEvents = scheduleEvents.filter((event) => {
@@ -621,130 +653,199 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       event.eventDate.getTime() <= nextThirtyDaysEnd.getTime()
   );
 
+  const hasDashboardAlerts =
+    newScansCount > 0 ||
+    oldPendingDeliveryNotesCount > 0 ||
+    (autoDiaryStatus?.pendingCount ?? 0) > 0 ||
+    (loadingVerificationStatus?.issueCount ?? 0) > 0 ||
+    recurringMaintenanceAlerts.length > 0 ||
+    recurringTrainingAlerts.length > 0;
+
+  const alertSection = hasDashboardAlerts ? (
+    <section
+      className={isWideDashboard ? "dashboard-alert-stack dashboard2-alerts" : "dashboard-alert-stack"}
+      aria-label="Attivita da lavorare"
+    >
+      {recurringMaintenanceAlerts.length > 0 ? (
+        <div className="dashboard-work-alert dashboard-work-alert-maintenance">
+          <span className="dashboard-work-alert-main">
+            <span className="dashboard-work-alert-count">{recurringMaintenanceAlerts.length}</span>
+            <span>
+              <strong>Attivita da verificare</strong>
+              <span className="dashboard-work-alert-copy">
+                Manutenzioni ricorrenti in scadenza nei prossimi 5 giorni.
+              </span>
+            </span>
+          </span>
+          <div className="dashboard-maintenance-alert-list">
+            {recurringMaintenanceAlerts.map((item) => (
+              <div key={item.id} className="dashboard-maintenance-alert-row">
+                <span>
+                  <strong>{item.equipment.nameDescription}</strong> - {item.interventionType} -{" "}
+                  {item.nextIntervention?.toLocaleDateString("it-IT") ?? "-"} - ogni{" "}
+                  {item.recurrenceMonths} mesi
+                </span>
+                <MaintenanceRollButton maintenanceId={item.id} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {recurringTrainingAlerts.length > 0 ? (
+        <div className="dashboard-work-alert dashboard-work-alert-maintenance">
+          <span className="dashboard-work-alert-main">
+            <span className="dashboard-work-alert-count">{recurringTrainingAlerts.length}</span>
+            <span>
+              <strong>Formazione da validare</strong>
+              <span className="dashboard-work-alert-copy">
+                Formazioni ricorrenti in scadenza nei prossimi 5 giorni.
+              </span>
+            </span>
+          </span>
+          <div className="dashboard-maintenance-alert-list">
+            {recurringTrainingAlerts.map((item) => (
+              <div key={item.id} className="dashboard-maintenance-alert-row">
+                <span>
+                  <strong>{item.person.fullName}</strong> - {item.course} -{" "}
+                  {item.expiresAt?.toLocaleDateString("it-IT") ?? "-"} - ogni{" "}
+                  {item.recurrenceMonths} mesi
+                </span>
+                <TrainingRollButton trainingId={item.id} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {(loadingVerificationStatus?.issueCount ?? 0) > 0 ? (
+        <a className="dashboard-work-alert dashboard-work-alert-validation" href="/admin/controlli">
+          <span className="dashboard-work-alert-main">
+            <span className="dashboard-work-alert-count">{loadingVerificationStatus?.issueCount}</span>
+            <span>
+              <strong>Verifica caricamenti di fine mese</strong>
+              <span className="dashboard-work-alert-copy">
+                Controlla ore sotto soglia, straordinari e giornate oltre 10 ore per {loadingVerificationStatus?.monthLabel}.
+              </span>
+            </span>
+          </span>
+          <span className="dashboard-work-alert-action">Vai ai Controlli</span>
+        </a>
+      ) : null}
+
+      {(autoDiaryStatus?.pendingCount ?? 0) > 0 ? (
+        <a className="dashboard-work-alert dashboard-work-alert-validation" href="/admin/controlli">
+          <span className="dashboard-work-alert-main">
+            <span className="dashboard-work-alert-count">{autoDiaryStatus?.pendingCount}</span>
+            <span>
+              <strong>Autocompilazione Diario da validare</strong>
+              <span className="dashboard-work-alert-copy">
+                Controlla e valida le proposte di autocompilazione per {autoDiaryStatus?.currentMonthLabel}.
+              </span>
+            </span>
+          </span>
+          <span className="dashboard-work-alert-action">Vai ai Controlli</span>
+        </a>
+      ) : null}
+
+      {newScansCount > 0 ? (
+        <a className="dashboard-work-alert dashboard-work-alert-scans" href="/documentale?tab=scansioni">
+          <span className="dashboard-work-alert-main">
+            <span className="dashboard-work-alert-count">{newScansCount}</span>
+            <span>
+              <strong>Nuove scansioni da inserire</strong>
+              <span className="dashboard-work-alert-copy">
+                Ci sono bolle scansionate da lavorare nel documentale.
+              </span>
+            </span>
+          </span>
+          <span className="dashboard-work-alert-action">Apri Bolle da inserire</span>
+        </a>
+      ) : null}
+
+      {oldPendingDeliveryNotesCount > 0 ? (
+        <a className="dashboard-work-alert dashboard-work-alert-validation" href="/documentale">
+          <span className="dashboard-work-alert-main">
+            <span className="dashboard-work-alert-count">{oldPendingDeliveryNotesCount}</span>
+            <span>
+              <strong>Presenti Bolle da validare</strong>
+              <span className="dashboard-work-alert-copy">
+                Sono presenti bolle non validate oltre 45 giorni.
+              </span>
+            </span>
+          </span>
+          <span className="dashboard-work-alert-action">Vai al Documentale</span>
+        </a>
+      ) : null}
+    </section>
+  ) : null;
+
+  if (isWideDashboard) {
+    return (
+      <div className="dashboard-page dashboard2-page">
+        <div className="dashboard2-column dashboard2-main-column">
+          <div className="dashboard2-weather">
+            <WeatherHero
+              weather={weather}
+              searchedCity={weatherCity}
+              actionPath={weatherActionPath ?? "/dashboard"}
+            />
+          </div>
+          {alertSection}
+          {appUser ? (
+            <DashboardTasksCard
+              tasks={dashboardTasks}
+              users={dashboardTaskUsers}
+              activeUserId={appUser.id}
+              showArchived={showArchivedTasks}
+            />
+          ) : null}
+        </div>
+
+        <div className="dashboard2-column dashboard2-side-column">
+          <section className="card dashboard2-card dashboard2-news-card">
+            <div className="dashboard2-news-head">
+              <div>
+                <p className="dashboard-kicker">News</p>
+                <h1>{headerNews?.enabled ? headerNews.title : "News"}</h1>
+              </div>
+              <span className="dashboard2-news-badge">NEW</span>
+            </div>
+            <p>
+              {headerNews?.enabled
+                ? headerNews.description
+                : "La sezione news e temporaneamente disattivata."}
+            </p>
+          </section>
+
+          <div className="card dashboard-card dashboard2-event-card">
+            <div className="dashboard-card-head">
+              <strong>Eventi di oggi</strong>
+              <span className="dashboard-pill">Scadenziario</span>
+            </div>
+            <EventList events={todayEvents} />
+          </div>
+
+          <div className="card dashboard-card dashboard2-event-card">
+            <div className="dashboard-card-head">
+              <strong>Prossimi eventi</strong>
+              <span className="dashboard-pill">Prossimi 30 giorni</span>
+            </div>
+            <EventList events={upcomingEvents} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard-page">
-      <WeatherHero weather={weather} searchedCity={weatherCity} />
-
-      {newScansCount > 0 ||
-      oldPendingDeliveryNotesCount > 0 ||
-      (autoDiaryStatus?.pendingCount ?? 0) > 0 ||
-      (loadingVerificationStatus?.issueCount ?? 0) > 0 ||
-      recurringMaintenanceAlerts.length > 0 ||
-      recurringTrainingAlerts.length > 0 ? (
-        <section className="dashboard-alert-stack" aria-label="Attivita da lavorare">
-          {recurringMaintenanceAlerts.length > 0 ? (
-            <div className="dashboard-work-alert dashboard-work-alert-maintenance">
-              <span className="dashboard-work-alert-main">
-                <span className="dashboard-work-alert-count">{recurringMaintenanceAlerts.length}</span>
-                <span>
-                  <strong>Attivita da verificare</strong>
-                  <span className="dashboard-work-alert-copy">
-                    Manutenzioni ricorrenti in scadenza nei prossimi 5 giorni.
-                  </span>
-                </span>
-              </span>
-              <div className="dashboard-maintenance-alert-list">
-                {recurringMaintenanceAlerts.map((item) => (
-                  <div key={item.id} className="dashboard-maintenance-alert-row">
-                    <span>
-                      <strong>{item.equipment.nameDescription}</strong> - {item.interventionType} -{" "}
-                      {item.nextIntervention?.toLocaleDateString("it-IT") ?? "-"} - ogni{" "}
-                      {item.recurrenceMonths} mesi
-                    </span>
-                    <MaintenanceRollButton maintenanceId={item.id} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {recurringTrainingAlerts.length > 0 ? (
-            <div className="dashboard-work-alert dashboard-work-alert-maintenance">
-              <span className="dashboard-work-alert-main">
-                <span className="dashboard-work-alert-count">{recurringTrainingAlerts.length}</span>
-                <span>
-                  <strong>Formazione da validare</strong>
-                  <span className="dashboard-work-alert-copy">
-                    Formazioni ricorrenti in scadenza nei prossimi 5 giorni.
-                  </span>
-                </span>
-              </span>
-              <div className="dashboard-maintenance-alert-list">
-                {recurringTrainingAlerts.map((item) => (
-                  <div key={item.id} className="dashboard-maintenance-alert-row">
-                    <span>
-                      <strong>{item.person.fullName}</strong> - {item.course} -{" "}
-                      {item.expiresAt?.toLocaleDateString("it-IT") ?? "-"} - ogni{" "}
-                      {item.recurrenceMonths} mesi
-                    </span>
-                    <TrainingRollButton trainingId={item.id} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {(loadingVerificationStatus?.issueCount ?? 0) > 0 ? (
-            <a className="dashboard-work-alert dashboard-work-alert-validation" href="/admin/controlli">
-              <span className="dashboard-work-alert-main">
-                <span className="dashboard-work-alert-count">{loadingVerificationStatus?.issueCount}</span>
-                <span>
-                  <strong>Verifica caricamenti di fine mese</strong>
-                  <span className="dashboard-work-alert-copy">
-                    Controlla ore sotto soglia, straordinari e giornate oltre 10 ore per {loadingVerificationStatus?.monthLabel}.
-                  </span>
-                </span>
-              </span>
-              <span className="dashboard-work-alert-action">Vai ai Controlli</span>
-            </a>
-          ) : null}
-
-          {(autoDiaryStatus?.pendingCount ?? 0) > 0 ? (
-            <a className="dashboard-work-alert dashboard-work-alert-validation" href="/admin/controlli">
-              <span className="dashboard-work-alert-main">
-                <span className="dashboard-work-alert-count">{autoDiaryStatus?.pendingCount}</span>
-                <span>
-                  <strong>Autocompilazione Diario da validare</strong>
-                  <span className="dashboard-work-alert-copy">
-                    Controlla e valida le proposte di autocompilazione per {autoDiaryStatus?.currentMonthLabel}.
-                  </span>
-                </span>
-              </span>
-              <span className="dashboard-work-alert-action">Vai ai Controlli</span>
-            </a>
-          ) : null}
-
-          {newScansCount > 0 ? (
-            <a className="dashboard-work-alert dashboard-work-alert-scans" href="/documentale?tab=scansioni">
-              <span className="dashboard-work-alert-main">
-                <span className="dashboard-work-alert-count">{newScansCount}</span>
-                <span>
-                  <strong>Nuove scansioni da inserire</strong>
-                  <span className="dashboard-work-alert-copy">
-                    Ci sono bolle scansionate da lavorare nel documentale.
-                  </span>
-                </span>
-              </span>
-              <span className="dashboard-work-alert-action">Apri Bolle da inserire</span>
-            </a>
-          ) : null}
-
-          {oldPendingDeliveryNotesCount > 0 ? (
-            <a className="dashboard-work-alert dashboard-work-alert-validation" href="/documentale">
-              <span className="dashboard-work-alert-main">
-                <span className="dashboard-work-alert-count">{oldPendingDeliveryNotesCount}</span>
-                <span>
-                  <strong>Presenti Bolle da validare</strong>
-                  <span className="dashboard-work-alert-copy">
-                    Sono presenti bolle non validate oltre 45 giorni.
-                  </span>
-                </span>
-              </span>
-              <span className="dashboard-work-alert-action">Vai al Documentale</span>
-            </a>
-          ) : null}
-        </section>
-      ) : null}
+      <WeatherHero
+        weather={weather}
+        searchedCity={weatherCity}
+        actionPath={weatherActionPath ?? "/dashboard_old"}
+      />
+      {alertSection}
 
       <section className="dashboard-grid">
         <div className="card dashboard-card dashboard-card-fixed">
@@ -765,4 +866,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </section>
     </div>
   );
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  return <DashboardExperience searchParams={searchParams} variant="wide" weatherActionPath="/dashboard" />;
 }

@@ -26,6 +26,27 @@ type ExternalResourceOption = {
 
 const EXTERNAL_RESOURCE_FAVORITES_KEY = "gigest.diary.externalResourceFavorites.v1";
 
+type DiaryFieldChange = {
+  field: string;
+  before: string | null;
+  after: string | null;
+};
+
+type DiaryRecordHistoryEntry = {
+  id: string;
+  changedAt: string;
+  changedByName: string;
+  changedFields: DiaryFieldChange[];
+};
+
+type DiaryRecordAudit = {
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  updatedByName?: string;
+  history?: DiaryRecordHistoryEntry[];
+};
+
 type MaterialUsageRow = {
   id: string;
   jobOrderId: string;
@@ -81,6 +102,7 @@ type PdfPreviewState = {
 
 type InternalEditableRow = {
   localId: string;
+  id?: string;
   isSaved?: boolean;
   isEditing?: boolean;
   resourceValue: string;
@@ -89,10 +111,12 @@ type InternalEditableRow = {
   jobOrderLabel?: string;
   hours: string;
   activityDescription: string;
+  audit?: DiaryRecordAudit;
 };
 
 type ExternalEditableRow = {
   localId: string;
+  id?: string;
   isSaved?: boolean;
   isEditing?: boolean;
   externalResourceId: string;
@@ -101,10 +125,12 @@ type ExternalEditableRow = {
   jobOrderLabel?: string;
   days: string;
   activityDescription: string;
+  audit?: DiaryRecordAudit;
 };
 
 type ExternalEconomyEditableRow = {
   localId: string;
+  id?: string;
   isSaved?: boolean;
   isEditing?: boolean;
   externalResourceId: string;
@@ -113,6 +139,7 @@ type ExternalEconomyEditableRow = {
   jobOrderLabel?: string;
   hours: string;
   activityDescription: string;
+  audit?: DiaryRecordAudit;
 };
 
 type PrintDay = {
@@ -259,6 +286,26 @@ function formatCompactHours(value: number) {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
       });
+}
+
+function formatAuditDateTime(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function latestAuditSummary(audit?: DiaryRecordAudit) {
+  if (!audit) return "Nessuna informazione modifica disponibile";
+  const user = audit.updatedByName || audit.createdByName || "-";
+  const date = formatAuditDateTime(audit.updatedAt || audit.createdAt);
+  return `Ultima modifica: ${user} - ${date}`;
 }
 
 function isFilledInternal(row: InternalEditableRow) {
@@ -605,6 +652,7 @@ export function DailyLogPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [auditPopup, setAuditPopup] = useState<{ title: string; audit?: DiaryRecordAudit } | null>(null);
 
   function confirmDiscardUnsavedChanges() {
     if (!hasUnsavedChanges) return true;
@@ -782,8 +830,10 @@ function currentPrintDay(): PrintDay {
       const duplicate: InternalEditableRow = {
         ...source,
         localId: crypto.randomUUID(),
+        id: undefined,
         isSaved: false,
         isEditing: true,
+        audit: undefined,
       };
       return [...current.slice(0, index + 1), duplicate, ...current.slice(index + 1)];
     });
@@ -798,8 +848,10 @@ function currentPrintDay(): PrintDay {
       const duplicate: ExternalEditableRow = {
         ...source,
         localId: crypto.randomUUID(),
+        id: undefined,
         isSaved: false,
         isEditing: true,
+        audit: undefined,
       };
       return [...current.slice(0, index + 1), duplicate, ...current.slice(index + 1)];
     });
@@ -814,8 +866,10 @@ function currentPrintDay(): PrintDay {
       const duplicate: ExternalEconomyEditableRow = {
         ...source,
         localId: crypto.randomUUID(),
+        id: undefined,
         isSaved: false,
         isEditing: true,
+        audit: undefined,
       };
       return [...current.slice(0, index + 1), duplicate, ...current.slice(index + 1)];
     });
@@ -860,6 +914,7 @@ function currentPrintDay(): PrintDay {
         ? []
         : data.internalRows.map((row: any) => ({
             localId: crypto.randomUUID(),
+            id: row.id,
             isSaved: true,
             isEditing: false,
             resourceValue: row.resourceValue ?? "",
@@ -868,6 +923,13 @@ function currentPrintDay(): PrintDay {
             jobOrderLabel: row.jobOrderLabel ?? "",
             hours: row.hours?.toString() ?? "",
             activityDescription: row.activityDescription ?? "",
+            audit: {
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+              createdByName: row.createdByName,
+              updatedByName: row.updatedByName,
+              history: row.history ?? [],
+            },
           }));
 
     const loadedExternalRows: ExternalEditableRow[] =
@@ -875,6 +937,7 @@ function currentPrintDay(): PrintDay {
         ? []
         : data.externalRows.map((row: any) => ({
             localId: crypto.randomUUID(),
+            id: row.id,
             isSaved: true,
             isEditing: false,
             externalResourceId: row.externalResourceId ?? "",
@@ -883,6 +946,13 @@ function currentPrintDay(): PrintDay {
             jobOrderLabel: row.jobOrderLabel ?? "",
             days: row.days?.toString() ?? "",
             activityDescription: row.activityDescription ?? "",
+            audit: {
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+              createdByName: row.createdByName,
+              updatedByName: row.updatedByName,
+              history: row.history ?? [],
+            },
           }));
 
     const loadedExternalEconomyRows: ExternalEconomyEditableRow[] =
@@ -890,6 +960,7 @@ function currentPrintDay(): PrintDay {
         ? []
         : data.externalEconomyRows.map((row: any) => ({
             localId: crypto.randomUUID(),
+            id: row.id,
             isSaved: true,
             isEditing: false,
             externalResourceId: row.externalResourceId ?? "",
@@ -898,6 +969,13 @@ function currentPrintDay(): PrintDay {
             jobOrderLabel: row.jobOrderLabel ?? "",
             hours: row.hours?.toString() ?? "",
             activityDescription: row.activityDescription ?? "",
+            audit: {
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+              createdByName: row.createdByName,
+              updatedByName: row.updatedByName,
+              history: row.history ?? [],
+            },
           }));
 
     return { internalRows: loadedInternalRows, externalRows: loadedExternalRows, externalEconomyRows: loadedExternalEconomyRows };
@@ -1052,12 +1130,14 @@ function currentPrintDay(): PrintDay {
         body: JSON.stringify({
           referenceDate,
           internalRows: internalRows.map((row) => ({
+            id: row.id,
             resourceValue: row.resourceValue,
             jobOrderId: row.jobOrderId,
             hours: row.hours,
             activityDescription: row.activityDescription,
           })),
           externalRows: externalRows.map((row) => ({
+            id: row.id,
             externalResourceId: row.externalResourceId,
             externalResourceName: row.externalResourceLabel || row.externalResourceId,
             jobOrderId: row.jobOrderId,
@@ -1065,6 +1145,7 @@ function currentPrintDay(): PrintDay {
             activityDescription: row.activityDescription,
           })),
           externalEconomyRows: externalEconomyRows.map((row) => ({
+            id: row.id,
             externalResourceId: row.externalResourceId,
             externalResourceName: row.externalResourceLabel || row.externalResourceId,
             jobOrderId: row.jobOrderId,
@@ -1098,17 +1179,17 @@ function currentPrintDay(): PrintDay {
       setInternalRows(
         data.internalRows.length === 0
           ? [makeEmptyInternalRow(), makeEmptyInternalRow(), makeEmptyInternalRow()]
-          : data.internalRows.map((row) => ({ ...row, localId: crypto.randomUUID(), isSaved: false, isEditing: true }))
+          : data.internalRows.map((row) => ({ ...row, localId: crypto.randomUUID(), id: undefined, audit: undefined, isSaved: false, isEditing: true }))
       );
       setExternalRows(
         data.externalRows.length === 0
           ? [makeEmptyExternalRow(), makeEmptyExternalRow()]
-          : data.externalRows.map((row) => ({ ...row, localId: crypto.randomUUID(), isSaved: false, isEditing: true }))
+          : data.externalRows.map((row) => ({ ...row, localId: crypto.randomUUID(), id: undefined, audit: undefined, isSaved: false, isEditing: true }))
       );
       setExternalEconomyRows(
         data.externalEconomyRows.length === 0
           ? [makeEmptyExternalEconomyRow()]
-          : data.externalEconomyRows.map((row) => ({ ...row, localId: crypto.randomUUID(), isSaved: false, isEditing: true }))
+          : data.externalEconomyRows.map((row) => ({ ...row, localId: crypto.randomUUID(), id: undefined, audit: undefined, isSaved: false, isEditing: true }))
       );
       setHasUnsavedChanges(true);
       setMessage(`Righe duplicate dal ${formatItalianShortDate(previousDate)}. Ricordati di salvare il diario.`);
@@ -1711,6 +1792,7 @@ function currentPrintDay(): PrintDay {
           onRemoveRow={removeInternalRow}
           onChangeRow={setInternalRowValue}
           onEditRow={editInternalRow}
+          onShowAudit={(title, audit) => setAuditPopup({ title, audit })}
         />
 
         <ExternalResourcesSection
@@ -1738,6 +1820,7 @@ function currentPrintDay(): PrintDay {
           onAddFavoriteRow={addFavoriteExternalRow}
           onEditRow={editExternalRow}
           onEditEconomyRow={editExternalEconomyRow}
+          onShowAudit={(title, audit) => setAuditPopup({ title, audit })}
           onToggleManager={() => setShowExternalResourceManager((current) => !current)}
           onDraftChange={setExternalResourceDraft}
           onAddExternalResource={handleAddExternalResource}
@@ -1760,6 +1843,14 @@ function currentPrintDay(): PrintDay {
           </div>
         </div>
       </section>
+
+      {auditPopup ? (
+        <DiaryAuditPopup
+          title={auditPopup.title}
+          audit={auditPopup.audit}
+          onClose={() => setAuditPopup(null)}
+        />
+      ) : null}
 
       {printDialogOpen ? (
         <DailyLogPrintDialog
@@ -2481,6 +2572,7 @@ function InternalResourcesSection({
   onRemoveRow,
   onChangeRow,
   onEditRow,
+  onShowAudit,
 }: {
   rows: InternalEditableRow[];
   resources: ResourceOption[];
@@ -2492,6 +2584,7 @@ function InternalResourcesSection({
   onRemoveRow: (localId: string) => void;
   onChangeRow: (localId: string, patch: Partial<InternalEditableRow>) => void;
   onEditRow: (localId: string) => void;
+  onShowAudit: (title: string, audit?: DiaryRecordAudit) => void;
 }) {
   return (
     <CompactDiarySection title="Risorse interne" subtitle="Personale e mezzi interni caricati a ore sulla commessa." onAddRow={onAddRow}>
@@ -2525,6 +2618,11 @@ function InternalResourcesSection({
             <textarea rows={1} className="diary-description-textarea" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione lavoro" disabled={loadingRows} />
             ) : <div className="diary-readonly-value diary-readonly-description">{row.activityDescription || "-"}</div>}
             <div className="diary-compact-actions">
+              {!isEditable ? (
+                <button type="button" className="diary-icon-action diary-icon-action-info" onClick={() => onShowAudit(resourceName, row.audit)} disabled={loadingRows} title={latestAuditSummary(row.audit)} aria-label={`Dettaglio modifiche ${resourceName}`}>
+                  <InfoIcon />
+                </button>
+              ) : null}
               {!isEditable ? (
                 <button type="button" className="diary-icon-action diary-icon-action-edit" onClick={() => onEditRow(row.localId)} disabled={loadingRows} title="Modifica riga" aria-label="Modifica riga">
                   <PencilIcon />
@@ -2570,6 +2668,7 @@ function ExternalResourcesSection({
   onAddFavoriteRow,
   onEditRow,
   onEditEconomyRow,
+  onShowAudit,
   onToggleManager,
   onDraftChange,
   onAddExternalResource,
@@ -2599,6 +2698,7 @@ function ExternalResourcesSection({
   onAddFavoriteRow: (name: string) => void;
   onEditRow: (localId: string) => void;
   onEditEconomyRow: (localId: string) => void;
+  onShowAudit: (title: string, audit?: DiaryRecordAudit) => void;
   onToggleManager: () => void;
   onDraftChange: (value: string) => void;
   onAddExternalResource: () => void;
@@ -2685,6 +2785,7 @@ function ExternalResourcesSection({
           onRemoveRow={onRemoveRow}
           onChangeRow={onChangeRow}
           onEditRow={onEditRow}
+          onShowAudit={onShowAudit}
         />
       </details>
 
@@ -2704,6 +2805,7 @@ function ExternalResourcesSection({
           onRemoveRow={onRemoveEconomyRow}
           onChangeRow={onChangeEconomyRow}
           onEditRow={onEditEconomyRow}
+          onShowAudit={onShowAudit}
         />
       </details>
     </CompactDiarySection>
@@ -2723,6 +2825,7 @@ function ExternalResourceRowsTable({
   onRemoveRow,
   onChangeRow,
   onEditRow,
+  onShowAudit,
 }: {
   rows: ExternalEditableRow[];
   externalResources: ExternalResourceOption[];
@@ -2736,6 +2839,7 @@ function ExternalResourceRowsTable({
   onRemoveRow: (localId: string) => void;
   onChangeRow: (localId: string, patch: Partial<ExternalEditableRow>) => void;
   onEditRow: (localId: string) => void;
+  onShowAudit: (title: string, audit?: DiaryRecordAudit) => void;
 }) {
   return (
     <div className="diary-compact-table">
@@ -2772,6 +2876,11 @@ function ExternalResourceRowsTable({
           ) : <div className="diary-readonly-value diary-readonly-description">{row.activityDescription || "-"}</div>}
           <div className="diary-compact-actions">
             {!isEditable ? (
+              <button type="button" className="diary-icon-action diary-icon-action-info" onClick={() => onShowAudit(resourceName, row.audit)} disabled={loadingRows} title={latestAuditSummary(row.audit)} aria-label={`Dettaglio modifiche ${resourceName}`}>
+                <InfoIcon />
+              </button>
+            ) : null}
+            {!isEditable ? (
               <button type="button" className="diary-icon-action diary-icon-action-edit" onClick={() => onEditRow(row.localId)} disabled={loadingRows} title="Modifica riga" aria-label="Modifica riga">
                 <PencilIcon />
               </button>
@@ -2804,6 +2913,7 @@ function ExternalEconomyRowsTable({
   onRemoveRow,
   onChangeRow,
   onEditRow,
+  onShowAudit,
 }: {
   rows: ExternalEconomyEditableRow[];
   externalResources: ExternalResourceOption[];
@@ -2815,6 +2925,7 @@ function ExternalEconomyRowsTable({
   onRemoveRow: (localId: string) => void;
   onChangeRow: (localId: string, patch: Partial<ExternalEconomyEditableRow>) => void;
   onEditRow: (localId: string) => void;
+  onShowAudit: (title: string, audit?: DiaryRecordAudit) => void;
 }) {
   return (
     <div className="diary-compact-table">
@@ -2850,6 +2961,11 @@ function ExternalEconomyRowsTable({
           <textarea rows={1} className="diary-description-textarea" value={row.activityDescription} onChange={(event) => onChangeRow(row.localId, { activityDescription: event.target.value })} placeholder="Descrizione attivita" disabled={loadingRows} />
           ) : <div className="diary-readonly-value diary-readonly-description">{row.activityDescription || "-"}</div>}
           <div className="diary-compact-actions">
+            {!isEditable ? (
+              <button type="button" className="diary-icon-action diary-icon-action-info" onClick={() => onShowAudit(resourceName, row.audit)} disabled={loadingRows} title={latestAuditSummary(row.audit)} aria-label={`Dettaglio modifiche ${resourceName}`}>
+                <InfoIcon />
+              </button>
+            ) : null}
             {!isEditable ? (
               <button type="button" className="diary-icon-action diary-icon-action-edit" onClick={() => onEditRow(row.localId)} disabled={loadingRows} title="Modifica riga" aria-label="Modifica riga">
                 <PencilIcon />
@@ -3015,6 +3131,99 @@ function PrintPreviewRows({ title, rows }: { title: string; rows: string[] }) {
       {rows.length === 0 ? <p>Nessuna riga.</p> : rows.slice(0, 5).map((row, index) => <p key={`${row}-${index}`}>{row || "-"}</p>)}
       {rows.length > 5 ? <p>+ {rows.length - 5} righe</p> : null}
     </section>
+  );
+}
+
+function diaryAuditFieldLabel(field: string) {
+  const labels: Record<string, string> = {
+    resourceType: "Tipo risorsa",
+    personId: "Persona",
+    equipmentId: "Mezzo",
+    externalResourceId: "Risorsa esterna",
+    jobOrderId: "Commessa",
+    activityType: "Tipo attivita",
+    hours: "Ore",
+    days: "Giornate",
+    activityDescription: "Descrizione",
+  };
+  return labels[field] ?? field;
+}
+
+function DiaryAuditPopup({
+  title,
+  audit,
+  onClose,
+}: {
+  title: string;
+  audit?: DiaryRecordAudit;
+  onClose: () => void;
+}) {
+  const history = audit?.history ?? [];
+
+  return (
+    <div className="diary-audit-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
+      <section className="diary-audit-popup" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <p className="dashboard-kicker">Dettaglio modifica</p>
+            <h2>{title}</h2>
+          </div>
+          <button type="button" className="diary-audit-close" onClick={onClose} aria-label="Chiudi dettaglio modifiche">
+            x
+          </button>
+        </header>
+
+        <dl className="diary-audit-meta">
+          <div>
+            <dt>Creato da</dt>
+            <dd>{audit?.createdByName || "-"}</dd>
+          </div>
+          <div>
+            <dt>In data</dt>
+            <dd>{formatAuditDateTime(audit?.createdAt)}</dd>
+          </div>
+          <div>
+            <dt>Ultima modifica fatta da</dt>
+            <dd>{audit?.updatedByName || audit?.createdByName || "-"}</dd>
+          </div>
+          <div>
+            <dt>Data ultima modifica</dt>
+            <dd>{formatAuditDateTime(audit?.updatedAt || audit?.createdAt)}</dd>
+          </div>
+        </dl>
+
+        {history.length > 0 ? (
+          <div className="diary-audit-history">
+            <h3>Modifiche registrate</h3>
+            {history.map((entry) => (
+              <article key={entry.id}>
+                <strong>{entry.changedByName || "-"} - {formatAuditDateTime(entry.changedAt)}</strong>
+                <ul>
+                  {entry.changedFields.map((change, index) => (
+                    <li key={`${entry.id}-${change.field}-${index}`}>
+                      <span>{diaryAuditFieldLabel(change.field)}</span>
+                      <em>{change.before || "-"} {"->"} {change.after || "-"}</em>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="diary-audit-empty">Nessuna modifica successiva alla creazione.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6" />
+      <path d="M12 7h.01" />
+    </svg>
   );
 }
 

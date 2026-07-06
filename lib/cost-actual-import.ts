@@ -1717,31 +1717,44 @@ export async function recalculateJobOrderActualCosts(jobOrderId: string) {
 }
 
 export async function listRecentCostImportSessions(limit = 8) {
-  const sessions = await prisma.costImportSession.findMany({
-    orderBy: { uploadedAt: "desc" },
-    take: limit,
-    include: {
-      jobOrder: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      _count: {
-        select: {
-          rows: true,
-        },
-      },
-    },
-  });
+  const sessions = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      fileName: string;
+      status: CostImportSessionStatus;
+      uploadedAt: Date;
+      rowCount: bigint;
+      jobOrderId: string;
+      jobOrderName: string;
+    }>
+  >`
+    SELECT
+      cis."id",
+      cis."fileName",
+      cis."status",
+      cis."uploadedAt",
+      COUNT(cir."id") AS "rowCount",
+      jo."id" AS "jobOrderId",
+      jo."name" AS "jobOrderName"
+    FROM "CostImportSession" cis
+    INNER JOIN "JobOrder" jo ON jo."id" = cis."jobOrderId"
+    LEFT JOIN "CostImportRowStaging" cir ON cir."importSessionId" = cis."id"
+    WHERE cis."jobOrderId" IS NOT NULL
+    GROUP BY cis."id", jo."id", jo."name"
+    ORDER BY cis."uploadedAt" DESC
+    LIMIT ${limit}
+  `;
 
   return sessions.map((session) => ({
     id: session.id,
     fileName: session.fileName,
     status: session.status,
     uploadedAt: session.uploadedAt.toISOString(),
-    rowCount: session._count.rows,
-    jobOrder: session.jobOrder,
+    rowCount: Number(session.rowCount),
+    jobOrder: {
+      id: session.jobOrderId,
+      name: session.jobOrderName,
+    },
   }));
 }
 

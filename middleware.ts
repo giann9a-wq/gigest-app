@@ -6,6 +6,8 @@ export const { auth: middleware } = NextAuth(authConfig);
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/dashboard2/:path*",
+    "/dashboard_old/:path*",
     "/diario/:path*",
     "/risorse/:path*",
     "/mezzi/:path*",
