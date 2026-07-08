@@ -16,7 +16,15 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const year = Number(request.nextUrl.searchParams.get("year") || now.getUTCFullYear());
   const month = Number(request.nextUrl.searchParams.get("month") || now.getUTCMonth() + 1);
-  const personIds = request.nextUrl.searchParams.getAll("personId").map((value) => value.trim()).filter(Boolean);
+  const includedPersonIds = request.nextUrl.searchParams
+    .getAll("includedPersonId")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const legacyPersonIds = request.nextUrl.searchParams
+    .getAll("personId")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const personIds = includedPersonIds.length > 0 ? includedPersonIds : legacyPersonIds;
 
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
     return NextResponse.json({ error: "Anno non valido" }, { status: 400 });

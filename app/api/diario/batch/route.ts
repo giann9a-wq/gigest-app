@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma, ResourceType, UserStatus } from "@prisma/client";
+import { ExternalDiaryActivityType, Prisma, ResourceType, UserStatus } from "@prisma/client";
 
 function getUtcDayRange(dateString: string) {
   const start = new Date(`${dateString}T00:00:00.000Z`);
@@ -10,6 +10,7 @@ function getUtcDayRange(dateString: string) {
 }
 
 type InternalBatchRowInput = {
+  id?: string;
   resourceValue: string;
   jobOrderId: string;
   hours: number | string;
@@ -17,6 +18,7 @@ type InternalBatchRowInput = {
 };
 
 type ExternalBatchRowInput = {
+  id?: string;
   externalResourceId: string;
   externalResourceName?: string;
   jobOrderId: string;
@@ -25,6 +27,7 @@ type ExternalBatchRowInput = {
 };
 
 type ExternalEconomyBatchRowInput = {
+  id?: string;
   externalResourceId: string;
   externalResourceName?: string;
   jobOrderId: string;
@@ -105,6 +108,33 @@ async function resolveExternalResourceIds(rows: Array<{ externalResourceId: stri
   return resolvedIdByInput;
 }
 
+function formatUserName(user: { firstName: string | null; lastName: string | null; email: string } | null | undefined) {
+  if (!user) return "";
+  const fullName = [user.firstName, user.lastName].map((part) => part?.trim()).filter(Boolean).join(" ");
+  return fullName || user.email;
+}
+
+function serializeHistory(changes: Array<{
+  id: string;
+  changedFields: Prisma.JsonValue;
+  createdAt: Date;
+  changedBy: { firstName: string | null; lastName: string | null; email: string } | null;
+}>) {
+  return changes.map((change) => ({
+    id: change.id,
+    changedAt: change.createdAt.toISOString(),
+    changedByName: formatUserName(change.changedBy),
+    changedFields: Array.isArray(change.changedFields) ? change.changedFields : [],
+  }));
+}
+
+function auditChange(field: string, before: unknown, after: unknown) {
+  const beforeValue = before === undefined || before === null || before === "" ? null : String(before);
+  const afterValue = after === undefined || after === null || after === "" ? null : String(after);
+  if (beforeValue === afterValue) return null;
+  return { field, before: beforeValue, after: afterValue };
+}
+
 export async function GET(request: NextRequest) {
   const authResult = await getAuthorizedUser();
   if (authResult.error) return authResult.error;
@@ -143,6 +173,32 @@ export async function GET(request: NextRequest) {
             type: true,
           },
         },
+        createdBy: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        updatedBy: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        changes: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            changedBy: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        },
       },
     }),
     prisma.externalDiaryActivity.findMany({
@@ -165,6 +221,32 @@ export async function GET(request: NextRequest) {
             type: true,
           },
         },
+        createdBy: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        updatedBy: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        changes: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            changedBy: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        },
       },
     }),
   ]);
@@ -185,6 +267,11 @@ export async function GET(request: NextRequest) {
     jobOrderLabel: activity.jobOrder.name,
     hours: Number(activity.hours),
     activityDescription: activity.activityDescription ?? "",
+    createdAt: activity.createdAt.toISOString(),
+    updatedAt: activity.updatedAt.toISOString(),
+    createdByName: formatUserName(activity.createdBy),
+    updatedByName: formatUserName(activity.updatedBy),
+    history: serializeHistory(activity.changes),
   }));
 
   const externalRows = externalActivities
@@ -197,6 +284,11 @@ export async function GET(request: NextRequest) {
     jobOrderLabel: activity.jobOrder.name,
     days: Number(activity.days),
     activityDescription: activity.activityDescription ?? "",
+    createdAt: activity.createdAt.toISOString(),
+    updatedAt: activity.updatedAt.toISOString(),
+    createdByName: formatUserName(activity.createdBy),
+    updatedByName: formatUserName(activity.updatedBy),
+    history: serializeHistory(activity.changes),
   }));
 
   const externalEconomyRows = externalActivities
@@ -209,6 +301,11 @@ export async function GET(request: NextRequest) {
       jobOrderLabel: activity.jobOrder.name,
       hours: Number(activity.hours ?? 0),
       activityDescription: activity.activityDescription ?? "",
+      createdAt: activity.createdAt.toISOString(),
+      updatedAt: activity.updatedAt.toISOString(),
+      createdByName: formatUserName(activity.createdBy),
+      updatedByName: formatUserName(activity.updatedBy),
+      history: serializeHistory(activity.changes),
     }));
 
   return NextResponse.json({ internalRows, externalRows, externalEconomyRows });
@@ -246,6 +343,7 @@ export async function POST(request: NextRequest) {
 
   const cleanedInternalRows = internalRows
     .map((row) => ({
+      id: row.id?.trim() ?? "",
       resourceValue: row.resourceValue?.trim() ?? "",
       jobOrderId: row.jobOrderId?.trim() ?? "",
       hours: row.hours,
@@ -255,6 +353,7 @@ export async function POST(request: NextRequest) {
 
   const cleanedExternalRows = externalRows
     .map((row) => ({
+      id: row.id?.trim() ?? "",
       externalResourceId: row.externalResourceId?.trim() ?? "",
       externalResourceName: row.externalResourceName?.trim() ?? "",
       jobOrderId: row.jobOrderId?.trim() ?? "",
@@ -265,6 +364,7 @@ export async function POST(request: NextRequest) {
 
   const cleanedExternalEconomyRows = (Array.isArray(externalEconomyRows) ? externalEconomyRows : [])
     .map((row) => ({
+      id: row.id?.trim() ?? "",
       externalResourceId: row.externalResourceId?.trim() ?? "",
       externalResourceName: row.externalResourceName?.trim() ?? "",
       jobOrderId: row.jobOrderId?.trim() ?? "",
@@ -341,13 +441,14 @@ export async function POST(request: NextRequest) {
   const { start, end } = getUtcDayRange(referenceDate);
   const referenceDateValue = new Date(`${referenceDate}T00:00:00.000Z`);
 
-  const internalCreateData: Prisma.DiaryActivityCreateManyInput[] = cleanedInternalRows.map((row) => {
+  const internalPayloads = cleanedInternalRows.map((row) => {
     const parsedHours = Number(row.hours);
     const roundedHours = Math.round(parsedHours * 10) / 10;
     const [resourceTypeRaw, resourceId] = row.resourceValue.split(":");
     const resourceType = resourceTypeRaw as ResourceType;
 
     return {
+      id: row.id,
       referenceDate: referenceDateValue,
       resourceType,
       personId: resourceType === "PERSON" ? resourceId : null,
@@ -360,18 +461,19 @@ export async function POST(request: NextRequest) {
     };
   });
 
-  const externalCreateData: Prisma.ExternalDiaryActivityCreateManyInput[] = cleanedExternalRows.map((row) => {
+  const externalPayloads = cleanedExternalRows.map((row) => {
     const parsedDays = Number(row.days);
     const roundedDays = Math.round(parsedDays * 10) / 10;
 
     return {
+      id: row.id,
       referenceDate: referenceDateValue,
       externalResourceId:
         externalResourceIdByInput.get(row.externalResourceName || row.externalResourceId) ??
         externalResourceIdByInput.get(row.externalResourceId) ??
         row.externalResourceId,
       jobOrderId: row.jobOrderId,
-      activityType: "SUBCONTRACT",
+      activityType: ExternalDiaryActivityType.SUBCONTRACT,
       days: new Prisma.Decimal(roundedDays),
       hours: null,
       activityDescription: row.activityDescription || null,
@@ -380,18 +482,19 @@ export async function POST(request: NextRequest) {
     };
   });
 
-  const externalEconomyCreateData: Prisma.ExternalDiaryActivityCreateManyInput[] = cleanedExternalEconomyRows.map((row) => {
+  const externalEconomyPayloads = cleanedExternalEconomyRows.map((row) => {
     const parsedHours = Number(row.hours);
     const roundedHours = Math.round(parsedHours * 10) / 10;
 
     return {
+      id: row.id,
       referenceDate: referenceDateValue,
       externalResourceId:
         externalResourceIdByInput.get(row.externalResourceName || row.externalResourceId) ??
         externalResourceIdByInput.get(row.externalResourceId) ??
         row.externalResourceId,
       jobOrderId: row.jobOrderId,
-      activityType: "ECONOMY",
+      activityType: ExternalDiaryActivityType.ECONOMY,
       days: new Prisma.Decimal(0),
       hours: new Prisma.Decimal(roundedHours),
       activityDescription: row.activityDescription || null,
@@ -401,17 +504,45 @@ export async function POST(request: NextRequest) {
   });
 
   await prisma.$transaction(async (tx) => {
+    const [existingInternalRows, existingExternalRows] = await Promise.all([
+      tx.diaryActivity.findMany({
+        where: {
+          source: "MANUAL",
+          referenceDate: {
+            gte: start,
+            lte: end,
+          },
+        },
+      }),
+      tx.externalDiaryActivity.findMany({
+        where: {
+          referenceDate: {
+            gte: start,
+            lte: end,
+          },
+        },
+      }),
+    ]);
+
+    const existingInternalById = new Map(existingInternalRows.map((row) => [row.id, row]));
+    const existingExternalById = new Map(existingExternalRows.map((row) => [row.id, row]));
+    const keptInternalIds = internalPayloads.map((row) => row.id).filter((id) => id && existingInternalById.has(id));
+    const keptExternalIds = [...externalPayloads, ...externalEconomyPayloads]
+      .map((row) => row.id)
+      .filter((id) => id && existingExternalById.has(id));
+
     await tx.diaryActivity.deleteMany({
       where: {
         source: "MANUAL",
         referenceDate: {
-            gte: start,
-            lte: end,
+          gte: start,
+          lte: end,
         },
+        ...(keptInternalIds.length > 0 ? { id: { notIn: keptInternalIds } } : {}),
       },
     });
 
-    const manualPersonIds = internalCreateData
+    const manualPersonIds = internalPayloads
       .map((row) => row.personId)
       .filter((personId): personId is string => Boolean(personId));
 
@@ -434,32 +565,109 @@ export async function POST(request: NextRequest) {
           gte: start,
           lte: end,
         },
+        ...(keptExternalIds.length > 0 ? { id: { notIn: keptExternalIds } } : {}),
       },
     });
 
-    if (internalCreateData.length > 0) {
-      await tx.diaryActivity.createMany({
-        data: internalCreateData,
+    for (const row of internalPayloads) {
+      const existing = row.id ? existingInternalById.get(row.id) : null;
+      const data = {
+        referenceDate: row.referenceDate,
+        resourceType: row.resourceType,
+        personId: row.personId,
+        equipmentId: row.equipmentId,
+        jobOrderId: row.jobOrderId,
+        hours: row.hours,
+        activityDescription: row.activityDescription,
+        updatedByUserId: appUser.id,
+      };
+
+      if (!existing) {
+        await tx.diaryActivity.create({
+          data: {
+            ...data,
+            createdByUserId: appUser.id,
+          },
+        });
+        continue;
+      }
+
+      const changes = [
+        auditChange("resourceType", existing.resourceType, row.resourceType),
+        auditChange("personId", existing.personId, row.personId),
+        auditChange("equipmentId", existing.equipmentId, row.equipmentId),
+        auditChange("jobOrderId", existing.jobOrderId, row.jobOrderId),
+        auditChange("hours", Number(existing.hours), Number(row.hours)),
+        auditChange("activityDescription", existing.activityDescription, row.activityDescription),
+      ].filter((change): change is { field: string; before: string | null; after: string | null } => Boolean(change));
+
+      if (changes.length === 0) continue;
+
+      await tx.diaryActivity.update({
+        where: { id: existing.id },
+        data,
+      });
+      await tx.diaryRecordChange.create({
+        data: {
+          diaryActivityId: existing.id,
+          changedByUserId: appUser.id,
+          changedFields: changes,
+        },
       });
     }
 
-    if (externalCreateData.length > 0) {
-      await tx.externalDiaryActivity.createMany({
-        data: externalCreateData,
-      });
-    }
+    for (const row of [...externalPayloads, ...externalEconomyPayloads]) {
+      const existing = row.id ? existingExternalById.get(row.id) : null;
+      const data = {
+        referenceDate: row.referenceDate,
+        externalResourceId: row.externalResourceId,
+        jobOrderId: row.jobOrderId,
+        activityType: row.activityType,
+        days: row.days,
+        hours: row.hours,
+        activityDescription: row.activityDescription,
+        updatedByUserId: appUser.id,
+      };
 
-    if (externalEconomyCreateData.length > 0) {
-      await tx.externalDiaryActivity.createMany({
-        data: externalEconomyCreateData,
+      if (!existing) {
+        await tx.externalDiaryActivity.create({
+          data: {
+            ...data,
+            createdByUserId: appUser.id,
+          },
+        });
+        continue;
+      }
+
+      const changes = [
+        auditChange("externalResourceId", existing.externalResourceId, row.externalResourceId),
+        auditChange("jobOrderId", existing.jobOrderId, row.jobOrderId),
+        auditChange("activityType", existing.activityType, row.activityType),
+        auditChange("days", Number(existing.days), Number(row.days)),
+        auditChange("hours", existing.hours === null ? null : Number(existing.hours), row.hours === null ? null : Number(row.hours)),
+        auditChange("activityDescription", existing.activityDescription, row.activityDescription),
+      ].filter((change): change is { field: string; before: string | null; after: string | null } => Boolean(change));
+
+      if (changes.length === 0) continue;
+
+      await tx.externalDiaryActivity.update({
+        where: { id: existing.id },
+        data,
+      });
+      await tx.diaryRecordChange.create({
+        data: {
+          externalDiaryActivityId: existing.id,
+          changedByUserId: appUser.id,
+          changedFields: changes,
+        },
       });
     }
   });
 
   return NextResponse.json({
     success: true,
-    savedInternalRows: internalCreateData.length,
-    savedExternalRows: externalCreateData.length,
-    savedExternalEconomyRows: externalEconomyCreateData.length,
+    savedInternalRows: internalPayloads.length,
+    savedExternalRows: externalPayloads.length,
+    savedExternalEconomyRows: externalEconomyPayloads.length,
   });
 }

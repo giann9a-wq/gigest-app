@@ -123,6 +123,7 @@ export async function buildMonthlyResourceReport(
     prisma.diaryActivity.findMany({
       where: {
         resourceType: "PERSON",
+        ...(options?.personIds?.length ? { personId: { in: options.personIds } } : {}),
         referenceDate: {
           gte: start,
           lte: end,

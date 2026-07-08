@@ -7,6 +7,7 @@ const FAVORITES_KEY = "gigest.weather.recentCities";
 type WeatherCityPickerProps = {
   currentCity: string;
   searchedCity: string;
+  actionPath?: "/dashboard" | "/dashboard2" | "/dashboard_old";
 };
 
 function readFavorites() {
@@ -24,11 +25,11 @@ function writeFavorites(cities: string[]) {
   window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(cities.slice(0, 3)));
 }
 
-function cityHref(city: string) {
-  return `/dashboard?meteo=${encodeURIComponent(city)}`;
+function cityHref(city: string, actionPath: WeatherCityPickerProps["actionPath"]) {
+  return `${actionPath ?? "/dashboard"}?meteo=${encodeURIComponent(city)}`;
 }
 
-export function WeatherCityPicker({ currentCity, searchedCity }: WeatherCityPickerProps) {
+export function WeatherCityPicker({ currentCity, searchedCity, actionPath = "/dashboard" }: WeatherCityPickerProps) {
   const [favorites, setFavorites] = useState<string[]>([]);
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export function WeatherCityPicker({ currentCity, searchedCity }: WeatherCityPick
     <details className="dashboard-weather-city-picker">
       <summary>Cambia citta</summary>
       <div className="dashboard-weather-city-popover">
-        <form action="/dashboard" className="dashboard-weather-city-form">
+        <form action={actionPath} className="dashboard-weather-city-form">
           <label>
             <input
               name="meteo"
@@ -73,7 +74,7 @@ export function WeatherCityPicker({ currentCity, searchedCity }: WeatherCityPick
             <span>Preferiti recenti</span>
             <div>
               {visibleFavorites.map((city) => (
-                <a key={city} href={cityHref(city)}>
+                <a key={city} href={cityHref(city, actionPath)}>
                   {city}
                 </a>
               ))}

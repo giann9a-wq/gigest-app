@@ -187,12 +187,23 @@ export default function StampaRisorseMesePage() {
   }
 
   function printReport() {
+    if (visibleResources.length === 0) return;
+
+    const params = new URLSearchParams({
+      month: String(month),
+      year: String(year),
+    });
+
+    for (const resource of visibleResources) {
+      params.append("includedPersonId", resource.id);
+    }
+
     setExpandedWorkResourceIds(
       visibleResources
         .filter((resource) => resource.isWorker && resource.workDetails.length > 0)
         .map((resource) => resource.id)
     );
-    window.setTimeout(() => window.print(), 0);
+    window.open(`/api/stampa-risorse-mese/pdf?${params.toString()}`, "_blank", "noopener,noreferrer");
   }
 
   const selectedResourceCount =
@@ -235,7 +246,7 @@ export default function StampaRisorseMesePage() {
           <button type="button" className="button" onClick={() => loadReport()}>
             Visualizza
           </button>
-          <button type="button" className="report-print-btn" onClick={printReport}>
+          <button type="button" className="report-print-btn" onClick={printReport} disabled={visibleResources.length === 0}>
             Stampa / PDF
           </button>
         </div>
@@ -352,6 +363,7 @@ export default function StampaRisorseMesePage() {
                 {visibleResources.map((resource) => {
                   const isWorkExpanded = expandedWorkResourceIds.includes(resource.id);
                   const hasWorkDetails = resource.isWorker && resource.workDetails.length > 0;
+                  const holidayGroup = resource.groups.find((group) => group.key === "NATIONAL_HOLIDAY");
                   const resourceHeader = (
                     <tr key={`${resource.id}-header`} className="report-resource-header-row">
                       <td colSpan={report.days.length + 2}>
@@ -391,21 +403,29 @@ export default function StampaRisorseMesePage() {
                           group.label
                         )}
                       </td>
-                      {group.values.map((value, valueIndex) => (
-                        <td
-                          key={`${resource.id}-${group.key}-${valueIndex}`}
-                          className={[
-                            report.days[valueIndex]?.isWeekend ? "report-weekend" : "",
-                            value > resource.expectedDailyHours ? "report-overtime-cell" : "",
-                            groupIndex === 0 ? "report-resource-start" : "",
-                            groupIndex === resource.groups.length - 1 ? "report-resource-end" : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                        >
-                          <span className="report-hour-value">{formatHours(value)}</span>
-                        </td>
-                      ))}
+                      {group.values.map((value, valueIndex) => {
+                        const day = report.days[valueIndex];
+                        const hasHolidayHours = (holidayGroup?.values[valueIndex] ?? 0) > 0;
+                        const isWorkedNonWorkingDay =
+                          group.key === "WORK" && value > 0 && Boolean(day?.isWeekend || hasHolidayHours);
+
+                        return (
+                          <td
+                            key={`${resource.id}-${group.key}-${valueIndex}`}
+                            className={[
+                              day?.isWeekend ? "report-weekend" : "",
+                              value > resource.expectedDailyHours ? "report-overtime-cell" : "",
+                              isWorkedNonWorkingDay ? "report-worked-nonworking-cell" : "",
+                              groupIndex === 0 ? "report-resource-start" : "",
+                              groupIndex === resource.groups.length - 1 ? "report-resource-end" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                          >
+                            <span className="report-hour-value">{formatHours(value)}</span>
+                          </td>
+                        );
+                      })}
                       <td
                         className={[
                           "report-total-value",
@@ -435,14 +455,25 @@ export default function StampaRisorseMesePage() {
                           .join(" ")}
                       >
                         <td className="report-work-detail-name">{detail.jobOrderName}</td>
-                        {detail.values.map((value, valueIndex) => (
-                          <td
-                            key={`${resource.id}-${detail.jobOrderId}-${valueIndex}`}
-                            className={report.days[valueIndex]?.isWeekend ? "report-weekend" : ""}
-                          >
-                            <span className="report-hour-value">{formatHours(value)}</span>
-                          </td>
-                        ))}
+                        {detail.values.map((value, valueIndex) => {
+                          const day = report.days[valueIndex];
+                          const hasHolidayHours = (holidayGroup?.values[valueIndex] ?? 0) > 0;
+                          const isWorkedNonWorkingDay = value > 0 && Boolean(day?.isWeekend || hasHolidayHours);
+
+                          return (
+                            <td
+                              key={`${resource.id}-${detail.jobOrderId}-${valueIndex}`}
+                              className={[
+                                day?.isWeekend ? "report-weekend" : "",
+                                isWorkedNonWorkingDay ? "report-worked-nonworking-cell" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            >
+                              <span className="report-hour-value">{formatHours(value)}</span>
+                            </td>
+                          );
+                        })}
                         <td className="report-total-value">
                           <span className="report-hour-value">{formatHours(detail.total)}</span>
                         </td>

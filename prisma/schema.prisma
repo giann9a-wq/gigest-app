@@ -155,6 +155,13 @@ enum DiaryActivitySource {
   AUTO
 }
 
+enum DashboardTaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  ARCHIVED
+}
+
 model User {
   id          String     @id @default(cuid())
   googleSub   String?    @unique
@@ -170,6 +177,7 @@ model User {
   managedAccessRequests         AccessRequest[]         @relation("ManagedBy")
   createdActivities             DiaryActivity[]         @relation("ActivityCreatedBy")
   updatedActivities             DiaryActivity[]         @relation("ActivityUpdatedBy")
+  diaryRecordChanges            DiaryRecordChange[]     @relation("DiaryRecordChangeChangedBy")
   createdExternalActivities     ExternalDiaryActivity[] @relation("ExternalActivityCreatedBy")
   updatedExternalActivities     ExternalDiaryActivity[] @relation("ExternalActivityUpdatedBy")
   createdMaterialUsages         MaterialUsage[]         @relation("MaterialUsageCreatedBy")
@@ -189,9 +197,32 @@ model User {
   uploadedInvoiceImportSessions InvoiceImportSession[]  @relation("InvoiceImportSessionUploadedBy")
   createdJobOrderAdvances       JobOrderAdvance[]       @relation("JobOrderAdvanceCreatedBy")
   updatedJobOrderAdvances       JobOrderAdvance[]       @relation("JobOrderAdvanceUpdatedBy")
+  ownedDashboardTasks           DashboardTask[]         @relation("DashboardTaskOwner")
+  assignedDashboardTasks        DashboardTask[]         @relation("DashboardTaskAssignee")
+  createdDashboardTasks         DashboardTask[]         @relation("DashboardTaskCreatedBy")
 
   accounts Account[]
   sessions Session[]
+}
+
+model DashboardTask {
+  id              String              @id @default(cuid())
+  description     String              @db.Text
+  status          DashboardTaskStatus @default(TODO)
+  dueDate         DateTime?           @db.Date
+  ownerId         String
+  assigneeId      String?
+  createdByUserId String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  owner     User  @relation("DashboardTaskOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  assignee  User? @relation("DashboardTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy User? @relation("DashboardTaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, status, dueDate])
+  @@index([assigneeId, status, dueDate])
+  @@index([createdAt])
 }
 
 model AccessRequest {
@@ -684,6 +715,7 @@ model DiaryActivity {
   jobOrder  JobOrder   @relation(fields: [jobOrderId], references: [id])
   createdBy User?      @relation("ActivityCreatedBy", fields: [createdByUserId], references: [id])
   updatedBy User?      @relation("ActivityUpdatedBy", fields: [updatedByUserId], references: [id])
+  changes   DiaryRecordChange[]
 
   @@index([referenceDate])
   @@index([jobOrderId])
@@ -718,11 +750,29 @@ model ExternalDiaryActivity {
   jobOrder         JobOrder         @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
   createdBy        User?            @relation("ExternalActivityCreatedBy", fields: [createdByUserId], references: [id])
   updatedBy        User?            @relation("ExternalActivityUpdatedBy", fields: [updatedByUserId], references: [id])
+  changes          DiaryRecordChange[]
 
   @@index([referenceDate])
   @@index([jobOrderId])
   @@index([externalResourceId])
   @@index([activityType])
+}
+
+model DiaryRecordChange {
+  id                      String   @id @default(cuid())
+  diaryActivityId         String?
+  externalDiaryActivityId String?
+  changedByUserId         String?
+  changedFields           Json
+  createdAt               DateTime @default(now())
+
+  diaryActivity         DiaryActivity?         @relation(fields: [diaryActivityId], references: [id], onDelete: Cascade)
+  externalDiaryActivity ExternalDiaryActivity? @relation(fields: [externalDiaryActivityId], references: [id], onDelete: Cascade)
+  changedBy             User?                  @relation("DiaryRecordChangeChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([diaryActivityId, createdAt])
+  @@index([externalDiaryActivityId, createdAt])
+  @@index([changedByUserId, createdAt])
 }
 
 model MaterialUsage {

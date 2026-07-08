@@ -16,14 +16,9 @@ type AppHeaderProps = {
   userLabel?: string | null;
   showAdminLink: boolean;
   logoutAction: React.ReactNode;
-  news: {
-    enabled: boolean;
-    title: string;
-    description: string;
-  };
 };
 
-export function AppHeader({ userLabel, showAdminLink, logoutAction, news }: AppHeaderProps) {
+export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderProps) {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -104,12 +99,6 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction, news }: AppH
           </nav>
         </div>
 
-        {news.enabled ? (
-          <section className="app-header-news-banner" aria-label="News">
-            <span>{news.title}</span>
-            <p>{news.description}</p>
-          </section>
-        ) : null}
       </div>
 
       <div className={`app-mobile-drawer-shell ${isMenuOpen ? "app-mobile-drawer-shell-open" : ""}`}>
