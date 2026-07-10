@@ -336,7 +336,7 @@ a {
 .admin-page {
   display: grid;
   gap: 1.2rem;
-  width: min(100%, 1180px);
+  width: 100%;
   margin: 0 auto;
   min-width: 0;
 }
