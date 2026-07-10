@@ -7,6 +7,7 @@ type ModelConfig = {
 
 const MODEL_ORDER: ModelConfig[] = [
   { key: "user", label: "User" },
+  { key: "dashboardTask", label: "DashboardTask" },
   { key: "accessRequest", label: "AccessRequest" },
   { key: "adminPanelCredential", label: "AdminPanelCredential" },
   { key: "adminPanelSession", label: "AdminPanelSession" },
@@ -58,6 +59,27 @@ function delegate(modelKey: string) {
   return (prisma as any)[modelKey];
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>
+) {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex]);
+      }
+    })
+  );
+
+  return results;
+}
+
 export function buildBackupFileName(date = new Date()) {
   const stamp = date.toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
   return `gigest-db-backup-${stamp}.json`;
@@ -66,8 +88,13 @@ export function buildBackupFileName(date = new Date()) {
 export async function createDatabaseBackup(): Promise<DatabaseBackupPayload> {
   const rows: Record<string, unknown[]> = {};
 
-  for (const model of MODEL_ORDER) {
-    rows[model.label] = await delegate(model.key).findMany();
+  const modelRows = await mapWithConcurrency(MODEL_ORDER, 6, async (model) => ({
+    label: model.label,
+    rows: await delegate(model.key).findMany(),
+  }));
+
+  for (const model of modelRows) {
+    rows[model.label] = model.rows;
   }
 
   return {
@@ -99,6 +126,11 @@ export async function restoreDatabaseBackup(payload: unknown) {
 
   for (const model of MODEL_ORDER) {
     if (!Array.isArray(backup.rows[model.label])) {
+      if (model.label === "DashboardTask") {
+        backup.rows[model.label] = [];
+        continue;
+      }
+
       throw new Error(`Backup incompleto: tabella ${model.label} mancante.`);
     }
   }

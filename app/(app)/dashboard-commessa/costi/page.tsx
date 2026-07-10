@@ -87,8 +87,12 @@ function formatDate(value: string) {
 export default function DashboardCommessaCostiPage() {
   const searchParams = useSearchParams();
   const initialJobOrderId = searchParams.get("jobOrderId") ?? "";
+  const initialDateFrom = searchParams.get("from") ?? "";
+  const initialDateTo = searchParams.get("to") ?? "";
   const [jobOrders, setJobOrders] = useState<JobOrderOption[]>([]);
   const [selectedJobOrderId, setSelectedJobOrderId] = useState(initialJobOrderId);
+  const [dateFrom, setDateFrom] = useState(initialDateFrom);
+  const [dateTo, setDateTo] = useState(initialDateTo);
   const [view, setView] = useState<CostActualViewResponse | null>(null);
   const [activeTab, setActiveTab] = useState<CostCategoryKey>("MATERIE_PRIME");
   const [moveCost, setMoveCost] = useState<{
@@ -101,6 +105,16 @@ export default function DashboardCommessaCostiPage() {
   const [loading, setLoading] = useState(true);
   const [movingCost, setMovingCost] = useState(false);
   const [error, setError] = useState("");
+  const costFilterQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    return params.toString();
+  }, [dateFrom, dateTo]);
+
+  function getCostViewUrl(jobOrderId: string) {
+    return `/api/commesse/${jobOrderId}/costi${costFilterQuery ? `?${costFilterQuery}` : ""}`;
+  }
 
   useEffect(() => {
     async function loadOptions() {
@@ -134,7 +148,7 @@ export default function DashboardCommessaCostiPage() {
       setError("");
 
       try {
-        const data = await jsonFetch<CostActualViewResponse>(`/api/commesse/${selectedJobOrderId}/costi`);
+        const data = await jsonFetch<CostActualViewResponse>(getCostViewUrl(selectedJobOrderId));
         setView(data);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Errore caricando i costi");
@@ -144,7 +158,7 @@ export default function DashboardCommessaCostiPage() {
     }
 
     loadView();
-  }, [selectedJobOrderId]);
+  }, [selectedJobOrderId, costFilterQuery]);
 
   async function moveCostToJobOrder() {
     if (!view || !moveCost || !moveCost.targetJobOrderId) return;
@@ -166,7 +180,7 @@ export default function DashboardCommessaCostiPage() {
       });
 
       setMoveCost(null);
-      const data = await jsonFetch<CostActualViewResponse>(`/api/commesse/${view.jobOrder.id}/costi`);
+      const data = await jsonFetch<CostActualViewResponse>(getCostViewUrl(view.jobOrder.id));
       setView(data);
     } catch (moveError) {
       setError(moveError instanceof Error ? moveError.message : "Errore modificando la spesa");
@@ -184,7 +198,9 @@ export default function DashboardCommessaCostiPage() {
 
   function exportAllCategories() {
     if (!view) return;
-    window.location.href = `/api/commesse/${view.jobOrder.id}/costi/export`;
+    window.location.href = `/api/commesse/${view.jobOrder.id}/costi/export${
+      costFilterQuery ? `?${costFilterQuery}` : ""
+    }`;
   }
 
   return (
@@ -225,6 +241,39 @@ export default function DashboardCommessaCostiPage() {
               ))}
             </select>
           </label>
+          <label className="mobile-data-field">
+            <span className="mobile-data-label">Data spesa da</span>
+            <input
+              className="mobile-data-input"
+              type="date"
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
+              disabled={loading}
+            />
+          </label>
+          <label className="mobile-data-field">
+            <span className="mobile-data-label">Data spesa a</span>
+            <input
+              className="mobile-data-input"
+              type="date"
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
+              disabled={loading}
+            />
+          </label>
+          <div className="cost-view-filter-actions">
+            <button
+              type="button"
+              className="mobile-button-secondary"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+              }}
+              disabled={loading || (!dateFrom && !dateTo)}
+            >
+              Reset date
+            </button>
+          </div>
         </div>
 
         {error ? <div className="scad-error">{error}</div> : null}

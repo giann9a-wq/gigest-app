@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { requireElevatedAdminUser } from "@/lib/admin-panel";
 import { buildBackupFileName, createDatabaseBackup } from "@/lib/database-backup";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 120;
+
 export async function GET() {
   const adminUser = await requireElevatedAdminUser();
 
@@ -10,7 +13,7 @@ export async function GET() {
   }
 
   const backup = await createDatabaseBackup();
-  const body = JSON.stringify(backup, null, 2);
+  const body = JSON.stringify(backup);
   const fileName = buildBackupFileName();
 
   return new NextResponse(body, {

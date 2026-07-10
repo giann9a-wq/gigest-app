@@ -42,9 +42,23 @@ function toDecimalNumber(value: Prisma.Decimal | null | undefined) {
   return Number(value);
 }
 
-async function getCostActualCategoryViews(jobOrderId: string) {
+type CostActualDateFilters = {
+  from?: Date | null;
+  to?: Date | null;
+};
+
+function buildCostActualDateWhere(filters?: CostActualDateFilters) {
+  const documentDate = {
+    ...(filters?.from ? { gte: filters.from } : {}),
+    ...(filters?.to ? { lte: filters.to } : {}),
+  };
+
+  return Object.keys(documentDate).length > 0 ? { documentDate } : {};
+}
+
+async function getCostActualCategoryViews(jobOrderId: string, filters?: CostActualDateFilters) {
   const entries = await prisma.costActualEntry.findMany({
-    where: { jobOrderId },
+    where: { jobOrderId, ...buildCostActualDateWhere(filters) },
     orderBy: [
       { category: "asc" },
       { documentDate: "desc" },
@@ -755,7 +769,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
   };
 }
 
-export async function getJobOrderCostActualView(jobOrderId: string) {
+export async function getJobOrderCostActualView(jobOrderId: string, filters?: CostActualDateFilters) {
   const jobOrder = await prisma.jobOrder.findUnique({
     where: { id: jobOrderId },
     select: {
@@ -770,7 +784,7 @@ export async function getJobOrderCostActualView(jobOrderId: string) {
     return null;
   }
 
-  const categories = await getCostActualCategoryViews(jobOrderId);
+  const categories = await getCostActualCategoryViews(jobOrderId, filters);
 
   return {
     jobOrder,

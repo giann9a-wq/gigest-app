@@ -12,6 +12,15 @@ const ALLOWED_CATEGORIES = new Set<CostActualCategory>([
   CostActualCategory.SPESE_VARIE,
 ]);
 
+function parseDateFilter(value: string | null, endOfDay = false) {
+  if (!value) return null;
+
+  const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date;
+}
+
 async function getAuthorizedUser() {
   const session = await auth();
 
@@ -32,15 +41,17 @@ async function getAuthorizedUser() {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const authResult = await getAuthorizedUser();
   if (authResult.error) return authResult.error;
 
   const { id } = await context.params;
+  const from = parseDateFilter(request.nextUrl.searchParams.get("from"));
+  const to = parseDateFilter(request.nextUrl.searchParams.get("to"), true);
   const [view, allJobOrders] = await Promise.all([
-    getJobOrderCostActualView(id),
+    getJobOrderCostActualView(id, { from, to }),
     authResult.appUser.role === UserRole.ADMIN
       ? prisma.jobOrder.findMany({
           orderBy: [{ name: "asc" }, { createdAt: "asc" }],

@@ -60,6 +60,24 @@ type ParsedWorkbookResult = {
   };
 };
 
+type CleanWorkbookRow = {
+  jobOrderId: string;
+  jobOrderName: string;
+  category: CostActualCategory | null;
+  documentDate: Date | null;
+  registrationDate: Date | null;
+  documentNumber: string | null;
+  supplierCode: string | null;
+  supplierName: string | null;
+  sourceAccountCode: string | null;
+  sourceAccountDescription: string | null;
+  description: string | null;
+  amount: number | null;
+  quantity: number | null;
+  sourceRowIndex: number;
+  parsingNote: string | null;
+};
+
 type ImportSessionDetails = Awaited<ReturnType<typeof getCostImportSessionDetails>>;
 type PrismaKnownError = {
   code?: string;
@@ -71,6 +89,25 @@ const ACCOUNT_CODE_REGEX = /^303\.\d{2}\.\d{5}\s*-\s*(.+)$/i;
 const SUPPLIER_CODE_REGEX = /^(212\.\d{5})\s*-\s*(.+)$/i;
 const GENERIC_ACCOUNT_REGEX = /^(\d{3}\.\d{2}\.\d{5})\s*-\s*(.+)$/i;
 const ITALIAN_DATE_REGEX = /^\d{2}\/\d{2}\/\d{4}$/;
+const CLEAN_COST_SHEET_NAME = "Costi puliti";
+const JOB_ORDER_DOMAIN_SHEET_NAME = "Dominio commesse";
+const CLEAN_COST_COLUMNS = [
+  "CommessaId",
+  "CommessaNome",
+  "CategoriaFinale",
+  "DataDocumento",
+  "DataRegistrazione",
+  "NumeroDocumento",
+  "FornitoreCodice",
+  "FornitoreNome",
+  "ContoCodice",
+  "ContoDescrizione",
+  "Descrizione",
+  "Importo",
+  "Quantita",
+  "RigaOrigine",
+  "NoteParsing",
+] as const;
 
 export function isCostImportSchemaMissingError(error: unknown) {
   const candidate = error as PrismaKnownError | undefined;
@@ -133,6 +170,10 @@ function parseDateInput(value: string | null | undefined) {
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
   if (Number.isNaN(date.getTime())) return null;
   return date;
+}
+
+function formatExcelDate(value: Date | null) {
+  return value?.toISOString().slice(0, 10) ?? "";
 }
 
 function parseAmount(value: unknown) {
@@ -759,6 +800,276 @@ async function classifyParsedRows(
   };
 }
 
+async function classifyParsedRowsByJobOrder(rows: ParsedMovementDraft[]) {
+  const rowsByJobOrder = new Map<string, ParsedMovementDraft[]>();
+
+  for (const row of rows) {
+    const assignedJobOrderId = (row as ParsedMovementDraft & { assignedJobOrderId?: string }).assignedJobOrderId ?? "";
+    const bucket = rowsByJobOrder.get(assignedJobOrderId) ?? [];
+    bucket.push(row);
+    rowsByJobOrder.set(assignedJobOrderId, bucket);
+  }
+
+  for (const [jobOrderId, bucket] of rowsByJobOrder) {
+    if (!jobOrderId) continue;
+    await classifyParsedRows(jobOrderId, bucket);
+  }
+
+  return {
+    duplicateRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.ALREADY_IMPORTED).length,
+    updatedDuplicateRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.UPDATED_DUPLICATE).length,
+    possibleDuplicateRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.POSSIBLE_DUPLICATE).length,
+    newRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.NEW).length,
+    invalidRows: rows.filter((row) => row.matchStatus === CostImportMatchStatus.INVALID).length,
+  };
+}
+
+export async function createCleanCostWorkbookFromPartitario(input: {
+  fileName: string;
+  buffer: Buffer;
+}) {
+  const parsed = parsePartitarioXls(input.buffer, "__PARSING_ONLY__");
+  const jobOrders = await prisma.jobOrder.findMany({
+    where: { status: "ACTIVE" },
+    orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+    select: { id: true, name: true, type: true, status: true },
+  });
+
+  const workbook = XLSX.utils.book_new();
+  workbook.Props = {
+    Title: `Parsing costi ${input.fileName}`,
+    Subject: "Template import costi pulito",
+    CreatedDate: new Date(),
+  };
+
+  const costRows = parsed.rows.map((row) => ({
+    CommessaId: "",
+    CommessaNome: "",
+    CategoriaFinale: row.finalCategory ?? "",
+    DataDocumento: formatExcelDate(row.documentDate),
+    DataRegistrazione: formatExcelDate(row.registrationDate),
+    NumeroDocumento: row.documentNumber ?? "",
+    FornitoreCodice: row.supplierCode ?? "",
+    FornitoreNome: row.supplierName ?? "",
+    ContoCodice: row.sourceAccountCode ?? "",
+    ContoDescrizione: row.sourceAccountDescription ?? "",
+    Descrizione: row.finalDescription ?? row.descriptionOriginal ?? "",
+    Importo: row.amount ?? "",
+    Quantita: row.quantity ?? "",
+    RigaOrigine: row.rowIndex,
+    NoteParsing: row.validationNote ?? "",
+  }));
+  const costSheet = XLSX.utils.json_to_sheet(costRows, {
+    header: [...CLEAN_COST_COLUMNS],
+  });
+  costSheet["!cols"] = [
+    { wch: 28 },
+    { wch: 42 },
+    { wch: 28 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 34 },
+    { wch: 16 },
+    { wch: 36 },
+    { wch: 52 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 42 },
+  ];
+  XLSX.utils.book_append_sheet(workbook, costSheet, CLEAN_COST_SHEET_NAME);
+
+  const domainSheet = XLSX.utils.json_to_sheet(
+    jobOrders.map((jobOrder) => ({
+      CommessaId: jobOrder.id,
+      CommessaNome: jobOrder.name,
+      Tipo: jobOrder.type,
+      Stato: jobOrder.status,
+    }))
+  );
+  domainSheet["!cols"] = [{ wch: 28 }, { wch: 48 }, { wch: 16 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(workbook, domainSheet, JOB_ORDER_DOMAIN_SHEET_NAME);
+
+  const legendSheet = XLSX.utils.aoa_to_sheet([
+    ["Campo", "Uso"],
+    ["CommessaId", "Obbligatorio per importare. Copialo dallo sheet Dominio commesse."],
+    ["CommessaNome", "Facoltativo se CommessaId e valorizzato; utile per leggibilita."],
+    ["CategoriaFinale", "Valori: MATERIE_PRIME, PRESTAZIONI_PROFESSIONALI, PRESTAZIONI_TERZI, SPESE_VARIE."],
+    ["Importo", "Numero positivo o negativo. Mantieni i decimali come numero Excel."],
+    ["DataDocumento/DataRegistrazione", "Formato consigliato: yyyy-mm-dd."],
+  ]);
+  legendSheet["!cols"] = [{ wch: 26 }, { wch: 100 }];
+  XLSX.utils.book_append_sheet(workbook, legendSheet, "Istruzioni");
+
+  return {
+    buffer: XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer,
+    summary: parsed.summary,
+  };
+}
+
+function getCleanWorkbookSheet(workbook: XLSX.WorkBook) {
+  const sheetName =
+    workbook.SheetNames.find((name) => normalizeText(name) === normalizeText(CLEAN_COST_SHEET_NAME)) ??
+    workbook.SheetNames[0];
+  return workbook.Sheets[sheetName];
+}
+
+function parseCleanWorkbookDate(value: unknown) {
+  if (value instanceof Date) {
+    const date = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (!parsed) return null;
+    return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+  }
+
+  return parseDateInput(value == null ? null : String(value));
+}
+
+function cleanWorkbookCategory(value: unknown) {
+  const normalized = normalizeText(cleanCell(value)).replace(/\s+/g, "_");
+  if (!normalized) return null;
+  if (normalized === "MATERIE_PRIME") return CostActualCategory.MATERIE_PRIME;
+  if (normalized === "PRESTAZIONI_PROFESSIONALI") return CostActualCategory.PRESTAZIONI_PROFESSIONALI;
+  if (normalized === "PRESTAZIONI_TERZI") return CostActualCategory.PRESTAZIONI_TERZI;
+  if (normalized === "SPESE_VARIE") return CostActualCategory.SPESE_VARIE;
+  return null;
+}
+
+function cellByHeader(row: Record<string, unknown>, header: string) {
+  return row[header] ?? row[header.toLowerCase()] ?? row[header.toUpperCase()] ?? "";
+}
+
+function parseCleanCostWorkbookRows(
+  buffer: Buffer,
+  jobOrderById: Map<string, { id: string; name: string }>,
+  jobOrderByName: Map<string, { id: string; name: string }>
+) {
+  const workbook = XLSX.read(buffer, {
+    type: "buffer",
+    cellDates: true,
+    raw: false,
+  });
+  const sheet = getCleanWorkbookSheet(workbook);
+  if (!sheet) {
+    throw new Error("Il file pulito non contiene fogli leggibili.");
+  }
+
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+    defval: "",
+    blankrows: false,
+  });
+  const parsedRows: Array<ParsedMovementDraft & { assignedJobOrderId: string }> = [];
+  const errors: string[] = [];
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    const isEmptyRow = CLEAN_COST_COLUMNS.every((column) => !cleanCell(cellByHeader(row, column)));
+    if (isEmptyRow) return;
+
+    const jobOrderId = cleanCell(cellByHeader(row, "CommessaId"));
+    const jobOrderName = cleanCell(cellByHeader(row, "CommessaNome"));
+    const jobOrder =
+      (jobOrderId ? jobOrderById.get(jobOrderId) : null) ??
+      (jobOrderName ? jobOrderByName.get(normalizeText(jobOrderName)) : null);
+
+    if (!jobOrder) {
+      errors.push(`Riga ${rowNumber}: commessa non valida o mancante.`);
+      return;
+    }
+
+    const cleanRow: CleanWorkbookRow = {
+      jobOrderId: jobOrder.id,
+      jobOrderName: jobOrder.name,
+      category: cleanWorkbookCategory(cellByHeader(row, "CategoriaFinale")),
+      documentDate: parseCleanWorkbookDate(cellByHeader(row, "DataDocumento")),
+      registrationDate: parseCleanWorkbookDate(cellByHeader(row, "DataRegistrazione")),
+      documentNumber: cleanCell(cellByHeader(row, "NumeroDocumento")) || null,
+      supplierCode: cleanCell(cellByHeader(row, "FornitoreCodice")) || null,
+      supplierName: cleanCell(cellByHeader(row, "FornitoreNome")) || null,
+      sourceAccountCode: cleanCell(cellByHeader(row, "ContoCodice")) || null,
+      sourceAccountDescription: cleanCell(cellByHeader(row, "ContoDescrizione")) || null,
+      description: cleanCell(cellByHeader(row, "Descrizione")) || null,
+      amount: parseAmount(cellByHeader(row, "Importo")),
+      quantity: parseAmount(cellByHeader(row, "Quantita")),
+      sourceRowIndex: Number(cleanCell(cellByHeader(row, "RigaOrigine"))) || rowNumber,
+      parsingNote: cleanCell(cellByHeader(row, "NoteParsing")) || null,
+    };
+
+    const validationState = buildRowValidationState({
+      jobOrderId: cleanRow.jobOrderId,
+      sourceAccountCode: cleanRow.sourceAccountCode,
+      sourceAccountDescription: cleanRow.sourceAccountDescription,
+      supplierCode: cleanRow.supplierCode,
+      supplierName: cleanRow.supplierName,
+      documentDate: cleanRow.documentDate,
+      registrationDate: cleanRow.registrationDate,
+      documentNumber: cleanRow.documentNumber,
+      amount: cleanRow.amount,
+      finalCategory: cleanRow.category,
+    });
+    const sourceRowData = buildSourceRowFingerprintInput({
+      jobOrderId: cleanRow.jobOrderId,
+      sourceAccountCode: cleanRow.sourceAccountCode,
+      sourceAccountDescription: cleanRow.sourceAccountDescription,
+      supplierCode: cleanRow.supplierCode,
+      supplierName: cleanRow.supplierName,
+      documentDate: cleanRow.documentDate,
+      registrationDate: cleanRow.registrationDate,
+      documentNumber: cleanRow.documentNumber,
+      descriptionOriginal: cleanRow.description,
+      amount: cleanRow.amount,
+    });
+
+    parsedRows.push({
+      assignedJobOrderId: cleanRow.jobOrderId,
+      rowIndex: cleanRow.sourceRowIndex,
+      rawData: {
+        ...row,
+        jobOrderId: cleanRow.jobOrderId,
+        jobOrderName: cleanRow.jobOrderName,
+        importedFromCleanWorkbookRow: rowNumber,
+      },
+      sourceAccountCode: cleanRow.sourceAccountCode,
+      sourceAccountDescription: cleanRow.sourceAccountDescription,
+      supplierCode: cleanRow.supplierCode,
+      supplierName: cleanRow.supplierName,
+      documentDate: cleanRow.documentDate,
+      registrationDate: cleanRow.registrationDate,
+      documentNumber: cleanRow.documentNumber,
+      descriptionOriginal: cleanRow.description,
+      descriptionNormalized: normalizeText(cleanRow.description) || null,
+      amount: cleanRow.amount,
+      quantity: cleanRow.quantity,
+      suggestedCategory: cleanRow.category,
+      sourceRowFingerprint: sourceRowData.fingerprint,
+      sourceRowFingerprintSource: sourceRowData.fingerprintSource,
+      fingerprint: validationState.fingerprint,
+      fingerprintSource: validationState.fingerprintSource,
+      matchStatus: validationState.matchStatus,
+      validationStatus: CostImportValidationStatus.PENDING,
+      validationNote: [cleanRow.parsingNote, validationState.validationNote].filter(Boolean).join(" "),
+      finalCategory: cleanRow.category,
+      finalDescription: cleanRow.description,
+    });
+  });
+
+  if (errors.length > 0) {
+    throw new Error(`Correggi il file pulito prima dell'import: ${errors.slice(0, 8).join(" ")}`);
+  }
+
+  if (parsedRows.length === 0) {
+    throw new Error("Il file pulito non contiene righe costo importabili.");
+  }
+
+  return parsedRows;
+}
+
 async function applySavedCorrections(jobOrderId: string, rows: ParsedMovementDraft[]) {
   const sourceFingerprints = rows
     .map((row) => row.sourceRowFingerprint)
@@ -976,6 +1287,102 @@ export async function createCostImportSession(input: {
         })),
       });
     }
+
+    return createdSession;
+  });
+
+  return {
+    sessionId: session.id,
+    summary,
+  };
+}
+
+export async function createCostImportSessionFromCleanWorkbook(input: {
+  fileName: string;
+  buffer: Buffer;
+  uploadedById?: string | null;
+}) {
+  const jobOrders = await prisma.jobOrder.findMany({
+    select: { id: true, name: true },
+  });
+  const jobOrderById = new Map(jobOrders.map((jobOrder) => [jobOrder.id, jobOrder]));
+  const jobOrderByName = new Map(jobOrders.map((jobOrder) => [normalizeText(jobOrder.name), jobOrder]));
+  const parsedRows = parseCleanCostWorkbookRows(input.buffer, jobOrderById, jobOrderByName);
+  const firstJobOrderId = parsedRows[0]?.assignedJobOrderId;
+
+  if (!firstJobOrderId) {
+    throw new Error("Il file pulito non contiene una commessa valida.");
+  }
+
+  const rowsByJobOrder = new Map<string, ParsedMovementDraft[]>();
+  for (const row of parsedRows) {
+    const bucket = rowsByJobOrder.get(row.assignedJobOrderId) ?? [];
+    bucket.push(row);
+    rowsByJobOrder.set(row.assignedJobOrderId, bucket);
+  }
+
+  for (const [jobOrderId, rows] of rowsByJobOrder) {
+    await applySavedCorrections(jobOrderId, rows);
+  }
+
+  const classification = await classifyParsedRowsByJobOrder(parsedRows);
+  const summary = {
+    totalRows: parsedRows.length,
+    parsedRows: parsedRows.length,
+    ignoredRows: 0,
+    warnings: [],
+    ...classification,
+    importMode: "clean-workbook",
+    jobOrderCount: rowsByJobOrder.size,
+  };
+  const fileHash = createHash("sha256").update(input.buffer).digest("hex");
+  const fileSizeBytes = input.buffer.byteLength;
+
+  const session = await prisma.$transaction(async (tx) => {
+    const createdSession = await tx.costImportSession.create({
+      data: {
+        jobOrderId: firstJobOrderId,
+        fileName: input.fileName,
+        fileHash,
+        fileSizeBytes,
+        storagePath: null,
+        sourceType: CostImportSourceType.PARTITARIO_XLS,
+        uploadedById: input.uploadedById ?? null,
+        status: CostImportSessionStatus.PARSED,
+        parseSummary: summary,
+      },
+      select: { id: true },
+    });
+
+    await tx.costImportRowStaging.createMany({
+      data: parsedRows.map((row) => ({
+        importSessionId: createdSession.id,
+        jobOrderId: row.assignedJobOrderId,
+        rowIndex: row.rowIndex,
+        rawData: JSON.parse(JSON.stringify(row.rawData)) as Prisma.InputJsonValue,
+        sourceAccountCode: row.sourceAccountCode,
+        sourceAccountDescription: row.sourceAccountDescription,
+        supplierCode: row.supplierCode,
+        supplierName: row.supplierName,
+        documentDate: row.documentDate,
+        registrationDate: row.registrationDate,
+        documentNumber: row.documentNumber,
+        descriptionOriginal: row.descriptionOriginal,
+        descriptionNormalized: row.descriptionNormalized,
+        amount: toDecimal(row.amount),
+        quantity: toDecimal(row.quantity),
+        suggestedCategory: row.suggestedCategory,
+        sourceRowFingerprint: row.sourceRowFingerprint,
+        sourceRowFingerprintSource: row.sourceRowFingerprintSource,
+        fingerprint: row.fingerprint,
+        fingerprintSource: row.fingerprintSource,
+        matchStatus: row.matchStatus,
+        validationStatus: row.validationStatus,
+        validationNote: row.validationNote || null,
+        finalCategory: row.finalCategory,
+        finalDescription: row.finalDescription,
+      })),
+    });
 
     return createdSession;
   });

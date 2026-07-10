@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import {
   assertActiveUser,
   getCostActualRows,
+  parseCostFilters,
 } from "@/lib/cost-actual-queries";
 import { makeExcelResponse } from "@/lib/excel";
 import { prisma } from "@/lib/prisma";
@@ -13,7 +14,7 @@ function safeFileSegment(value: string) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
@@ -37,16 +38,7 @@ export async function GET(
     return NextResponse.json({ error: "Commessa non trovata" }, { status: 404 });
   }
 
-  const rows = await getCostActualRows(
-    {
-      supplier: "",
-      jobOrderId: "",
-      from: "",
-      to: "",
-      category: "",
-    },
-    id
-  );
+  const rows = await getCostActualRows(parseCostFilters(request.nextUrl.searchParams), id);
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.json_to_sheet(
     rows.map((row) => ({
