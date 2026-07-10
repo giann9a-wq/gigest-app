@@ -93,6 +93,8 @@ export default function DashboardCommessaCostiPage() {
   const [selectedJobOrderId, setSelectedJobOrderId] = useState(initialJobOrderId);
   const [dateFrom, setDateFrom] = useState(initialDateFrom);
   const [dateTo, setDateTo] = useState(initialDateTo);
+  const [draftDateFrom, setDraftDateFrom] = useState(initialDateFrom);
+  const [draftDateTo, setDraftDateTo] = useState(initialDateTo);
   const [view, setView] = useState<CostActualViewResponse | null>(null);
   const [activeTab, setActiveTab] = useState<CostCategoryKey>("MATERIE_PRIME");
   const [moveCost, setMoveCost] = useState<{
@@ -199,6 +201,19 @@ export default function DashboardCommessaCostiPage() {
   );
   const canReassignCosts = Boolean(view?.canReassignCosts);
   const reassignJobOrders = view?.allJobOrders ?? [];
+  const hasPendingDateFilters = draftDateFrom !== dateFrom || draftDateTo !== dateTo;
+
+  function applyDateFilters() {
+    setDateFrom(draftDateFrom);
+    setDateTo(draftDateTo);
+  }
+
+  function resetDateFilters() {
+    setDraftDateFrom("");
+    setDraftDateTo("");
+    setDateFrom("");
+    setDateTo("");
+  }
 
   function exportAllCategories() {
     if (!view) return;
@@ -250,9 +265,8 @@ export default function DashboardCommessaCostiPage() {
             <input
               className="mobile-data-input"
               type="date"
-              value={dateFrom}
-              onChange={(event) => setDateFrom(event.target.value)}
-              disabled={loading}
+              value={draftDateFrom}
+              onChange={(event) => setDraftDateFrom(event.target.value)}
             />
           </label>
           <label className="mobile-data-field">
@@ -260,20 +274,24 @@ export default function DashboardCommessaCostiPage() {
             <input
               className="mobile-data-input"
               type="date"
-              value={dateTo}
-              onChange={(event) => setDateTo(event.target.value)}
-              disabled={loading}
+              value={draftDateTo}
+              onChange={(event) => setDraftDateTo(event.target.value)}
             />
           </label>
           <div className="cost-view-filter-actions">
             <button
               type="button"
+              className="button"
+              onClick={applyDateFilters}
+              disabled={loading || !hasPendingDateFilters}
+            >
+              Filtra
+            </button>
+            <button
+              type="button"
               className="mobile-button-secondary"
-              onClick={() => {
-                setDateFrom("");
-                setDateTo("");
-              }}
-              disabled={loading || (!dateFrom && !dateTo)}
+              onClick={resetDateFilters}
+              disabled={loading || (!dateFrom && !dateTo && !draftDateFrom && !draftDateTo)}
             >
               Reset date
             </button>
