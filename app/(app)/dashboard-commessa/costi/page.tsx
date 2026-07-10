@@ -193,6 +193,10 @@ export default function DashboardCommessaCostiPage() {
     () => view?.categories.find((category) => category.key === activeTab) ?? null,
     [activeTab, view]
   );
+  const totalCostAmount = useMemo(
+    () => view?.categories.reduce((total, category) => total + category.totalAmount, 0) ?? 0,
+    [view]
+  );
   const canReassignCosts = Boolean(view?.canReassignCosts);
   const reassignJobOrders = view?.allJobOrders ?? [];
 
@@ -293,6 +297,10 @@ export default function DashboardCommessaCostiPage() {
                 <strong>{formatCurrency(category.totalAmount)}</strong>
               </button>
             ))}
+            <div className="cost-view-tab cost-view-total-tab" aria-label="Totale complessivo costi">
+              <span>Totale complessivo</span>
+              <strong>{formatCurrency(totalCostAmount)}</strong>
+            </div>
           </div>
 
           {activeCategory ? (

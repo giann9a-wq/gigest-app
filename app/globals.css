@@ -4980,6 +4980,16 @@ a {
   box-shadow: 0 10px 24px rgba(235, 91, 25, 0.12);
 }
 
+.cost-view-total-tab {
+  border-color: #eb5b19;
+  background: #ffffff;
+  cursor: default;
+}
+
+.cost-view-total-tab strong {
+  color: #8f2f08;
+}
+
 .cost-view-table {
   min-width: 980px;
 }
