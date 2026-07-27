@@ -865,6 +865,7 @@ model ScannedDeliveryNote {
   id                String                    @id @default(cuid())
   gmailMessageId    String
   gmailAttachmentId String
+  deduplicationKey  String?                   @unique
   gmailInternalDate DateTime?
   fromEmail         String
   subject           String?
