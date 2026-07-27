@@ -696,12 +696,26 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       actual.thirdPartyServices +
       actual.misc
   );
+  const actualGrossMargin = roundCurrency(actual.revenue - actualTotalCosts);
+  let negativeMarginAlertSnoozedUntil = jobOrder.negativeMarginAlertSnoozedUntil;
+
+  // A non-negative margin closes the current alert episode. If the margin
+  // becomes negative again later, the previous 30-day snooze must not apply.
+  if (actualGrossMargin >= 0 && negativeMarginAlertSnoozedUntil) {
+    await prisma.jobOrder.update({
+      where: { id: jobOrder.id },
+      data: { negativeMarginAlertSnoozedUntil: null },
+    });
+    negativeMarginAlertSnoozedUntil = null;
+  }
 
   return {
     jobOrder: {
       id: jobOrder.id,
       name: jobOrder.name,
       type: jobOrder.type,
+      isOwnAccountSite: jobOrder.isOwnAccountSite,
+      negativeMarginAlertSnoozedUntil: negativeMarginAlertSnoozedUntil?.toISOString() ?? null,
       startDate: jobOrder.startDate?.toISOString().slice(0, 10) ?? "",
       endDate: jobOrder.endDate?.toISOString().slice(0, 10) ?? "",
       status: jobOrder.status,
@@ -722,7 +736,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
     actual: {
       ...actual,
       totalCosts: actualTotalCosts,
-      grossMargin: roundCurrency(actual.revenue - actualTotalCosts),
+      grossMargin: actualGrossMargin,
       grossMarginPct: toRatio(actualTotalCosts, actual.revenue),
       personnelDetails: [...personnelMap.values()].sort((a, b) =>
         a.resourceLabel.localeCompare(b.resourceLabel, "it", { sensitivity: "base" })

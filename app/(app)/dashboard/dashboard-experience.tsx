@@ -13,6 +13,7 @@ import {
 } from "@/lib/dashboard-tasks";
 import { runGmailScansSync } from "@/lib/gmail-scans-sync-runner";
 import { getLoadingVerificationStatus, shouldShowLoadingVerificationAlert } from "@/lib/loading-verification";
+import { getNegativeMarginSiteAlerts } from "@/lib/job-order-alerts";
 import {
   DeliveryNoteValidationStatus,
   ScannedDeliveryNoteStatus,
@@ -487,8 +488,10 @@ function WeatherHero({
               rel="noreferrer"
               aria-label={`Apri Meteo AM per ${weather.location.name}, ${day.label}`}
             >
-              <span>{day.label}</span>
-              <WeatherIcon code={day.code} />
+              <div className="dashboard-weather-day-heading">
+                <span>{day.label}</span>
+                <WeatherIcon code={day.code} />
+              </div>
               <small>{day.condition}</small>
               <b>
                 {day.min}° / {day.max}°
@@ -584,6 +587,7 @@ export async function DashboardExperience({
     headerNews,
     dashboardTasks,
     dashboardTaskUsers,
+    negativeMarginSiteAlerts,
   ] = await Promise.all([
     getScheduleEvents({
       from: todayBounds.start,
@@ -640,6 +644,7 @@ export async function DashboardExperience({
       ? getDashboardTasksForUser(appUser.id, { includeArchived: showArchivedTasks })
       : Promise.resolve([]),
     isWideDashboard ? getDashboardTaskUserOptions() : Promise.resolve([]),
+    getNegativeMarginSiteAlerts(),
   ]);
 
   const todayEvents = scheduleEvents.filter((event) => {
@@ -659,7 +664,8 @@ export async function DashboardExperience({
     (autoDiaryStatus?.pendingCount ?? 0) > 0 ||
     (loadingVerificationStatus?.issueCount ?? 0) > 0 ||
     recurringMaintenanceAlerts.length > 0 ||
-    recurringTrainingAlerts.length > 0;
+    recurringTrainingAlerts.length > 0 ||
+    negativeMarginSiteAlerts.length > 0;
 
   const alertSection = hasDashboardAlerts ? (
     <section
@@ -716,6 +722,26 @@ export async function DashboardExperience({
             ))}
           </div>
         </div>
+      ) : null}
+
+      {negativeMarginSiteAlerts.length > 0 ? (
+        <a
+          className="dashboard-work-alert dashboard-work-alert-negative-margin"
+          href="/commesse/overview"
+        >
+          <span className="dashboard-work-alert-main">
+            <span className="dashboard-work-alert-count">{negativeMarginSiteAlerts.length}</span>
+            <span>
+              <strong>Alert cantieri con margine negativo</strong>
+              <span className="dashboard-work-alert-copy">
+                {negativeMarginSiteAlerts.length === 1
+                  ? `La commessa ${negativeMarginSiteAlerts[0].name} richiede attenzione.`
+                  : `${negativeMarginSiteAlerts.length} commesse cantiere richiedono attenzione.`}
+              </span>
+            </span>
+          </span>
+          <span className="dashboard-work-alert-action">Vai a Overview commesse</span>
+        </a>
       ) : null}
 
       {(loadingVerificationStatus?.issueCount ?? 0) > 0 ? (
@@ -803,20 +829,18 @@ export async function DashboardExperience({
         </div>
 
         <div className="dashboard2-column dashboard2-side-column">
-          <section className="card dashboard2-card dashboard2-news-card">
-            <div className="dashboard2-news-head">
-              <div>
-                <p className="dashboard-kicker">News</p>
-                <h1>{headerNews?.enabled ? headerNews.title : "News"}</h1>
+          {headerNews?.enabled ? (
+            <section className="card dashboard2-card dashboard2-news-card">
+              <div className="dashboard2-news-head">
+                <div>
+                  <p className="dashboard-kicker">News</p>
+                  <h1>{headerNews.title}</h1>
+                </div>
+                <span className="dashboard2-news-badge">NEW</span>
               </div>
-              <span className="dashboard2-news-badge">NEW</span>
-            </div>
-            <p>
-              {headerNews?.enabled
-                ? headerNews.description
-                : "La sezione news e temporaneamente disattivata."}
-            </p>
-          </section>
+              <p>{headerNews.description}</p>
+            </section>
+          ) : null}
 
           <div className="card dashboard-card dashboard2-event-card">
             <div className="dashboard-card-head">

@@ -27,13 +27,20 @@ export async function POST(
     return NextResponse.json({ error: "Scansione gia lavorata" }, { status: 409 });
   }
 
-  await prisma.scannedDeliveryNote.update({
-    where: { id },
+  const rejected = await prisma.scannedDeliveryNote.updateMany({
+    where: {
+      id,
+      status: ScannedDeliveryNoteStatus.NEW,
+    },
     data: {
       status: ScannedDeliveryNoteStatus.REJECTED,
       errorMessage: "Rifiutata manualmente",
     },
   });
+
+  if (rejected.count === 0) {
+    return NextResponse.json({ error: "Scansione gia lavorata" }, { status: 409 });
+  }
 
   return NextResponse.json({ success: true });
 }

@@ -62,6 +62,7 @@ export default function OverviewCommessePage() {
   const [sortKey, setSortKey] = useState<OverviewSortKey>("revenueDesc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [snoozingId, setSnoozingId] = useState("");
 
   useEffect(() => {
     async function loadOverview() {
@@ -81,21 +82,53 @@ export default function OverviewCommessePage() {
     loadOverview();
   }, []);
 
-  const totals = useMemo(
+  const alertRows = useMemo(
     () =>
-      rows.reduce(
-        (acc, row) => ({
-          costs: acc.costs + row.actual.totalCosts,
-          revenue: acc.revenue + row.actual.revenue,
-          margin: acc.margin + row.actual.grossMargin,
-          budgetCosts: acc.budgetCosts + row.budget.totalCosts,
-        }),
-        { costs: 0, revenue: 0, margin: 0, budgetCosts: 0 }
-      ),
+      rows.filter((row) => {
+        if (row.jobOrder.type !== "SITE" || row.jobOrder.isOwnAccountSite || row.actual.grossMargin >= 0) {
+          return false;
+        }
+
+        const snoozedUntil = row.jobOrder.negativeMarginAlertSnoozedUntil;
+        return !snoozedUntil || new Date(snoozedUntil).getTime() <= Date.now();
+      }),
     [rows]
   );
 
-  const marginPct = totals.revenue ? (totals.margin / totals.revenue) * 100 : 0;
+  async function snoozeAlert(jobOrderId: string) {
+    setSnoozingId(jobOrderId);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/commesse/${jobOrderId}/negative-margin-alert/snooze`, {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Errore nel silenziamento dell'alert");
+      }
+
+      setRows((current) =>
+        current.map((row) =>
+          row.jobOrder.id === jobOrderId
+            ? {
+                ...row,
+                jobOrder: {
+                  ...row.jobOrder,
+                  negativeMarginAlertSnoozedUntil: data.snoozedUntil,
+                },
+              }
+            : row
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel silenziamento dell'alert");
+    } finally {
+      setSnoozingId("");
+    }
+  }
+
   const sortedRows = useMemo(() => {
     return [...rows].sort((a, b) => {
       switch (sortKey) {
@@ -124,25 +157,34 @@ export default function OverviewCommessePage() {
             <h1>Overview commesse</h1>
             <p>Commesse attive con sintesi economica, operativa e accesso diretto alla dashboard dedicata.</p>
           </div>
-          <div className="job-overview-total-grid" aria-label="Totali overview">
-            <div>
-              <span>Commesse attive</span>
-              <strong>{rows.length}</strong>
-            </div>
-            <div>
-              <span>Costi actual</span>
-              <strong>{formatCurrency(totals.costs)}</strong>
-            </div>
-            <div>
-              <span>Ricavi actual</span>
-              <strong>{formatCurrency(totals.revenue)}</strong>
-            </div>
-            <div>
-              <span>Margine actual</span>
-              <strong>{formatCurrency(totals.margin)}</strong>
-              <small>{formatPercent(marginPct)}</small>
+          <div className="job-overview-hero-side">
+            <div className="job-overview-total-grid" aria-label="Totali overview">
+              <div>
+                <span>Commesse attive</span>
+                <strong>{rows.length}</strong>
+              </div>
             </div>
           </div>
+          {alertRows.length > 0 ? (
+            <div className="job-overview-alert-list" aria-label="Alert cantieri con margine negativo">
+              {alertRows.map((row) => (
+                <div className="job-overview-alert-row" key={row.jobOrder.id}>
+                  <span>
+                    <strong>{row.jobOrder.name}</strong>
+                    <small aria-hidden="true">-</small>
+                    <small>Alert cantiere con margine negativo</small>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => snoozeAlert(row.jobOrder.id)}
+                    disabled={snoozingId === row.jobOrder.id}
+                  >
+                    {snoozingId === row.jobOrder.id ? "Silenziamento..." : "Silenzia Alert"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </section>
 
         {error ? <div className="job-dashboard-error">{error}</div> : null}
@@ -185,7 +227,20 @@ export default function OverviewCommessePage() {
                 <summary>
                   <span className="job-premium-expand">+</span>
                   <span className="job-overview-title">
-                    <strong>{row.jobOrder.name}</strong>
+                    <strong>
+                      {row.jobOrder.type === "SITE" &&
+                      !row.jobOrder.isOwnAccountSite &&
+                      row.actual.grossMargin < 0 ? (
+                        <span
+                          className="job-overview-negative-margin-triangle"
+                          title="Cantiere con margine negativo"
+                          aria-label="Alert: cantiere con margine negativo"
+                        >
+                          ▲
+                        </span>
+                      ) : null}
+                      {row.jobOrder.name}
+                    </strong>
                     <small>{jobTypeLabel(row.jobOrder.type)} - {formatDate(row.jobOrder.startDate)}</small>
                   </span>
                   <span className="job-overview-kpi">

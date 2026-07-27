@@ -21,6 +21,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <AppHeader
             userLabel={session?.user?.name ?? session?.user?.email ?? null}
             showAdminLink={activeAppUser?.role === "ADMIN"}
+            chatEnabled={Boolean(activeAppUser)}
             logoutAction={<LogoutButton />}
           />
           <main className="app-main">

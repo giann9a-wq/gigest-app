@@ -163,16 +163,18 @@ enum DashboardTaskStatus {
 }
 
 model User {
-  id          String     @id @default(cuid())
-  googleSub   String?    @unique
-  firstName   String?
-  lastName    String?
-  email       String     @unique
-  role        UserRole   @default(OPERATOR)
-  status      UserStatus @default(PENDING)
-  lastLoginAt DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id             String     @id @default(cuid())
+  googleSub      String?    @unique
+  firstName      String?
+  lastName       String?
+  email          String     @unique
+  role           UserRole   @default(OPERATOR)
+  status         UserStatus @default(PENDING)
+  lastLoginAt    DateTime?
+  lastSeenAt     DateTime?
+  chatLastReadAt DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   managedAccessRequests         AccessRequest[]         @relation("ManagedBy")
   createdActivities             DiaryActivity[]         @relation("ActivityCreatedBy")
@@ -200,9 +202,22 @@ model User {
   ownedDashboardTasks           DashboardTask[]         @relation("DashboardTaskOwner")
   assignedDashboardTasks        DashboardTask[]         @relation("DashboardTaskAssignee")
   createdDashboardTasks         DashboardTask[]         @relation("DashboardTaskCreatedBy")
+  appChatMessages               AppChatMessage[]
 
   accounts Account[]
   sessions Session[]
+}
+
+model AppChatMessage {
+  id        String   @id @default(cuid())
+  senderId  String
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([senderId, createdAt])
 }
 
 model DashboardTask {
@@ -404,27 +419,29 @@ model MaintenanceDocument {
 }
 
 model JobOrder {
-  id                             String         @id @default(cuid())
-  name                           String
-  type                           JobType
-  startDate                      DateTime?
-  endDate                        DateTime?
-  status                         ResourceStatus @default(ACTIVE)
-  description                    String?
-  budgetPersonnelCost            Decimal?       @db.Decimal(12, 2)
-  budgetEquipmentCost            Decimal?       @db.Decimal(12, 2)
-  budgetMaterialsCost            Decimal?       @db.Decimal(12, 2)
-  budgetProfessionalServicesCost Decimal?       @db.Decimal(12, 2)
-  budgetThirdPartyServicesCost   Decimal?       @db.Decimal(12, 2)
-  budgetMiscCost                 Decimal?       @db.Decimal(12, 2)
-  budgetExpectedRevenue          Decimal?       @db.Decimal(12, 2)
-  actualMaterialsCost            Decimal?       @db.Decimal(12, 2)
-  actualProfessionalServicesCost Decimal?       @db.Decimal(12, 2)
-  actualThirdPartyServicesCost   Decimal?       @db.Decimal(12, 2)
-  actualMiscCost                 Decimal?       @db.Decimal(12, 2)
-  actualRevenue                  Decimal?       @db.Decimal(12, 2)
-  createdAt                      DateTime       @default(now())
-  updatedAt                      DateTime       @updatedAt
+  id                              String         @id @default(cuid())
+  name                            String
+  type                            JobType
+  startDate                       DateTime?
+  endDate                         DateTime?
+  status                          ResourceStatus @default(ACTIVE)
+  description                     String?
+  budgetPersonnelCost             Decimal?       @db.Decimal(12, 2)
+  budgetEquipmentCost             Decimal?       @db.Decimal(12, 2)
+  budgetMaterialsCost             Decimal?       @db.Decimal(12, 2)
+  budgetProfessionalServicesCost  Decimal?       @db.Decimal(12, 2)
+  budgetThirdPartyServicesCost    Decimal?       @db.Decimal(12, 2)
+  budgetMiscCost                  Decimal?       @db.Decimal(12, 2)
+  budgetExpectedRevenue           Decimal?       @db.Decimal(12, 2)
+  actualMaterialsCost             Decimal?       @db.Decimal(12, 2)
+  actualProfessionalServicesCost  Decimal?       @db.Decimal(12, 2)
+  actualThirdPartyServicesCost    Decimal?       @db.Decimal(12, 2)
+  actualMiscCost                  Decimal?       @db.Decimal(12, 2)
+  actualRevenue                   Decimal?       @db.Decimal(12, 2)
+  isOwnAccountSite                Boolean        @default(false)
+  negativeMarginAlertSnoozedUntil DateTime?
+  createdAt                       DateTime       @default(now())
+  updatedAt                       DateTime       @updatedAt
 
   diaryActivities            DiaryActivity[]
   autoDiaryEntryProposals    AutoDiaryEntryProposal[]
@@ -443,18 +460,18 @@ model JobOrder {
 }
 
 model JobOrderAdvance {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   jobOrderId      String
-  advanceDate     DateTime @db.Date
+  advanceDate     DateTime  @db.Date
   description     String
-  amount          Decimal  @db.Decimal(12, 2)
-  isActive        Boolean  @default(true)
+  amount          Decimal   @db.Decimal(12, 2)
+  isActive        Boolean   @default(true)
   disabledReason  String?
   disabledAt      DateTime?
   createdByUserId String?
   updatedByUserId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   jobOrder  JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
   createdBy User?    @relation("JobOrderAdvanceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -710,11 +727,11 @@ model DiaryActivity {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
-  person    Person?    @relation(fields: [personId], references: [id])
-  equipment Equipment? @relation(fields: [equipmentId], references: [id])
-  jobOrder  JobOrder   @relation(fields: [jobOrderId], references: [id])
-  createdBy User?      @relation("ActivityCreatedBy", fields: [createdByUserId], references: [id])
-  updatedBy User?      @relation("ActivityUpdatedBy", fields: [updatedByUserId], references: [id])
+  person    Person?             @relation(fields: [personId], references: [id])
+  equipment Equipment?          @relation(fields: [equipmentId], references: [id])
+  jobOrder  JobOrder            @relation(fields: [jobOrderId], references: [id])
+  createdBy User?               @relation("ActivityCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy User?               @relation("ActivityUpdatedBy", fields: [updatedByUserId], references: [id])
   changes   DiaryRecordChange[]
 
   @@index([referenceDate])
@@ -746,10 +763,10 @@ model ExternalDiaryActivity {
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
 
-  externalResource ExternalResource @relation(fields: [externalResourceId], references: [id], onDelete: Cascade)
-  jobOrder         JobOrder         @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
-  createdBy        User?            @relation("ExternalActivityCreatedBy", fields: [createdByUserId], references: [id])
-  updatedBy        User?            @relation("ExternalActivityUpdatedBy", fields: [updatedByUserId], references: [id])
+  externalResource ExternalResource    @relation(fields: [externalResourceId], references: [id], onDelete: Cascade)
+  jobOrder         JobOrder            @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  createdBy        User?               @relation("ExternalActivityCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy        User?               @relation("ExternalActivityUpdatedBy", fields: [updatedByUserId], references: [id])
   changes          DiaryRecordChange[]
 
   @@index([referenceDate])
@@ -823,18 +840,18 @@ model DeliveryNoteUsage {
 }
 
 model Training {
-  id              String    @id @default(cuid())
-  personId        String
-  course          String
-  description     String?
-  trainingDate    DateTime
-  mandatory       Boolean   @default(false)
-  expiresAt       DateTime?
-  isRecurring     Boolean   @default(false)
+  id               String    @id @default(cuid())
+  personId         String
+  course           String
+  description      String?
+  trainingDate     DateTime
+  mandatory        Boolean   @default(false)
+  expiresAt        DateTime?
+  isRecurring      Boolean   @default(false)
   recurrenceMonths Int?
-  createdByUserId String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdByUserId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   person    Person             @relation(fields: [personId], references: [id], onDelete: Cascade)
   createdBy User?              @relation("TrainingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -865,6 +882,7 @@ model ScannedDeliveryNote {
   id                String                    @id @default(cuid())
   gmailMessageId    String
   gmailAttachmentId String
+  deduplicationKey  String?                   @unique
   gmailInternalDate DateTime?
   fromEmail         String
   subject           String?

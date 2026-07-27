@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AppChat } from "@/components/layout/app-chat";
 
 type NavItem = {
   href?: Route;
@@ -16,9 +17,10 @@ type AppHeaderProps = {
   userLabel?: string | null;
   showAdminLink: boolean;
   logoutAction: React.ReactNode;
+  chatEnabled: boolean;
 };
 
-export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderProps) {
+export function AppHeader({ userLabel, showAdminLink, logoutAction, chatEnabled }: AppHeaderProps) {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -55,6 +57,8 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction }: AppHeaderP
             <span className="app-brand-mark">Gi</span>
             <span className="app-brand-text">GEST</span>
           </Link>
+
+          {chatEnabled ? <AppChat /> : null}
 
           {userLabel ? (
             <div className="app-user-actions app-user-actions-desktop">

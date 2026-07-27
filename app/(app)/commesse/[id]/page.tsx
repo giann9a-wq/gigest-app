@@ -30,6 +30,8 @@ type JobOrderDashboardResponse = {
     id: string;
     name: string;
     type: JobTypeValue;
+    isOwnAccountSite: boolean;
+    negativeMarginAlertSnoozedUntil: string | null;
     startDate: string;
     endDate: string;
     status: ResourceStatusValue;
@@ -78,6 +80,7 @@ type JobOrderForm = {
   endDate: string;
   status: ResourceStatusValue;
   description: string;
+  isOwnAccountSite: boolean;
 };
 
 const budgetFields: { key: keyof BudgetForm; label: string }[] = [
@@ -206,6 +209,7 @@ export default function SchedaCommessaPage() {
         endDate: data.jobOrder.endDate,
         status: data.jobOrder.status,
         description: data.jobOrder.description,
+        isOwnAccountSite: data.jobOrder.isOwnAccountSite,
       });
       setBudget({
         personnel: formatInputValue(data.budget.personnel),
@@ -247,6 +251,7 @@ export default function SchedaCommessaPage() {
           status: jobOrderForm.status,
           endDate: jobOrderForm.endDate,
           description: jobOrderForm.description,
+          isOwnAccountSite: jobOrderForm.isOwnAccountSite,
           budget,
         }),
       })) as JobOrderDashboardResponse & { success: boolean };
@@ -337,6 +342,21 @@ export default function SchedaCommessaPage() {
                   <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                   <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
                   <option value="ENDED">{statusLabel("ENDED")}</option>
+                </select>
+              </label>
+              <label className="job-sheet-field">
+                <span>Cantiere Conto proprio</span>
+                <select
+                  className="job-dashboard-head-input"
+                  value={jobOrderForm.isOwnAccountSite ? "yes" : "no"}
+                  onChange={(e) =>
+                    setJobOrderForm((current) =>
+                      current ? { ...current, isOwnAccountSite: e.target.value === "yes" } : current
+                    )
+                  }
+                >
+                  <option value="no">No</option>
+                  <option value="yes">Sì</option>
                 </select>
               </label>
               <label className="job-sheet-field">

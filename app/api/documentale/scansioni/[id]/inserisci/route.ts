@@ -55,6 +55,21 @@ export async function POST(
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.scannedDeliveryNote.updateMany({
+      where: {
+        id: scan.id,
+        status: ScannedDeliveryNoteStatus.NEW,
+      },
+      data: {
+        status: ScannedDeliveryNoteStatus.INSERTED,
+        insertedAt: new Date(),
+      },
+    });
+
+    if (claimed.count === 0) {
+      return null;
+    }
+
     const deliveryNote = await tx.deliveryNoteUsage.create({
       data: {
         jobOrderId,
@@ -81,14 +96,16 @@ export async function POST(
     await tx.scannedDeliveryNote.update({
       where: { id: scan.id },
       data: {
-        status: ScannedDeliveryNoteStatus.INSERTED,
         deliveryNoteId: deliveryNote.id,
-        insertedAt: new Date(),
       },
     });
 
     return { deliveryNote, document };
   });
+
+  if (!result) {
+    return NextResponse.json({ error: "Scansione gia inserita" }, { status: 409 });
+  }
 
   return NextResponse.json({
     success: true,

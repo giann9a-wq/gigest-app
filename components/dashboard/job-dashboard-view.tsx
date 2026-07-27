@@ -124,6 +124,8 @@ export type JobOrderDashboardResponse = {
     id: string;
     name: string;
     type: JobTypeValue;
+    isOwnAccountSite: boolean;
+    negativeMarginAlertSnoozedUntil: string | null;
     startDate: string;
     endDate: string;
     status: ResourceStatusValue;

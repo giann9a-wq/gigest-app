@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
   const status = String(body.status ?? "") as ResourceStatus;
   const endDate = String(body.endDate ?? "").trim();
   const description = String(body.description ?? "").trim();
+  const isOwnAccountSite = body.isOwnAccountSite === true;
   const budget = {
     personnel: body.budget?.personnel ?? "",
     equipment: body.budget?.equipment ?? "",
@@ -131,6 +132,7 @@ export async function POST(request: NextRequest) {
       status,
       endDate: parsedEndDate,
       description: description || null,
+      isOwnAccountSite,
       budgetPersonnelCost: parseOptionalDecimal(budget.personnel),
       budgetEquipmentCost: parseOptionalDecimal(budget.equipment),
       budgetMaterialsCost: parseOptionalDecimal(budget.materials),

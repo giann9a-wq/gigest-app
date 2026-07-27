@@ -1,6 +1,7 @@
-import { ScannedDeliveryNoteStatus } from "@prisma/client";
+import { Prisma, ScannedDeliveryNoteStatus } from "@prisma/client";
 import { createHash } from "crypto";
 import {
+  deleteDriveFile,
   ensureScannedDeliveryNotesFolder,
   getGoogleDriveAccessToken,
   uploadDocumentBufferToDrive,
@@ -193,18 +194,9 @@ export async function syncGmailScannedDeliveryNotes() {
         const fileName = attachment.filename?.trim() || `scansione-${message.id}.pdf`;
         const buffer = await fetchAttachment(accessToken, message.id, attachmentId);
         const fileHash = hashBuffer(buffer);
-        const existingByHash = await prisma.scannedDeliveryNote.findFirst({
-          where: {
-            fromEmail,
-            fileHash,
-            status: {
-              in: [
-                ScannedDeliveryNoteStatus.NEW,
-                ScannedDeliveryNoteStatus.INSERTED,
-                ScannedDeliveryNoteStatus.REJECTED,
-              ],
-            },
-          },
+        const deduplicationKey = `${fromEmail}:${fileHash}`;
+        const existingByHash = await prisma.scannedDeliveryNote.findUnique({
+          where: { deduplicationKey },
           select: { id: true },
         });
 
@@ -220,22 +212,39 @@ export async function syncGmailScannedDeliveryNotes() {
           folderId,
         });
 
-        await prisma.scannedDeliveryNote.create({
-          data: {
-            gmailMessageId: message.id,
-            gmailAttachmentId: attachmentId,
-            gmailInternalDate: receivedAt,
-            fromEmail,
-            subject,
-            fileName: uploaded.fileName,
-            driveFileId: uploaded.driveFileId,
-            fileHash,
-            mimeType: uploaded.mimeType,
-            sizeBytes: uploaded.sizeBytes,
-            status: ScannedDeliveryNoteStatus.NEW,
-            receivedAt,
-          },
-        });
+        try {
+          await prisma.scannedDeliveryNote.create({
+            data: {
+              gmailMessageId: message.id,
+              gmailAttachmentId: attachmentId,
+              deduplicationKey,
+              gmailInternalDate: receivedAt,
+              fromEmail,
+              subject,
+              fileName: uploaded.fileName,
+              driveFileId: uploaded.driveFileId,
+              fileHash,
+              mimeType: uploaded.mimeType,
+              sizeBytes: uploaded.sizeBytes,
+              status: ScannedDeliveryNoteStatus.NEW,
+              receivedAt,
+            },
+          });
+        } catch (error) {
+          await deleteDriveFile(uploaded.driveFileId).catch((cleanupError) => {
+            console.error("Pulizia allegato Drive duplicato fallita", {
+              driveFileId: uploaded.driveFileId,
+              error: cleanupError instanceof Error ? cleanupError.message : cleanupError,
+            });
+          });
+
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            skipped += 1;
+            continue;
+          }
+
+          throw error;
+        }
         imported += 1;
       }
     } catch (error) {
