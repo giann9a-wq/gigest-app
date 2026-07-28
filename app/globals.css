@@ -4152,6 +4152,21 @@ a {
   border-color: #bae6fd;
 }
 
+.dashboard-work-alert-maintenance-overdue {
+  border-color: #fca5a5;
+  background: linear-gradient(90deg, #fff1f2 0%, #ffffff 72%);
+  box-shadow: 0 14px 30px rgba(185, 28, 28, 0.12);
+}
+
+.dashboard-work-alert-maintenance-overdue .dashboard-work-alert-count,
+.dashboard-work-alert-maintenance-overdue .dashboard-work-alert-action {
+  background: #b91c1c;
+}
+
+.dashboard-work-alert-maintenance-overdue .dashboard-work-alert-copy {
+  color: #991b1b;
+}
+
 .dashboard-work-alert-main {
   display: flex;
   align-items: center;
@@ -4226,6 +4241,24 @@ a {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(186, 230, 253, 0.9);
+}
+
+.dashboard-maintenance-alert-row-overdue {
+  border-color: #fecaca;
+  background: rgba(255, 241, 242, 0.92);
+}
+
+.dashboard-maintenance-overdue-label {
+  display: inline-flex;
+  margin-left: 0.55rem;
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  background: #b91c1c;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .dashboard-maintenance-action-wrap {

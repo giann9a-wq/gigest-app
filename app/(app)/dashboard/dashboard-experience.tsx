@@ -613,7 +613,6 @@ export async function DashboardExperience({
         isRecurring: true,
         recurrenceMonths: { not: null },
         nextIntervention: {
-          gte: todayBounds.start,
           lte: nextFiveDaysEnd,
         },
         deadline: { isNot: null },
@@ -658,6 +657,10 @@ export async function DashboardExperience({
       event.eventDate.getTime() <= nextThirtyDaysEnd.getTime()
   );
 
+  const overdueMaintenanceCount = recurringMaintenanceAlerts.filter(
+    (item) => item.nextIntervention && item.nextIntervention < todayBounds.start
+  ).length;
+
   const hasDashboardAlerts =
     newScansCount > 0 ||
     oldPendingDeliveryNotesCount > 0 ||
@@ -673,27 +676,53 @@ export async function DashboardExperience({
       aria-label="Attivita da lavorare"
     >
       {recurringMaintenanceAlerts.length > 0 ? (
-        <div className="dashboard-work-alert dashboard-work-alert-maintenance">
+        <div
+          className={`dashboard-work-alert dashboard-work-alert-maintenance${
+            overdueMaintenanceCount > 0 ? " dashboard-work-alert-maintenance-overdue" : ""
+          }`}
+        >
           <span className="dashboard-work-alert-main">
             <span className="dashboard-work-alert-count">{recurringMaintenanceAlerts.length}</span>
             <span>
-              <strong>Attivita da verificare</strong>
+              <strong>
+                {overdueMaintenanceCount > 0 ? "Manutenzioni scadute" : "Attivita da verificare"}
+              </strong>
               <span className="dashboard-work-alert-copy">
-                Manutenzioni ricorrenti in scadenza nei prossimi 5 giorni.
+                {overdueMaintenanceCount > 0
+                  ? `${overdueMaintenanceCount} ${
+                      overdueMaintenanceCount === 1 ? "manutenzione scaduta" : "manutenzioni scadute"
+                    } ancora da verificare e ripianificare.${
+                      recurringMaintenanceAlerts.length > overdueMaintenanceCount
+                        ? ` ${recurringMaintenanceAlerts.length - overdueMaintenanceCount} in scadenza nei prossimi 5 giorni.`
+                        : ""
+                    }`
+                  : "Manutenzioni ricorrenti in scadenza nei prossimi 5 giorni."}
               </span>
             </span>
           </span>
           <div className="dashboard-maintenance-alert-list">
-            {recurringMaintenanceAlerts.map((item) => (
-              <div key={item.id} className="dashboard-maintenance-alert-row">
-                <span>
-                  <strong>{item.equipment.nameDescription}</strong> - {item.interventionType} -{" "}
-                  {item.nextIntervention?.toLocaleDateString("it-IT") ?? "-"} - ogni{" "}
-                  {item.recurrenceMonths} mesi
-                </span>
-                <MaintenanceRollButton maintenanceId={item.id} />
-              </div>
-            ))}
+            {recurringMaintenanceAlerts.map((item) => {
+              const isOverdue = Boolean(
+                item.nextIntervention && item.nextIntervention < todayBounds.start
+              );
+
+              return (
+                <div
+                  key={item.id}
+                  className={`dashboard-maintenance-alert-row${
+                    isOverdue ? " dashboard-maintenance-alert-row-overdue" : ""
+                  }`}
+                >
+                  <span>
+                    <strong>{item.equipment.nameDescription}</strong> - {item.interventionType} -{" "}
+                    {item.nextIntervention?.toLocaleDateString("it-IT") ?? "-"} - ogni{" "}
+                    {item.recurrenceMonths} mesi
+                    {isOverdue ? <b className="dashboard-maintenance-overdue-label">Scaduto!</b> : null}
+                  </span>
+                  <MaintenanceRollButton maintenanceId={item.id} />
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
