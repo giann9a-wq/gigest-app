@@ -7331,6 +7331,12 @@ a {
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
 }
 
+.job-overview-accordion-completed {
+  border-color: #cbdce8;
+  background: #f3f8fc;
+  box-shadow: 0 12px 28px rgba(71, 106, 128, 0.08);
+}
+
 .job-overview-accordion summary {
   display: grid;
   grid-template-columns: auto minmax(220px, 1.4fr) repeat(4, minmax(120px, 1fr));

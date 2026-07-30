@@ -228,7 +228,10 @@ export default function OverviewCommessePage() {
               : 0;
 
             return (
-              <details key={row.jobOrder.id} className="job-overview-accordion">
+              <details
+                key={row.jobOrder.id}
+                className={`job-overview-accordion${row.jobOrder.status === "COMPLETED" ? " job-overview-accordion-completed" : ""}`}
+              >
                 <summary>
                   <span className="job-premium-expand">+</span>
                   <span className="job-overview-title">
