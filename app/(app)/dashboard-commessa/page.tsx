@@ -115,7 +115,7 @@ export default function DashboardCommessaPage() {
                 <option value="">Seleziona una commessa</option>
                 {jobOrders.map((jobOrder) => (
                   <option key={jobOrder.id} value={jobOrder.id}>
-                    {jobOrder.name}
+                    {jobOrder.name}{jobOrder.status === "COMPLETED" ? " (Conclusa)" : ""}
                   </option>
                 ))}
               </select>

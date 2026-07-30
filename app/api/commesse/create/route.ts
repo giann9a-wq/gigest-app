@@ -13,7 +13,7 @@ const allowedTypes: JobType[] = [
   "NATIONAL_HOLIDAY",
   "OTHER",
 ];
-const allowedStatuses: ResourceStatus[] = ["ACTIVE", "SUSPENDED", "ENDED"];
+const allowedStatuses: ResourceStatus[] = ["ACTIVE", "SUSPENDED", "ENDED", "COMPLETED"];
 
 function parseOptionalDate(value?: string | null) {
   if (!value) return null;

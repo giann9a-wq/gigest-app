@@ -13,7 +13,7 @@ type JobTypeValue =
   | "RAIN"
   | "NATIONAL_HOLIDAY"
   | "OTHER";
-type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
+type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED" | "COMPLETED";
 type JobSortKey = "name" | "type" | "startDate" | "status" | "endDate" | "description";
 type SortDirection = "asc" | "desc";
 
@@ -157,6 +157,8 @@ function statusLabel(status: ResourceStatusValue) {
       return "Sospeso";
     case "ENDED":
       return "Estinto";
+    case "COMPLETED":
+      return "Concluso";
   }
 }
 
@@ -535,6 +537,7 @@ export default function CommessePage() {
               <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
               <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
               <option value="ENDED">{statusLabel("ENDED")}</option>
+              <option value="COMPLETED">{statusLabel("COMPLETED")}</option>
             </select>
           </label>
 
@@ -707,6 +710,7 @@ export default function CommessePage() {
                           <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                           <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
                           <option value="ENDED">{statusLabel("ENDED")}</option>
+                          <option value="COMPLETED">{statusLabel("COMPLETED")}</option>
                         </select>
                       ) : (
                         <span className="commesse-table-value">{row.status ? statusLabel(row.status as ResourceStatusValue) : "-"}</span>
@@ -875,6 +879,7 @@ export default function CommessePage() {
                       <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                       <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
                       <option value="ENDED">{statusLabel("ENDED")}</option>
+                      <option value="COMPLETED">{statusLabel("COMPLETED")}</option>
                     </select>
                   </label>
                   <label className="mobile-data-field">
@@ -1009,6 +1014,7 @@ export default function CommessePage() {
                         <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                         <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
                         <option value="ENDED">{statusLabel("ENDED")}</option>
+                        <option value="COMPLETED">{statusLabel("COMPLETED")}</option>
                       </select>
                     </label>
                     <label className="job-sheet-field">

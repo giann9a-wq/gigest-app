@@ -28,6 +28,7 @@ enum ResourceStatus {
   ACTIVE
   SUSPENDED
   ENDED
+  COMPLETED
 }
 
 enum EquipmentType {

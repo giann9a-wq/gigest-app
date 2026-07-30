@@ -13,7 +13,7 @@ type JobTypeValue =
   | "RAIN"
   | "NATIONAL_HOLIDAY"
   | "OTHER";
-type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
+type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED" | "COMPLETED";
 
 type BudgetForm = {
   personnel: string;
@@ -138,6 +138,8 @@ function statusLabel(status: ResourceStatusValue) {
       return "Sospeso";
     case "ENDED":
       return "Estinto";
+    case "COMPLETED":
+      return "Concluso";
   }
 }
 
@@ -342,6 +344,7 @@ export default function SchedaCommessaPage() {
                   <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
                   <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
                   <option value="ENDED">{statusLabel("ENDED")}</option>
+                  <option value="COMPLETED">{statusLabel("COMPLETED")}</option>
                 </select>
               </label>
               <label className="job-sheet-field">

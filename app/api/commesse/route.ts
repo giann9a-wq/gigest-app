@@ -22,7 +22,7 @@ const allowedTypes: JobType[] = [
   "NATIONAL_HOLIDAY",
   "OTHER",
 ];
-const allowedStatuses: ResourceStatus[] = ["ACTIVE", "SUSPENDED", "ENDED"];
+const allowedStatuses: ResourceStatus[] = ["ACTIVE", "SUSPENDED", "ENDED", "COMPLETED"];
 
 function parseOptionalDate(value?: string | null) {
   if (!value) return null;
@@ -69,7 +69,12 @@ export async function GET(request: NextRequest) {
   const dashboardOnly = request.nextUrl.searchParams.get("dashboardOnly") === "true";
 
   const rows = await prisma.jobOrder.findMany({
-    where: dashboardOnly ? { type: { in: ["SITE", "OTHER"] } } : undefined,
+    where: dashboardOnly
+      ? {
+          type: { in: ["SITE", "OTHER"] },
+          status: { in: [ResourceStatus.ACTIVE, ResourceStatus.COMPLETED] },
+        }
+      : { status: { not: ResourceStatus.COMPLETED } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -155,6 +160,7 @@ export async function POST(request: NextRequest) {
 
   await prisma.$transaction(async (tx) => {
     const existing = await tx.jobOrder.findMany({
+      where: { status: { not: ResourceStatus.COMPLETED } },
       select: { id: true },
     });
 

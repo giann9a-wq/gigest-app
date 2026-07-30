@@ -6394,7 +6394,8 @@ a {
   color: #b45309 !important;
 }
 
-.job-premium-status-ended {
+.job-premium-status-ended,
+.job-premium-status-completed {
   background: #f3f4f6;
   color: #4b5563 !important;
 }

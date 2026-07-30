@@ -85,7 +85,12 @@ export default function OverviewCommessePage() {
   const alertRows = useMemo(
     () =>
       rows.filter((row) => {
-        if (row.jobOrder.type !== "SITE" || row.jobOrder.isOwnAccountSite || row.actual.grossMargin >= 0) {
+        if (
+          row.jobOrder.status !== "ACTIVE" ||
+          row.jobOrder.type !== "SITE" ||
+          row.jobOrder.isOwnAccountSite ||
+          row.actual.grossMargin >= 0
+        ) {
           return false;
         }
 
@@ -155,12 +160,12 @@ export default function OverviewCommessePage() {
           <div>
             <p className="job-premium-eyebrow">Gestione Commesse</p>
             <h1>Overview commesse</h1>
-            <p>Commesse attive con sintesi economica, operativa e accesso diretto alla dashboard dedicata.</p>
+            <p>Commesse attive e concluse con sintesi economica, operativa e accesso diretto alla dashboard dedicata.</p>
           </div>
           <div className="job-overview-hero-side">
             <div className="job-overview-total-grid" aria-label="Totali overview">
               <div>
-                <span>Commesse attive</span>
+                <span>Commesse visibili</span>
                 <strong>{rows.length}</strong>
               </div>
             </div>
@@ -191,7 +196,7 @@ export default function OverviewCommessePage() {
         {loading ? <div className="job-premium-loading">Caricamento overview commesse...</div> : null}
 
         {!loading && !error && rows.length === 0 ? (
-          <div className="job-premium-empty-state">Nessuna commessa attiva disponibile.</div>
+          <div className="job-premium-empty-state">Nessuna commessa attiva o conclusa disponibile.</div>
         ) : null}
 
         {!loading && !error && rows.length > 0 ? (
@@ -241,7 +246,10 @@ export default function OverviewCommessePage() {
                       ) : null}
                       {row.jobOrder.name}
                     </strong>
-                    <small>{jobTypeLabel(row.jobOrder.type)} - {formatDate(row.jobOrder.startDate)}</small>
+                    <small>
+                      {jobTypeLabel(row.jobOrder.type)} - {formatDate(row.jobOrder.startDate)}
+                      {row.jobOrder.status === "COMPLETED" ? " - Conclusa" : ""}
+                    </small>
                   </span>
                   <span className="job-overview-kpi">
                     <small>Costi actual</small>

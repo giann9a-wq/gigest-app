@@ -13,7 +13,7 @@ export type JobTypeValue =
   | "RAIN"
   | "NATIONAL_HOLIDAY"
   | "OTHER";
-export type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED";
+export type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED" | "COMPLETED";
 export type CostCategoryKey =
   | "MATERIE_PRIME"
   | "PRESTAZIONI_PROFESSIONALI"
@@ -301,6 +301,8 @@ function statusLabel(status: ResourceStatusValue) {
       return "Sospesa";
     case "ENDED":
       return "Chiusa";
+    case "COMPLETED":
+      return "Conclusa";
   }
 }
 
@@ -420,7 +422,7 @@ function JobDashboardHeader({
             <option value="">Seleziona una commessa</option>
             {jobOrders.map((jobOrder) => (
               <option key={jobOrder.id} value={jobOrder.id}>
-                {jobOrder.name}
+                {jobOrder.name}{jobOrder.status === "COMPLETED" ? " (Conclusa)" : ""}
               </option>
             ))}
           </select>
