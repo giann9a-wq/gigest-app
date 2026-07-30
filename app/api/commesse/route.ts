@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
           type: { in: ["SITE", "OTHER"] },
           status: { in: [ResourceStatus.ACTIVE, ResourceStatus.COMPLETED] },
         }
-      : { status: { not: ResourceStatus.COMPLETED } },
+      : undefined,
     orderBy: { createdAt: "asc" },
   });
 
@@ -160,7 +160,6 @@ export async function POST(request: NextRequest) {
 
   await prisma.$transaction(async (tx) => {
     const existing = await tx.jobOrder.findMany({
-      where: { status: { not: ResourceStatus.COMPLETED } },
       select: { id: true },
     });
 
