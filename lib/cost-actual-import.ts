@@ -172,6 +172,85 @@ function parseDateInput(value: string | null | undefined) {
   return date;
 }
 
+type ImportedSourceAllocation = {
+  actualEntryId: string;
+  jobOrderId: string;
+  jobOrderName: string;
+};
+
+async function getImportedSourceAllocations(sourceFingerprints: Array<string | null>) {
+  const uniqueFingerprints = [
+    ...new Set(sourceFingerprints.filter((value): value is string => Boolean(value))),
+  ];
+  const allocationsByFingerprint = new Map<string, ImportedSourceAllocation[]>();
+
+  if (uniqueFingerprints.length === 0) {
+    return allocationsByFingerprint;
+  }
+
+  const historicalRows = await prisma.costImportRowStaging.findMany({
+    where: {
+      sourceRowFingerprint: { in: uniqueFingerprints },
+      costActualEntries: { some: {} },
+    },
+    select: {
+      sourceRowFingerprint: true,
+      costActualEntries: {
+        select: {
+          id: true,
+          jobOrderId: true,
+          jobOrder: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  const seenEntryIds = new Set<string>();
+
+  for (const historicalRow of historicalRows) {
+    if (!historicalRow.sourceRowFingerprint) continue;
+    const bucket = allocationsByFingerprint.get(historicalRow.sourceRowFingerprint) ?? [];
+
+    for (const entry of historicalRow.costActualEntries) {
+      if (seenEntryIds.has(entry.id)) continue;
+      seenEntryIds.add(entry.id);
+      bucket.push({
+        actualEntryId: entry.id,
+        jobOrderId: entry.jobOrderId,
+        jobOrderName: entry.jobOrder.name,
+      });
+    }
+
+    allocationsByFingerprint.set(historicalRow.sourceRowFingerprint, bucket);
+  }
+
+  return allocationsByFingerprint;
+}
+
+function getAlreadyImportedSourceNote(
+  currentJobOrderId: string,
+  allocations: ImportedSourceAllocation[]
+) {
+  const jobOrders = [
+    ...new Map(
+      allocations.map((allocation) => [allocation.jobOrderId, allocation.jobOrderName])
+    ).entries(),
+  ].map(([id, name]) => ({ id, name }));
+  const otherJobOrders = jobOrders.filter((jobOrder) => jobOrder.id !== currentJobOrderId);
+
+  if (otherJobOrders.length === 1 && jobOrders.length === 1) {
+    return `Gia importata in precedenza e spostata sulla commessa "${otherJobOrders[0].name}".`;
+  }
+
+  if (otherJobOrders.length > 0) {
+    return `Gia importata in precedenza e ripartita/spostata sulle commesse: ${jobOrders
+      .map((jobOrder) => jobOrder.name)
+      .join(", ")}.`;
+  }
+
+  return "Riga sorgente gia importata in passato per questa commessa.";
+}
+
 function formatExcelDate(value: Date | null) {
   return value?.toISOString().slice(0, 10) ?? "";
 }
@@ -743,26 +822,42 @@ async function classifyParsedRows(
   jobOrderId: string,
   rows: ParsedMovementDraft[]
 ) {
-  const existingEntries = await prisma.costActualEntry.findMany({
-    where: { jobOrderId },
-    select: {
-      id: true,
-      fingerprint: true,
-      amount: true,
-      documentDate: true,
-      supplierCode: true,
-      supplierName: true,
-      documentNumber: true,
-    },
-  });
+  const [existingEntries, importedSourceAllocations] = await Promise.all([
+    prisma.costActualEntry.findMany({
+      where: { jobOrderId },
+      select: {
+        id: true,
+        fingerprint: true,
+        amount: true,
+        documentDate: true,
+        supplierCode: true,
+        supplierName: true,
+        documentNumber: true,
+      },
+    }),
+    getImportedSourceAllocations(rows.map((row) => row.sourceRowFingerprint)),
+  ]);
 
   const fingerprintSet = new Set(existingEntries.map((entry) => entry.fingerprint));
 
   for (const row of rows) {
     if (
-      row.matchStatus === CostImportMatchStatus.INVALID ||
-      row.matchStatus === CostImportMatchStatus.UPDATED_DUPLICATE
+      row.matchStatus === CostImportMatchStatus.INVALID
     ) {
+      continue;
+    }
+
+    const sourceAllocations = row.sourceRowFingerprint
+      ? importedSourceAllocations.get(row.sourceRowFingerprint) ?? []
+      : [];
+
+    if (sourceAllocations.length > 0) {
+      row.matchStatus = CostImportMatchStatus.ALREADY_IMPORTED;
+      row.validationNote = getAlreadyImportedSourceNote(jobOrderId, sourceAllocations);
+      continue;
+    }
+
+    if (row.matchStatus === CostImportMatchStatus.UPDATED_DUPLICATE) {
       continue;
     }
 
@@ -1167,18 +1262,36 @@ async function evaluateEditedCostImportRow(input: {
     return baseState;
   }
 
-  const existingEntries = await prisma.costActualEntry.findMany({
-    where: { jobOrderId: input.jobOrderId },
-    select: {
-      id: true,
-      fingerprint: true,
-      amount: true,
-      documentDate: true,
-      supplierCode: true,
-      supplierName: true,
-      documentNumber: true,
-    },
+  const currentRow = await prisma.costImportRowStaging.findUnique({
+    where: { id: input.rowId },
+    select: { sourceRowFingerprint: true },
   });
+  const [existingEntries, importedSourceAllocations] = await Promise.all([
+    prisma.costActualEntry.findMany({
+      where: { jobOrderId: input.jobOrderId },
+      select: {
+        id: true,
+        fingerprint: true,
+        amount: true,
+        documentDate: true,
+        supplierCode: true,
+        supplierName: true,
+        documentNumber: true,
+      },
+    }),
+    getImportedSourceAllocations([currentRow?.sourceRowFingerprint ?? null]),
+  ]);
+  const sourceAllocations = currentRow?.sourceRowFingerprint
+    ? importedSourceAllocations.get(currentRow.sourceRowFingerprint) ?? []
+    : [];
+
+  if (sourceAllocations.length > 0) {
+    return {
+      ...baseState,
+      matchStatus: CostImportMatchStatus.ALREADY_IMPORTED,
+      validationNote: getAlreadyImportedSourceNote(input.jobOrderId, sourceAllocations),
+    };
+  }
 
   if (existingEntries.some((entry) => entry.fingerprint === baseState.fingerprint)) {
     return {
@@ -1398,7 +1511,56 @@ function decimalToNumber(value: Prisma.Decimal | null) {
   return Number(value);
 }
 
+async function refreshAlreadyImportedSourceStatuses(sessionId: string) {
+  const rows = await prisma.costImportRowStaging.findMany({
+    where: {
+      importSessionId: sessionId,
+      matchStatus: { not: CostImportMatchStatus.INVALID },
+      sourceRowFingerprint: { not: null },
+    },
+    select: {
+      id: true,
+      jobOrderId: true,
+      sourceRowFingerprint: true,
+      matchStatus: true,
+      validationNote: true,
+    },
+  });
+  const importedSourceAllocations = await getImportedSourceAllocations(
+    rows.map((row) => row.sourceRowFingerprint)
+  );
+  const updates = rows.flatMap((row) => {
+    if (!row.sourceRowFingerprint) return [];
+    const allocations = importedSourceAllocations.get(row.sourceRowFingerprint) ?? [];
+    if (allocations.length === 0) return [];
+
+    const validationNote = getAlreadyImportedSourceNote(row.jobOrderId, allocations);
+    if (
+      row.matchStatus === CostImportMatchStatus.ALREADY_IMPORTED &&
+      row.validationNote === validationNote
+    ) {
+      return [];
+    }
+
+    return [
+      prisma.costImportRowStaging.update({
+        where: { id: row.id },
+        data: {
+          matchStatus: CostImportMatchStatus.ALREADY_IMPORTED,
+          validationNote,
+        },
+      }),
+    ];
+  });
+
+  if (updates.length > 0) {
+    await prisma.$transaction(updates);
+  }
+}
+
 export async function getCostImportSessionDetails(sessionId: string) {
+  await refreshAlreadyImportedSourceStatuses(sessionId);
+
   const session = await prisma.costImportSession.findUnique({
     where: { id: sessionId },
     include: {
@@ -1907,6 +2069,9 @@ export async function applyApprovedCostImportRows(sessionId: string) {
   const rowIds = session.rows.map((row) => row.id);
   const fingerprints = session.rows.map((row) => row.fingerprint).filter((value): value is string => Boolean(value));
   const targetJobOrderIds = [...new Set(session.rows.map((row) => row.jobOrderId))];
+  const importedSourceAllocations = await getImportedSourceAllocations(
+    session.rows.map((row) => row.sourceRowFingerprint)
+  );
   const existingEntries =
     rowIds.length === 0
       ? []
@@ -2031,6 +2196,24 @@ export async function applyApprovedCostImportRows(sessionId: string) {
       const sourceEntries =
         allSourceEntries.length > 1 ? matchingAmountEntries : allSourceEntries;
       const sourceEntryIds = new Set(sourceEntries.map((entry) => entry.id));
+      const historicalSourceAllocations = row.sourceRowFingerprint
+        ? importedSourceAllocations.get(row.sourceRowFingerprint) ?? []
+        : [];
+
+      if (sourceEntries.length === 0 && historicalSourceAllocations.length > 0) {
+        await tx.costImportRowStaging.update({
+          where: { id: row.id },
+          data: {
+            matchStatus: CostImportMatchStatus.ALREADY_IMPORTED,
+            validationNote: getAlreadyImportedSourceNote(
+              row.jobOrderId,
+              historicalSourceAllocations
+            ),
+          },
+        });
+        continue;
+      }
+
       const conflictingEntry = (
         existingByJobOrderAndFingerprint.get(fingerprintKey(row.jobOrderId, resolvedFingerprint)) ?? []
       ).find((entry) => !sourceEntryIds.has(entry.id));

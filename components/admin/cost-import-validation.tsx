@@ -92,6 +92,17 @@ function categoryLabel(value: CostActualCategory | null) {
   return value.replaceAll("_", " ");
 }
 
+function matchStatusLabel(row: SessionPayload["rows"][number]) {
+  if (
+    row.matchStatus === "ALREADY_IMPORTED" &&
+    /spostata|ripartita/i.test(row.validationNote)
+  ) {
+    return "GIA IMPORTATA / SPOSTATA";
+  }
+
+  return row.matchStatus;
+}
+
 function amountToCents(value: number | string | null | undefined) {
   if (value === null || value === undefined || value === "") return 0;
   const parsed = typeof value === "number" ? value : Number(String(value).replace(",", "."));
@@ -570,7 +581,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
                         <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => toggleSelection(row.id)} />
                       </td>
                       <td>
-                        <div className={`cost-import-badge cost-import-badge-${row.matchStatus.toLowerCase()}`}>{row.matchStatus}</div>
+                        <div className={`cost-import-badge cost-import-badge-${row.matchStatus.toLowerCase()}`}>{matchStatusLabel(row)}</div>
                         {row.validationNote ? <div className="muted">{row.validationNote}</div> : null}
                         {isInvalid ? (
                           <button
