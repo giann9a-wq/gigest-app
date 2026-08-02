@@ -110,7 +110,7 @@ export async function PATCH(
   const [entry, targetJobOrder] = await Promise.all([
     prisma.costActualEntry.findUnique({
       where: { id: costEntryId },
-      select: { id: true, jobOrderId: true, category: true },
+      select: { id: true, jobOrderId: true, category: true, sourceImportRowId: true },
     }),
     prisma.jobOrder.findUnique({
       where: { id: targetJobOrderId },
@@ -133,12 +133,24 @@ export async function PATCH(
   }
 
   try {
-    await prisma.costActualEntry.update({
-      where: { id: costEntryId },
-      data: {
-        jobOrderId: targetJobOrderId,
-        category: nextCategory,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.costActualEntry.update({
+        where: { id: costEntryId },
+        data: {
+          jobOrderId: targetJobOrderId,
+          category: nextCategory,
+        },
+      });
+
+      if (entry.sourceImportRowId) {
+        await tx.costImportRowStaging.updateMany({
+          where: { id: entry.sourceImportRowId },
+          data: {
+            jobOrderId: targetJobOrderId,
+            finalCategory: nextCategory,
+          },
+        });
+      }
     });
 
     await Promise.all(
@@ -156,6 +168,52 @@ export async function PATCH(
 
     throw error;
   }
+
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const authResult = await getAuthorizedUser();
+  if (authResult.error) return authResult.error;
+
+  if (authResult.appUser.role !== UserRole.ADMIN) {
+    return NextResponse.json({ error: "Funzione riservata agli admin" }, { status: 403 });
+  }
+
+  const { id } = await context.params;
+  const costEntryId = String(request.nextUrl.searchParams.get("costEntryId") ?? "").trim();
+
+  if (!costEntryId) {
+    return NextResponse.json({ error: "Costo da eliminare non specificato" }, { status: 400 });
+  }
+
+  const entry = await prisma.costActualEntry.findUnique({
+    where: { id: costEntryId },
+    select: { id: true, jobOrderId: true, sourceImportRowId: true },
+  });
+
+  if (!entry || entry.jobOrderId !== id) {
+    return NextResponse.json({ error: "Costo non trovato nella commessa corrente" }, { status: 404 });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.costActualEntry.delete({ where: { id: entry.id } });
+
+    if (entry.sourceImportRowId) {
+      await tx.costImportRowStaging.updateMany({
+        where: { id: entry.sourceImportRowId },
+        data: {
+          validationStatus: "REJECTED",
+          validationNote: "Voce eliminata manualmente dalla sezione costi.",
+        },
+      });
+    }
+  });
+
+  await recalculateJobOrderActualCosts(entry.jobOrderId);
 
   return NextResponse.json({ success: true });
 }

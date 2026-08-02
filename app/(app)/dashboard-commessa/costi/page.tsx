@@ -106,7 +106,9 @@ export default function DashboardCommessaCostiPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [movingCost, setMovingCost] = useState(false);
+  const [deletingCostId, setDeletingCostId] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const costFilterQuery = useMemo(() => {
     const params = new URLSearchParams();
     if (dateFrom) params.set("from", dateFrom);
@@ -167,6 +169,7 @@ export default function DashboardCommessaCostiPage() {
 
     setMovingCost(true);
     setError("");
+    setMessage("");
 
     try {
       await jsonMutation<{ success: boolean }>(`/api/commesse/${view.jobOrder.id}/costi`, {
@@ -182,12 +185,40 @@ export default function DashboardCommessaCostiPage() {
       });
 
       setMoveCost(null);
+      setMessage("Costo aggiornato correttamente.");
       const data = await jsonFetch<CostActualViewResponse>(getCostViewUrl(view.jobOrder.id));
       setView(data);
     } catch (moveError) {
       setError(moveError instanceof Error ? moveError.message : "Errore modificando la spesa");
     } finally {
       setMovingCost(false);
+    }
+  }
+
+  async function deleteCost(row: { id: string; description: string; amount: number }) {
+    if (!view) return;
+
+    const label = row.description || "questa voce";
+    if (!window.confirm(`Eliminare definitivamente ${label} (${formatCurrency(row.amount)})?`)) {
+      return;
+    }
+
+    setDeletingCostId(row.id);
+    setError("");
+    setMessage("");
+
+    try {
+      await jsonMutation<{ success: boolean }>(
+        `/api/commesse/${view.jobOrder.id}/costi?costEntryId=${encodeURIComponent(row.id)}`,
+        { method: "DELETE" }
+      );
+      setMessage("Costo eliminato correttamente.");
+      const data = await jsonFetch<CostActualViewResponse>(getCostViewUrl(view.jobOrder.id));
+      setView(data);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Errore eliminando la spesa");
+    } finally {
+      setDeletingCostId("");
     }
   }
 
@@ -299,6 +330,7 @@ export default function DashboardCommessaCostiPage() {
         </div>
 
         {error ? <div className="scad-error">{error}</div> : null}
+        {message ? <div className="scad-success">{message}</div> : null}
       </section>
 
       {view ? (
@@ -372,23 +404,34 @@ export default function DashboardCommessaCostiPage() {
                           <td>{formatCurrency(row.amount)}</td>
                           {canReassignCosts ? (
                             <td>
-                              <button
-                                type="button"
-                                className="cost-view-reassign-btn"
-                                onClick={() =>
-                                  setMoveCost({
-                                    id: row.id,
-                                    description: row.description || row.documentNumber || "Spesa",
-                                    amount: row.amount,
-                                    targetJobOrderId: view.jobOrder.id,
-                                    targetCategory: activeCategory.key,
-                                  })
-                                }
-                                title="Modifica commessa e tipologia"
-                                aria-label="Modifica commessa e tipologia"
-                              >
-                                Modifica
-                              </button>
+                              <div className="cost-view-row-actions">
+                                <button
+                                  type="button"
+                                  className="cost-view-reassign-btn"
+                                  onClick={() =>
+                                    setMoveCost({
+                                      id: row.id,
+                                      description: row.description || row.documentNumber || "Spesa",
+                                      amount: row.amount,
+                                      targetJobOrderId: view.jobOrder.id,
+                                      targetCategory: activeCategory.key,
+                                    })
+                                  }
+                                  title="Modifica commessa e tipologia"
+                                  aria-label="Modifica commessa e tipologia"
+                                  disabled={Boolean(deletingCostId)}
+                                >
+                                  Modifica
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cost-view-delete-btn"
+                                  onClick={() => void deleteCost(row)}
+                                  disabled={Boolean(deletingCostId)}
+                                >
+                                  {deletingCostId === row.id ? "Elimino..." : "Elimina"}
+                                </button>
+                              </div>
                             </td>
                           ) : null}
                         </tr>

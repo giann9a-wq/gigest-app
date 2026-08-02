@@ -1904,36 +1904,73 @@ export async function applyApprovedCostImportRows(sessionId: string) {
     throw new Error("Sessione import non trovata.");
   }
 
+  const rowIds = session.rows.map((row) => row.id);
   const fingerprints = session.rows.map((row) => row.fingerprint).filter((value): value is string => Boolean(value));
   const targetJobOrderIds = [...new Set(session.rows.map((row) => row.jobOrderId))];
-  const existingEntries = await prisma.costActualEntry.findMany({
-    where: {
-      jobOrderId: { in: targetJobOrderIds },
-      fingerprint: { in: fingerprints },
-    },
-    select: { jobOrderId: true, fingerprint: true },
-  });
-  const existingByJobOrder = new Map<string, Set<string>>();
+  const existingEntries =
+    rowIds.length === 0
+      ? []
+      : await prisma.costActualEntry.findMany({
+          where: {
+            OR: [
+              { sourceImportRowId: { in: rowIds } },
+              ...(fingerprints.length > 0
+                ? [{ jobOrderId: { in: targetJobOrderIds }, fingerprint: { in: fingerprints } }]
+                : []),
+            ],
+          },
+          select: {
+            id: true,
+            jobOrderId: true,
+            amount: true,
+            fingerprint: true,
+            sourceImportRowId: true,
+          },
+        });
 
-  for (const entry of existingEntries) {
-    const bucket = existingByJobOrder.get(entry.jobOrderId) ?? new Set<string>();
-    if (entry.fingerprint) {
-      bucket.add(entry.fingerprint);
+  type ExistingCostEntry = (typeof existingEntries)[number];
+  const existingBySourceRow = new Map<string, ExistingCostEntry[]>();
+  const existingByJobOrderAndFingerprint = new Map<string, ExistingCostEntry[]>();
+  const fingerprintKey = (jobOrderId: string, fingerprint: string) =>
+    `${jobOrderId}\u0000${fingerprint}`;
+
+  const addExistingEntry = (entry: ExistingCostEntry) => {
+    if (entry.sourceImportRowId) {
+      const sourceBucket = existingBySourceRow.get(entry.sourceImportRowId) ?? [];
+      sourceBucket.push(entry);
+      existingBySourceRow.set(entry.sourceImportRowId, sourceBucket);
     }
-    existingByJobOrder.set(entry.jobOrderId, bucket);
-  }
 
-  const getExistingFingerprints = (jobOrderId: string) => {
-    const bucket = existingByJobOrder.get(jobOrderId) ?? new Set<string>();
-    existingByJobOrder.set(jobOrderId, bucket);
-    return bucket;
+    const key = fingerprintKey(entry.jobOrderId, entry.fingerprint);
+    const fingerprintBucket = existingByJobOrderAndFingerprint.get(key) ?? [];
+    fingerprintBucket.push(entry);
+    existingByJobOrderAndFingerprint.set(key, fingerprintBucket);
   };
+
+  const removeExistingEntry = (entry: ExistingCostEntry) => {
+    if (entry.sourceImportRowId) {
+      existingBySourceRow.set(
+        entry.sourceImportRowId,
+        (existingBySourceRow.get(entry.sourceImportRowId) ?? []).filter((item) => item.id !== entry.id)
+      );
+    }
+
+    const key = fingerprintKey(entry.jobOrderId, entry.fingerprint);
+    existingByJobOrderAndFingerprint.set(
+      key,
+      (existingByJobOrderAndFingerprint.get(key) ?? []).filter((item) => item.id !== entry.id)
+    );
+  };
+
+  for (const entry of existingEntries) addExistingEntry(entry);
 
   const affectedJobOrderIds = new Set<string>(
     session.rows.length > 0 ? session.rows.map((row) => row.jobOrderId) : [session.jobOrderId]
   );
 
   let createdCount = 0;
+  let updatedCount = 0;
+  let removedDuplicateCount = 0;
 
   await prisma.$transaction(async (tx) => {
     for (const row of session.rows) {
@@ -1978,37 +2015,133 @@ export async function applyApprovedCostImportRows(sessionId: string) {
           amount: decimalToNumber(row.amount),
         }).fingerprintSource;
 
-      const existingFingerprints = getExistingFingerprints(row.jobOrderId);
+      const allSourceEntries = [...(existingBySourceRow.get(row.id) ?? [])];
+      const matchingAmountEntries = allSourceEntries.filter(
+        (entry) => Math.round(Number(entry.amount) * 100) === Math.round(Number(row.amount) * 100)
+      );
 
-      if (existingFingerprints.has(resolvedFingerprint)) {
+      if (allSourceEntries.length > 1 && matchingAmountEntries.length === 0) {
+        throw new Error(
+          `Impossibile riallineare in sicurezza la riga ${row.rowIndex}: esistono piu costi storici collegati con importi differenti.`
+        );
+      }
+
+      // Gli split storici potevano condividere lo stesso sourceImportRowId. Quando esistono
+      // piu importi, solo le registrazioni con l'importo corrente rappresentano questa riga.
+      const sourceEntries =
+        allSourceEntries.length > 1 ? matchingAmountEntries : allSourceEntries;
+      const sourceEntryIds = new Set(sourceEntries.map((entry) => entry.id));
+      const conflictingEntry = (
+        existingByJobOrderAndFingerprint.get(fingerprintKey(row.jobOrderId, resolvedFingerprint)) ?? []
+      ).find((entry) => !sourceEntryIds.has(entry.id));
+
+      if (conflictingEntry) {
+        if (sourceEntries.length > 0) {
+          await tx.costActualEntry.deleteMany({
+            where: { id: { in: sourceEntries.map((entry) => entry.id) } },
+          });
+          for (const entry of sourceEntries) {
+            affectedJobOrderIds.add(entry.jobOrderId);
+            removeExistingEntry(entry);
+          }
+          removedDuplicateCount += sourceEntries.length;
+        }
+
         await tx.costImportRowStaging.update({
           where: { id: row.id },
           data: {
             matchStatus: CostImportMatchStatus.ALREADY_IMPORTED,
-            validationNote: "Fingerprint gia presente nei costi actual definitivi.",
+            validationNote:
+              "Costo riallineato: la voce equivalente era gia presente nella commessa di destinazione.",
           },
         });
         continue;
       }
 
-      await tx.costActualEntry.create({
-        data: {
-          jobOrderId: row.jobOrderId,
-          category: row.finalCategory,
-          amount: row.amount,
-          sourceAccountCode: row.sourceAccountCode,
-          sourceAccountDescription: row.sourceAccountDescription,
-          supplierCode: row.supplierCode,
-          supplierName: row.supplierName,
-          documentDate: row.documentDate,
-          documentNumber: row.documentNumber,
-          descriptionOriginal: row.descriptionOriginal,
-          descriptionCustom: row.finalDescription || null,
-          fingerprint: resolvedFingerprint,
-          sourceImportSessionId: session.id,
-          sourceImportRowId: row.id,
-        },
-      });
+      const actualEntryData = {
+        jobOrderId: row.jobOrderId,
+        category: row.finalCategory,
+        amount: row.amount,
+        sourceAccountCode: row.sourceAccountCode,
+        sourceAccountDescription: row.sourceAccountDescription,
+        supplierCode: row.supplierCode,
+        supplierName: row.supplierName,
+        documentDate: row.documentDate,
+        documentNumber: row.documentNumber,
+        descriptionOriginal: row.descriptionOriginal,
+        descriptionCustom: row.finalDescription || null,
+        fingerprint: resolvedFingerprint,
+        sourceImportSessionId: session.id,
+        sourceImportRowId: row.id,
+      };
+
+      if (sourceEntries.length > 0) {
+        const canonicalEntry =
+          sourceEntries.find(
+            (entry) =>
+              entry.jobOrderId === row.jobOrderId && entry.fingerprint === resolvedFingerprint
+          ) ??
+          sourceEntries.find((entry) => entry.jobOrderId === row.jobOrderId) ??
+          sourceEntries[0];
+        const duplicateEntries = sourceEntries.filter((entry) => entry.id !== canonicalEntry.id);
+
+        if (duplicateEntries.length > 0) {
+          await tx.costActualEntry.deleteMany({
+            where: { id: { in: duplicateEntries.map((entry) => entry.id) } },
+          });
+          for (const entry of duplicateEntries) {
+            affectedJobOrderIds.add(entry.jobOrderId);
+            removeExistingEntry(entry);
+          }
+          removedDuplicateCount += duplicateEntries.length;
+        }
+
+        affectedJobOrderIds.add(canonicalEntry.jobOrderId);
+        removeExistingEntry(canonicalEntry);
+        const updatedEntry = await tx.costActualEntry.update({
+          where: { id: canonicalEntry.id },
+          data: actualEntryData,
+          select: {
+            id: true,
+            jobOrderId: true,
+            amount: true,
+            fingerprint: true,
+            sourceImportRowId: true,
+          },
+        });
+        addExistingEntry(updatedEntry);
+        updatedCount += 1;
+      } else {
+        const createdEntry = await tx.costActualEntry.create({
+          data: actualEntryData,
+          select: {
+            id: true,
+            jobOrderId: true,
+            amount: true,
+            fingerprint: true,
+            sourceImportRowId: true,
+          },
+        });
+        addExistingEntry(createdEntry);
+        createdCount += 1;
+      }
+
+      const previousJobOrderIds = [
+        ...new Set(
+          sourceEntries
+            .map((entry) => entry.jobOrderId)
+            .filter((jobOrderId) => jobOrderId !== row.jobOrderId)
+        ),
+      ];
+
+      if (row.sourceRowFingerprint && previousJobOrderIds.length > 0) {
+        await tx.costImportCorrectionRule.deleteMany({
+          where: {
+            jobOrderId: { in: previousJobOrderIds },
+            sourceRowFingerprint: row.sourceRowFingerprint,
+          },
+        });
+      }
 
       if (row.sourceRowFingerprint) {
         await tx.costImportCorrectionRule.upsert({
@@ -2065,8 +2198,6 @@ export async function applyApprovedCostImportRows(sessionId: string) {
         },
       });
 
-      existingFingerprints.add(resolvedFingerprint);
-      createdCount += 1;
     }
 
     await tx.costImportSession.update({
@@ -2084,6 +2215,8 @@ export async function applyApprovedCostImportRows(sessionId: string) {
 
   return {
     createdCount,
+    updatedCount,
+    removedDuplicateCount,
     approvedCount: session.rows.length,
   };
 }

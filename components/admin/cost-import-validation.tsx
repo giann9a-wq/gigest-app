@@ -281,12 +281,21 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
             rowIds: selectedIds,
           }),
         });
-        const result = await jsonFetch<{ createdCount: number; approvedCount: number }>(
+        const result = await jsonFetch<{
+          createdCount: number;
+          updatedCount: number;
+          removedDuplicateCount: number;
+          approvedCount: number;
+        }>(
           `/api/admin/import-costi/${sessionId}/apply`,
           { method: "POST" }
         );
         setMessage(
-          `Approvazione e conferma completate: ${result.createdCount} costi actual creati su ${result.approvedCount} righe approvate.`
+          `Approvazione e conferma completate: ${result.createdCount} costi creati, ${result.updatedCount} aggiornati${
+            result.removedDuplicateCount > 0
+              ? `, ${result.removedDuplicateCount} duplicati rimossi`
+              : ""
+          } su ${result.approvedCount} righe approvate.`
         );
         setSelectedIds([]);
         await loadSession();
