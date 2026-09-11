@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PdfViewerModal } from "@/components/pdf-viewer-modal";
+import { PhotoRepositoryPanel } from "@/components/documentale/photo-repository-panel";
 
 type JobOrderOption = {
   id: string;
@@ -85,7 +86,7 @@ type PdfPreviewState = {
   subtitle?: string;
 };
 
-type DocumentaleTab = "bolle" | "scansioni" | "risorse";
+type DocumentaleTab = "bolle" | "scansioni" | "risorse" | "foto";
 
 async function safeJsonFetch(url: string, options?: RequestInit) {
   const response = await fetch(url, options);
@@ -141,6 +142,8 @@ export default function DocumentalePage() {
       ? "scansioni"
       : searchParams.get("tab") === "risorse"
         ? "risorse"
+        : searchParams.get("tab") === "foto"
+          ? "foto"
         : "bolle";
   const showReturnToDiary = source === "diario-bolle";
   const [activeTab, setActiveTab] = useState<DocumentaleTab>(initialTab);
@@ -256,6 +259,8 @@ export default function DocumentalePage() {
       params.set("tab", "scansioni");
     } else if (tab === "risorse") {
       params.set("tab", "risorse");
+    } else if (tab === "foto") {
+      params.set("tab", "foto");
     } else {
       params.delete("tab");
     }
@@ -521,6 +526,14 @@ export default function DocumentalePage() {
           onClick={() => selectTab("risorse")}
         >
           Allegati Risorse
+        </button>
+        <button
+          type="button"
+          className={`documentale-tab ${activeTab === "foto" ? "documentale-tab-active" : ""}`}
+          aria-current={activeTab === "foto" ? "page" : undefined}
+          onClick={() => selectTab("foto")}
+        >
+          Foto cantiere
         </button>
       </section>
 
@@ -830,7 +843,7 @@ export default function DocumentalePage() {
             </table>
           </div>
         </section>
-      ) : (
+      ) : activeTab === "risorse" ? (
         <section className="card documentale-results">
           <div className="dashboard-card-head">
             <strong>Allegati Risorse</strong>
@@ -902,6 +915,8 @@ export default function DocumentalePage() {
             </div>
           )}
         </section>
+      ) : (
+        <PhotoRepositoryPanel />
       )}
 
       {selectedScan ? (

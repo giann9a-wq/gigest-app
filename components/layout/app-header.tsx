@@ -42,6 +42,7 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction, chatEnabled 
     { href: "/dashboard" as Route, label: "Dashboard" },
     { href: "/diario" as Route, label: "Diario di cantiere" },
     { href: "/dashboard-commessa" as Route, label: "Gestione Commesse" },
+    { href: "/preventivi" as Route, label: "Preventivi" },
     { href: "/risorse" as Route, label: "Gestione Risorse" },
     { href: "/documentale" as Route, label: "Documentale" },
     { href: "/scadenziario" as Route, label: "Scadenziario" },

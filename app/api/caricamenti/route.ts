@@ -9,17 +9,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
-  const resourceValue = request.nextUrl.searchParams.get("resourceValue")?.trim() ?? "";
+  const resourceValues = request.nextUrl.searchParams.getAll("resourceValue");
   const jobOrderId = request.nextUrl.searchParams.get("jobOrderId")?.trim() ?? "";
   const from = request.nextUrl.searchParams.get("from") ?? "";
   const to = request.nextUrl.searchParams.get("to") ?? "";
 
-  if (!resourceValue) {
+  if (resourceValues.length === 0) {
     return NextResponse.json({ rows: [] });
   }
 
   const validation = validateCaricamentiFilters({
-    resourceValue,
+    resourceValues,
     jobOrderId,
     from,
     to,
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: validation.error }, { status: validation.status });
   }
 
-  const rows = await getCaricamentiRows({ resourceValue, jobOrderId, from, to });
+  const rows = await getCaricamentiRows({ resourceValues, jobOrderId, from, to });
 
   return NextResponse.json({ rows });
 }

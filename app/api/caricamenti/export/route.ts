@@ -24,18 +24,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
-  const resourceValue = request.nextUrl.searchParams.get("resourceValue")?.trim() ?? "";
+  const resourceValues = request.nextUrl.searchParams.getAll("resourceValue");
   const jobOrderId = request.nextUrl.searchParams.get("jobOrderId")?.trim() ?? "";
   const from = request.nextUrl.searchParams.get("from") ?? "";
   const to = request.nextUrl.searchParams.get("to") ?? "";
 
-  const validation = validateCaricamentiFilters({ resourceValue, jobOrderId, from, to });
+  const validation = validateCaricamentiFilters({ resourceValues, jobOrderId, from, to });
 
   if (!validation.ok) {
     return NextResponse.json({ error: validation.error }, { status: validation.status });
   }
 
-  const rows = await getCaricamentiRows({ resourceValue, jobOrderId, from, to });
+  const rows = await getCaricamentiRows({ resourceValues, jobOrderId, from, to });
   const workbook = XLSX.utils.book_new();
 
   const exportRows = rows.map((row) => ({
@@ -53,8 +53,13 @@ export async function GET(request: NextRequest) {
   const sheet = XLSX.utils.json_to_sheet(exportRows);
   XLSX.utils.book_append_sheet(workbook, sheet, "Caricamenti");
 
-  const [resourceType, resourceId] = resourceValue.split(":");
-  const fileName = `caricamenti-${safeFileSegment(resourceType)}-${safeFileSegment(resourceId)}.xlsx`;
+  const fileName =
+    resourceValues.length === 1
+      ? (() => {
+          const [resourceType, resourceId] = resourceValues[0].split(":");
+          return `caricamenti-${safeFileSegment(resourceType)}-${safeFileSegment(resourceId)}.xlsx`;
+        })()
+      : `caricamenti-${resourceValues.length}-risorse.xlsx`;
 
   return makeExcelResponse(workbook, fileName);
 }

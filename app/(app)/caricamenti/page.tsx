@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ResourceTabs } from "@/components/layout/resource-tabs";
 
 type ResourceOption = {
@@ -40,7 +40,13 @@ type EditableLoadingRow = LoadingRow & {
   isDeleting?: boolean;
 };
 
-type SortKey = "referenceDate" | "jobOrderLabel" | "hours" | "activityDescription" | "updatedAt";
+type SortKey =
+  | "referenceDate"
+  | "resourceLabel"
+  | "jobOrderLabel"
+  | "hours"
+  | "activityDescription"
+  | "updatedAt";
 type SortDirection = "asc" | "desc";
 
 async function safeJsonFetch(url: string, options?: RequestInit) {
@@ -86,13 +92,94 @@ function sortArrow(direction: SortDirection) {
   return direction === "asc" ? "↑" : "↓";
 }
 
+function ResourceMultiSelect({
+  options,
+  selectedValues,
+  onChange,
+  disabled,
+}: {
+  options: ResourceOption[];
+  selectedValues: string[];
+  onChange: (values: string[]) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedLabels = options
+    .filter((option) => selectedValues.includes(option.value))
+    .map((option) => option.label);
+  const summary =
+    selectedLabels.length === 0
+      ? "Seleziona risorse"
+      : selectedLabels.length === 1
+        ? selectedLabels[0]
+        : `${selectedLabels.length} risorse selezionate`;
+  const allSelected = options.length > 0 && selectedValues.length === options.length;
+
+  function toggleValue(value: string) {
+    onChange(
+      selectedValues.includes(value)
+        ? selectedValues.filter((item) => item !== value)
+        : [...selectedValues, value]
+    );
+  }
+
+  return (
+    <div className="stats-multi caricamenti-resource-picker" ref={containerRef}>
+      <span>Risorse</span>
+      <button
+        type="button"
+        className="stats-multi-trigger"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        disabled={disabled}
+      >
+        <span className="stats-multi-summary">{summary}</span>
+        <span className="stats-multi-caret">{open ? "▲" : "▼"}</span>
+      </button>
+      {open ? (
+        <div className="stats-multi-menu">
+          <label className="stats-multi-option caricamenti-resource-select-all">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => onChange(allSelected ? [] : options.map((option) => option.value))}
+            />
+            <span>{allSelected ? "Deseleziona tutte" : "Seleziona tutte"}</span>
+          </label>
+          {options.map((option) => (
+            <label key={option.value} className="stats-multi-option">
+              <input
+                type="checkbox"
+                checked={selectedValues.includes(option.value)}
+                onChange={() => toggleValue(option.value)}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function CaricamentiPage() {
   const [resources, setResources] = useState<ResourceOption[]>([]);
   const [jobOrders, setJobOrders] = useState<JobOrderOption[]>([]);
   const [rows, setRows] = useState<EditableLoadingRow[]>([]);
   const [editingRowId, setEditingRowId] = useState("");
   const [canManageLoadings, setCanManageLoadings] = useState(false);
-  const [selectedResourceValue, setSelectedResourceValue] = useState("");
+  const [selectedResourceValues, setSelectedResourceValues] = useState<string[]>([]);
   const [selectedJobOrderId, setSelectedJobOrderId] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -124,7 +211,7 @@ export default function CaricamentiPage() {
   }, []);
 
   async function loadRows() {
-    if (!selectedResourceValue) {
+    if (selectedResourceValues.length === 0) {
       setRows([]);
       setMessage("");
       return;
@@ -134,7 +221,8 @@ export default function CaricamentiPage() {
     setError("");
     setMessage("");
 
-    const params = new URLSearchParams({ resourceValue: selectedResourceValue });
+    const params = new URLSearchParams();
+    selectedResourceValues.forEach((value) => params.append("resourceValue", value));
     if (selectedJobOrderId) params.set("jobOrderId", selectedJobOrderId);
     if (fromDate) params.set("from", fromDate);
     if (toDate) params.set("to", toDate);
@@ -205,9 +293,9 @@ export default function CaricamentiPage() {
     }
   }
 
-  const selectedResourceLabel = useMemo(
-    () => resources.find((item) => item.value === selectedResourceValue)?.label ?? "",
-    [resources, selectedResourceValue]
+  const selectedResourceLabels = useMemo(
+    () => resources.filter((item) => selectedResourceValues.includes(item.value)).map((item) => item.label),
+    [resources, selectedResourceValues]
   );
 
   const visibleRows = useMemo(() => {
@@ -217,6 +305,9 @@ export default function CaricamentiPage() {
       switch (sortKey) {
         case "referenceDate":
           result = compareText(a.referenceDate, b.referenceDate);
+          break;
+        case "resourceLabel":
+          result = compareText(a.resourceLabel, b.resourceLabel);
           break;
         case "jobOrderLabel":
           result = compareText(a.jobOrderLabel, b.jobOrderLabel);
@@ -255,9 +346,10 @@ export default function CaricamentiPage() {
   }
 
   function handleExportExcel() {
-    if (!selectedResourceValue) return;
+    if (selectedResourceValues.length === 0) return;
 
-    const params = new URLSearchParams({ resourceValue: selectedResourceValue });
+    const params = new URLSearchParams();
+    selectedResourceValues.forEach((value) => params.append("resourceValue", value));
     if (selectedJobOrderId) params.set("jobOrderId", selectedJobOrderId);
     if (fromDate) params.set("from", fromDate);
     if (toDate) params.set("to", toDate);
@@ -280,7 +372,7 @@ export default function CaricamentiPage() {
           <div>
             <h1 style={{ marginTop: 0, marginBottom: 8 }}>Caricamenti</h1>
             <p className="muted" style={{ margin: 0 }}>
-              Seleziona una risorsa alla volta e consulta o modifica tutti i caricamenti già presenti.
+              Seleziona una o più risorse e consulta o modifica tutti i caricamenti già presenti.
             </p>
           </div>
         </div>
@@ -288,21 +380,17 @@ export default function CaricamentiPage() {
         <ResourceTabs current="loadings" />
 
         <div className="stats-filter-bar" style={{ marginTop: 20 }}>
-          <label className="report-control">
-            <span>Risorsa</span>
-            <select
-              value={selectedResourceValue}
-              onChange={(e) => setSelectedResourceValue(e.target.value)}
-              disabled={loadingOptions}
-            >
-              <option value="">Seleziona risorsa</option>
-              {resources.map((resource) => (
-                <option key={resource.value} value={resource.value}>
-                  {resource.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ResourceMultiSelect
+            options={resources}
+            selectedValues={selectedResourceValues}
+            onChange={(values) => {
+              setSelectedResourceValues(values);
+              setRows([]);
+              setEditingRowId("");
+              setMessage("");
+            }}
+            disabled={loadingOptions}
+          />
 
           <label className="report-control">
             <span>Commessa</span>
@@ -334,7 +422,7 @@ export default function CaricamentiPage() {
             type="button"
             className="button"
             onClick={loadRows}
-            disabled={loadingOptions || !selectedResourceValue}
+            disabled={loadingOptions || selectedResourceValues.length === 0}
           >
             Applica filtri
           </button>
@@ -343,6 +431,7 @@ export default function CaricamentiPage() {
             type="button"
             className="report-print-btn"
             onClick={() => {
+              setSelectedResourceValues([]);
               setSelectedJobOrderId("");
               setFromDate("");
               setToDate("");
@@ -356,9 +445,9 @@ export default function CaricamentiPage() {
           </button>
         </div>
 
-        {selectedResourceLabel ? (
+        {selectedResourceLabels.length > 0 ? (
           <div style={{ marginTop: 18, marginBottom: 12, fontWeight: 700, color: "#7c2d12" }}>
-            Risorsa selezionata: {selectedResourceLabel}
+            Risorse selezionate: {selectedResourceLabels.join(", ")}
           </div>
         ) : null}
 
@@ -373,7 +462,7 @@ export default function CaricamentiPage() {
             type="button"
             className="report-print-btn"
             onClick={handleExportExcel}
-            disabled={!selectedResourceValue || loadingRows}
+            disabled={selectedResourceValues.length === 0 || loadingRows}
           >
             Export Excel
           </button>
@@ -384,6 +473,7 @@ export default function CaricamentiPage() {
             <thead>
               <tr>
                 <th>{renderSortHeader("Data", "referenceDate")}</th>
+                <th>{renderSortHeader("Risorsa", "resourceLabel")}</th>
                 <th>{renderSortHeader("Commessa", "jobOrderLabel")}</th>
                 <th>{renderSortHeader("Ore", "hours")}</th>
                 <th>{renderSortHeader("Descrizione lavoro", "activityDescription")}</th>
@@ -394,19 +484,19 @@ export default function CaricamentiPage() {
             <tbody>
               {loadingRows ? (
                 <tr>
-                  <td colSpan={canManageLoadings ? 6 : 5} className="stats-empty-cell">
+                  <td colSpan={canManageLoadings ? 7 : 6} className="stats-empty-cell">
                     Caricamento...
                   </td>
                 </tr>
-              ) : !selectedResourceValue ? (
+              ) : selectedResourceValues.length === 0 ? (
                 <tr>
-                  <td colSpan={canManageLoadings ? 6 : 5} className="stats-empty-cell">
-                    Seleziona una risorsa e premi Applica filtri per visualizzare i caricamenti
+                  <td colSpan={canManageLoadings ? 7 : 6} className="stats-empty-cell">
+                    Seleziona una o più risorse e premi Applica filtri per visualizzare i caricamenti
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={canManageLoadings ? 6 : 5} className="stats-empty-cell">
+                  <td colSpan={canManageLoadings ? 7 : 6} className="stats-empty-cell">
                     Nessun caricamento trovato per i filtri selezionati
                   </td>
                 </tr>
@@ -426,6 +516,7 @@ export default function CaricamentiPage() {
                         formatDate(row.referenceDate)
                       )}
                     </td>
+                    <td>{row.resourceLabel}</td>
                     <td>
                       {editingRowId === row.id ? (
                         <select

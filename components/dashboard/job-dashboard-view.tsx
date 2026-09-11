@@ -130,6 +130,9 @@ export type JobOrderDashboardResponse = {
     endDate: string;
     status: ResourceStatusValue;
     description: string;
+    customerName: string;
+    customerContact: string;
+    siteAddress: string;
     activityCount: number;
     externalActivityCount: number;
     materialUsageCount: number;

@@ -12,6 +12,7 @@ import {
   lockAdminPanelAction,
   rejectAccessRequestAction,
   updateUserRoleAction,
+  updateUserWhatsappAction,
   unlockAdminPanelAction,
 } from "./actions";
 
@@ -71,6 +72,11 @@ export default async function AdminAccessPage({
             firstName: true,
             lastName: true,
             role: true,
+            phone: true,
+            internationalPrefix: true,
+            whatsappPhone: true,
+            whatsappEnabled: true,
+            whatsappId: true,
           },
         }),
       ])
@@ -256,6 +262,27 @@ export default async function AdminAccessPage({
                             <button type="submit" className="mobile-button-secondary">
                               Salva ruolo
                             </button>
+                          </form>
+                          <form action={updateUserWhatsappAction} className="admin-user-whatsapp-form">
+                            <input type="hidden" name="userId" value={user.id} />
+                            <label>
+                              <span>Prefisso</span>
+                              <input name="internationalPrefix" defaultValue={user.internationalPrefix ?? "+39"} placeholder="+39" />
+                            </label>
+                            <label>
+                              <span>Telefono WhatsApp</span>
+                              <input name="phone" defaultValue={user.phone ?? ""} inputMode="tel" placeholder="3331234567" />
+                            </label>
+                            <label>
+                              <span>ID Meta opzionale</span>
+                              <input name="whatsappId" defaultValue={user.whatsappId ?? ""} placeholder="Identificativo provider" />
+                            </label>
+                            <label className="admin-whatsapp-enabled">
+                              <input type="checkbox" name="whatsappEnabled" defaultChecked={user.whatsappEnabled} />
+                              <span>Abilita WhatsApp</span>
+                            </label>
+                            {user.whatsappPhone ? <small>Numero normalizzato: {user.whatsappPhone}</small> : null}
+                            <button type="submit" className="mobile-button-secondary">Salva WhatsApp</button>
                           </form>
                         </article>
                       );

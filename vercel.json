@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/diary-reminder-winter",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp-session-cleanup",
+      "schedule": "5 0 * * *"
     }
   ]
 }

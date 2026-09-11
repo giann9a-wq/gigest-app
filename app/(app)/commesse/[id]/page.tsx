@@ -36,6 +36,9 @@ type JobOrderDashboardResponse = {
     endDate: string;
     status: ResourceStatusValue;
     description: string;
+    customerName: string;
+    customerContact: string;
+    siteAddress: string;
     activityCount: number;
     createdAt: string;
     updatedAt: string;
@@ -80,6 +83,9 @@ type JobOrderForm = {
   endDate: string;
   status: ResourceStatusValue;
   description: string;
+  customerName: string;
+  customerContact: string;
+  siteAddress: string;
   isOwnAccountSite: boolean;
 };
 
@@ -211,6 +217,9 @@ export default function SchedaCommessaPage() {
         endDate: data.jobOrder.endDate,
         status: data.jobOrder.status,
         description: data.jobOrder.description,
+        customerName: data.jobOrder.customerName,
+        customerContact: data.jobOrder.customerContact,
+        siteAddress: data.jobOrder.siteAddress,
         isOwnAccountSite: data.jobOrder.isOwnAccountSite,
       });
       setBudget({
@@ -253,6 +262,9 @@ export default function SchedaCommessaPage() {
           status: jobOrderForm.status,
           endDate: jobOrderForm.endDate,
           description: jobOrderForm.description,
+          customerName: jobOrderForm.customerName,
+          customerContact: jobOrderForm.customerContact,
+          siteAddress: jobOrderForm.siteAddress,
           isOwnAccountSite: jobOrderForm.isOwnAccountSite,
           budget,
         }),
@@ -373,6 +385,18 @@ export default function SchedaCommessaPage() {
               <label className="job-sheet-field job-sheet-field-wide">
                 <span>Descrizione</span>
                 <textarea className="job-dashboard-head-input job-dashboard-head-textarea" value={jobOrderForm.description} onChange={(e) => setJobOrderForm((current) => current ? { ...current, description: e.target.value } : current)} />
+              </label>
+              <label className="job-sheet-field">
+                <span>Cliente</span>
+                <input className="job-dashboard-head-input" value={jobOrderForm.customerName} onChange={(e) => setJobOrderForm((current) => current ? { ...current, customerName: e.target.value } : current)} />
+              </label>
+              <label className="job-sheet-field">
+                <span>Contatto cliente</span>
+                <input className="job-dashboard-head-input" value={jobOrderForm.customerContact} onChange={(e) => setJobOrderForm((current) => current ? { ...current, customerContact: e.target.value } : current)} />
+              </label>
+              <label className="job-sheet-field job-sheet-field-wide">
+                <span>Indirizzo cantiere</span>
+                <input className="job-dashboard-head-input" value={jobOrderForm.siteAddress} onChange={(e) => setJobOrderForm((current) => current ? { ...current, siteAddress: e.target.value } : current)} />
               </label>
             </div>
           </div>

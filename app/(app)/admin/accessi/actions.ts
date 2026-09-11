@@ -11,6 +11,7 @@ import {
   unlockAdminPanel,
 } from "@/lib/admin-panel";
 import { prisma } from "@/lib/prisma";
+import { normalizeWhatsappPhone } from "@/lib/photo-repository";
 
 function buildAdminRedirect(message: string, type: "success" | "error" = "success"): Route {
   const params = new URLSearchParams({
@@ -203,4 +204,49 @@ export async function updateUserRoleAction(formData: FormData) {
 
   revalidatePath("/admin/accessi");
   redirect(buildAdminRedirect(`Ruolo aggiornato per ${targetUser.email}.`));
+}
+
+export async function updateUserWhatsappAction(formData: FormData) {
+  const adminUser = await requireAdminUser();
+  if (!adminUser) redirect("/dashboard");
+
+  const hasAccess = await hasElevatedAdminPanelAccess(adminUser.id);
+  if (!hasAccess) {
+    redirect(buildAdminRedirect("Sblocca prima l'area admin con la password aggiuntiva.", "error"));
+  }
+
+  const userId = String(formData.get("userId") ?? "");
+  const internationalPrefix = String(formData.get("internationalPrefix") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const whatsappId = String(formData.get("whatsappId") ?? "").trim();
+  const whatsappEnabled = formData.get("whatsappEnabled") === "on";
+  const whatsappPhone = phone ? normalizeWhatsappPhone(phone.startsWith("+") ? phone : `${internationalPrefix}${phone}`) : "";
+
+  if (whatsappEnabled && !/^\+\d{8,15}$/.test(whatsappPhone)) {
+    redirect(buildAdminRedirect("Inserisci un numero WhatsApp valido prima di abilitarlo.", "error"));
+  }
+
+  const targetUser = await prisma.user.findFirst({ where: { id: userId, status: UserStatus.ACTIVE }, select: { email: true } });
+  if (!targetUser) redirect(buildAdminRedirect("Utente attivo non trovato.", "error"));
+
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        phone: phone || null,
+        internationalPrefix: internationalPrefix || null,
+        whatsappPhone: whatsappPhone || null,
+        whatsappEnabled,
+        whatsappId: whatsappId || null,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "P2002") {
+      redirect(buildAdminRedirect("Numero o identificativo WhatsApp già associato a un altro utente.", "error"));
+    }
+    throw error;
+  }
+
+  revalidatePath("/admin/accessi");
+  redirect(buildAdminRedirect(`Configurazione WhatsApp aggiornata per ${targetUser.email}.`));
 }

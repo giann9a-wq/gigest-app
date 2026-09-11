@@ -9,6 +9,7 @@ type AdminSection =
   | "acconti"
   | "controlli"
   | "news"
+  | "prezzario"
   | "gestione-db";
 
 const ADMIN_FUNCTIONS: Array<{
@@ -50,6 +51,11 @@ const ADMIN_FUNCTIONS: Array<{
     key: "news",
     href: "/admin/news" as Route,
     title: "News",
+  },
+  {
+    key: "prezzario",
+    href: "/admin/prezzario" as Route,
+    title: "Prezzario edilizia",
   },
   {
     key: "gestione-db",

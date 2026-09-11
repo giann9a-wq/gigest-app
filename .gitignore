@@ -6,5 +6,7 @@ node_modules
 coverage
 .vercel
 prisma/dev.db*
+db-costs.json
+tmp/
 
 .vercel

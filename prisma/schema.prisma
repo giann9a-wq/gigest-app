@@ -51,6 +51,32 @@ enum ResourceType {
   EQUIPMENT
 }
 
+enum QuoteStatus {
+  DRAFT
+  SAVED
+}
+
+enum QuoteLineSourceType {
+  PERSON_ROLE
+  EQUIPMENT
+  PRICE_LIST
+  FREE
+}
+
+enum OpportunityStatus {
+  OPEN
+  CLOSED
+  SUSPENDED
+  APPROVED
+}
+
+enum PriceListVersionStatus {
+  IMPORTING
+  ACTIVE
+  ARCHIVED
+  FAILED
+}
+
 enum ExternalDiaryActivityType {
   SUBCONTRACT
   ECONOMY
@@ -163,19 +189,57 @@ enum DashboardTaskStatus {
   ARCHIVED
 }
 
+enum PhotoUploadSource {
+  MANUAL
+  WHATSAPP
+}
+
+enum WhatsAppSessionStatus {
+  WAITING_FOR_MEDIA
+  WAITING_FOR_COMMESSA
+  WAITING_FOR_PHASE
+  WAITING_FOR_NEW_PHASE_NAME
+  WAITING_FOR_NOTE_CHOICE
+  WAITING_FOR_NOTE
+  WAITING_FOR_CONFIRMATION
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum WhatsAppInboundEventStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PhotoAuditAction {
+  UPLOAD_CREATED
+  PHOTO_DELETED
+  UPLOAD_DELETED
+  SESSION_CANCELLED
+  SESSION_EXPIRED
+}
+
 model User {
-  id             String     @id @default(cuid())
-  googleSub      String?    @unique
-  firstName      String?
-  lastName       String?
-  email          String     @unique
-  role           UserRole   @default(OPERATOR)
-  status         UserStatus @default(PENDING)
-  lastLoginAt    DateTime?
-  lastSeenAt     DateTime?
-  chatLastReadAt DateTime?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id                  String     @id @default(cuid())
+  googleSub           String?    @unique
+  firstName           String?
+  lastName            String?
+  email               String     @unique
+  role                UserRole   @default(OPERATOR)
+  status              UserStatus @default(PENDING)
+  lastLoginAt         DateTime?
+  lastSeenAt          DateTime?
+  chatLastReadAt      DateTime?
+  phone               String?
+  internationalPrefix String?
+  whatsappPhone       String?    @unique
+  whatsappEnabled     Boolean    @default(false)
+  whatsappId          String?    @unique
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
   managedAccessRequests         AccessRequest[]         @relation("ManagedBy")
   createdActivities             DiaryActivity[]         @relation("ActivityCreatedBy")
@@ -204,6 +268,11 @@ model User {
   assignedDashboardTasks        DashboardTask[]         @relation("DashboardTaskAssignee")
   createdDashboardTasks         DashboardTask[]         @relation("DashboardTaskCreatedBy")
   appChatMessages               AppChatMessage[]
+  createdPhotoPhases            PhotoPhase[]            @relation("PhotoPhaseCreatedBy")
+  photoUploads                  PhotoUpload[]           @relation("PhotoUploadAuthor")
+  deletedPhotos                 Photo[]                 @relation("PhotoDeletedBy")
+  whatsappUploadSessions        WhatsAppUploadSession[]
+  photoAuditEvents              PhotoAuditEvent[]       @relation("PhotoAuditActor")
 
   accounts Account[]
   sessions Session[]
@@ -427,6 +496,9 @@ model JobOrder {
   endDate                         DateTime?
   status                          ResourceStatus @default(ACTIVE)
   description                     String?
+  customerName                    String?
+  customerContact                 String?
+  siteAddress                     String?
   budgetPersonnelCost             Decimal?       @db.Decimal(12, 2)
   budgetEquipmentCost             Decimal?       @db.Decimal(12, 2)
   budgetMaterialsCost             Decimal?       @db.Decimal(12, 2)
@@ -458,6 +530,259 @@ model JobOrder {
   issuedInvoiceActuals       IssuedInvoiceActual[]
   advances                   JobOrderAdvance[]
   suggestedInvoiceImportRows InvoiceImportRowStaging[]  @relation("InvoiceImportRowSuggestedJobOrder")
+  photoPhases                PhotoPhase[]
+  photoUploads               PhotoUpload[]
+  whatsappUploadSessions     WhatsAppUploadSession[]
+  photoAuditEvents           PhotoAuditEvent[]
+  opportunities              Opportunity[]
+}
+
+model PriceListVersion {
+  id          String                 @id @default(cuid())
+  name        String
+  sourceLabel String?
+  status      PriceListVersionStatus @default(IMPORTING)
+  itemCount   Int                    @default(0)
+  importedAt  DateTime?
+  createdById String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  items PriceListItem[]
+
+  @@index([status, importedAt])
+}
+
+model PriceListItem {
+  id          String   @id @default(cuid())
+  versionId   String
+  code        String
+  description String   @db.Text
+  unit        String?
+  price       Decimal  @db.Decimal(14, 4)
+  sourceFile  String
+  category    String?
+  createdAt   DateTime @default(now())
+
+  version    PriceListVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  quoteLines QuoteLine[]
+
+  @@unique([versionId, code, sourceFile])
+  @@index([versionId, code])
+  @@index([versionId, category])
+}
+
+model Quote {
+  id                     String      @id @default(cuid())
+  number                 String      @unique
+  title                  String
+  customerName           String
+  customerContact        String?
+  siteAddress            String?
+  description            String?
+  plannedStartDate       DateTime?
+  plannedEndDate         DateTime?
+  isOwnAccountSite       Boolean     @default(false)
+  generalDiscountPercent Decimal     @default(0) @db.Decimal(5, 2)
+  status                 QuoteStatus @default(DRAFT)
+  savedAt                DateTime?
+  createdById            String?
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  chapters    QuoteChapter[]
+  opportunity Opportunity?
+
+  @@index([status, updatedAt])
+  @@index([customerName])
+}
+
+model QuoteChapter {
+  id          String  @id @default(cuid())
+  quoteId     String
+  parentId    String?
+  title       String
+  description String?
+  sortOrder   Int     @default(0)
+
+  quote    Quote          @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  parent   QuoteChapter?  @relation("QuoteChapterTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children QuoteChapter[] @relation("QuoteChapterTree")
+  lines    QuoteLine[]
+
+  @@index([quoteId, sortOrder])
+  @@index([parentId, sortOrder])
+}
+
+model QuoteLine {
+  id              String              @id @default(cuid())
+  chapterId       String
+  sourceType      QuoteLineSourceType
+  sourceReference String?
+  priceListItemId String?
+  code            String?
+  description     String              @db.Text
+  unit            String
+  quantity        Decimal             @default(1) @db.Decimal(14, 3)
+  unitPrice       Decimal             @default(0) @db.Decimal(14, 4)
+  discountPercent Decimal             @default(0) @db.Decimal(5, 2)
+  sortOrder       Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  chapter       QuoteChapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  priceListItem PriceListItem? @relation(fields: [priceListItemId], references: [id], onDelete: SetNull)
+
+  @@index([chapterId, sortOrder])
+  @@index([priceListItemId])
+}
+
+model Opportunity {
+  id         String            @id @default(cuid())
+  quoteId    String            @unique
+  status     OpportunityStatus @default(OPEN)
+  jobOrderId String?
+  notes      String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  quote    Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  jobOrder JobOrder? @relation(fields: [jobOrderId], references: [id], onDelete: SetNull)
+
+  @@index([status, updatedAt])
+  @@index([jobOrderId])
+}
+
+model PhotoPhase {
+  id              String   @id @default(cuid())
+  jobOrderId      String
+  name            String
+  normalizedName  String
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  jobOrder               JobOrder                @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  createdBy              User?                   @relation("PhotoPhaseCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  uploads                PhotoUpload[]
+  whatsappUploadSessions WhatsAppUploadSession[]
+  auditEvents            PhotoAuditEvent[]
+
+  @@unique([jobOrderId, normalizedName])
+  @@index([jobOrderId, name])
+}
+
+model PhotoUpload {
+  id                String            @id @default(cuid())
+  jobOrderId        String
+  phaseId           String
+  userId            String
+  note              String?           @db.Text
+  source            PhotoUploadSource @default(MANUAL)
+  whatsappSessionId String?           @unique
+  mediaCount        Int               @default(0)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  jobOrder        JobOrder               @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  phase           PhotoPhase             @relation(fields: [phaseId], references: [id], onDelete: Restrict)
+  user            User                   @relation("PhotoUploadAuthor", fields: [userId], references: [id], onDelete: Restrict)
+  whatsappSession WhatsAppUploadSession? @relation(fields: [whatsappSessionId], references: [id], onDelete: SetNull)
+  photos          Photo[]
+  auditEvents     PhotoAuditEvent[]
+
+  @@index([jobOrderId, createdAt])
+  @@index([phaseId, createdAt])
+  @@index([userId, createdAt])
+  @@index([source, createdAt])
+}
+
+model Photo {
+  id              String    @id @default(cuid())
+  uploadId        String
+  storagePath     String
+  driveFileId     String    @unique
+  filename        String
+  mimeType        String
+  sizeBytes       Int
+  whatsappMediaId String?   @unique
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  deletedAt       DateTime?
+  deletedByUserId String?
+
+  upload      PhotoUpload       @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  deletedBy   User?             @relation("PhotoDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
+  auditEvents PhotoAuditEvent[]
+
+  @@index([uploadId, createdAt])
+  @@index([deletedAt])
+}
+
+model WhatsAppUploadSession {
+  id                String                @id @default(cuid())
+  activeKey         String?               @unique
+  userId            String
+  whatsappPhone     String
+  status            WhatsAppSessionStatus @default(WAITING_FOR_MEDIA)
+  media             Json
+  jobOrderId        String?
+  phaseId           String?
+  note              String?               @db.Text
+  expiresAt         DateTime
+  lastInteractionAt DateTime              @default(now())
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobOrder JobOrder?    @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  phase    PhotoPhase?  @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  upload   PhotoUpload?
+
+  @@index([whatsappPhone, status, lastInteractionAt])
+  @@index([expiresAt, status])
+  @@index([userId, createdAt])
+}
+
+model WhatsAppInboundEvent {
+  id                  String                     @id @default(cuid())
+  providerMessageId   String                     @unique
+  whatsappPhone       String
+  payload             Json
+  status              WhatsAppInboundEventStatus @default(PENDING)
+  attemptCount        Int                        @default(0)
+  nextAttemptAt       DateTime                   @default(now())
+  processingStartedAt DateTime?
+  processedAt         DateTime?
+  lastError           String?                    @db.Text
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([whatsappPhone, createdAt])
+}
+
+model PhotoAuditEvent {
+  id            String           @id @default(cuid())
+  action        PhotoAuditAction
+  actorUserId   String?
+  whatsappPhone String?
+  jobOrderId    String?
+  phaseId       String?
+  uploadId      String?
+  photoId       String?
+  details       Json?
+  createdAt     DateTime         @default(now())
+
+  actor    User?        @relation("PhotoAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  jobOrder JobOrder?    @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  phase    PhotoPhase?  @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  upload   PhotoUpload? @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+  photo    Photo?       @relation(fields: [photoId], references: [id], onDelete: SetNull)
+
+  @@index([jobOrderId, createdAt])
+  @@index([uploadId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 model JobOrderAdvance {
@@ -504,7 +829,7 @@ model AutoDiaryEntryProposal {
 
 model CostImportSession {
   id            String                  @id @default(cuid())
-  jobOrderId    String
+  jobOrderId    String?
   fileName      String
   fileHash      String?
   fileSizeBytes Int?
@@ -518,7 +843,7 @@ model CostImportSession {
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
 
-  jobOrder          JobOrder               @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  jobOrder          JobOrder?              @relation(fields: [jobOrderId], references: [id], onDelete: SetNull)
   uploadedBy        User?                  @relation("CostImportSessionUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
   rows              CostImportRowStaging[]
   costActualEntries CostActualEntry[]
@@ -531,7 +856,7 @@ model CostImportSession {
 model CostImportRowStaging {
   id                         String                     @id @default(cuid())
   importSessionId            String
-  jobOrderId                 String
+  jobOrderId                 String?
   rowIndex                   Int
   rawData                    Json
   sourceAccountCode          String?
@@ -559,7 +884,7 @@ model CostImportRowStaging {
   updatedAt                  DateTime                   @updatedAt
 
   importSession     CostImportSession @relation(fields: [importSessionId], references: [id], onDelete: Cascade)
-  jobOrder          JobOrder          @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  jobOrder          JobOrder?         @relation(fields: [jobOrderId], references: [id], onDelete: SetNull)
   costActualEntries CostActualEntry[]
 
   @@index([importSessionId, validationStatus])
@@ -739,6 +1064,7 @@ model DiaryActivity {
   @@index([jobOrderId])
   @@index([personId])
   @@index([equipmentId])
+  @@index([source, referenceDate])
 }
 
 model ExternalResource {

@@ -101,6 +101,9 @@ export async function POST(
   const status = String(body.status ?? "") as ResourceStatus;
   const endDate = String(body.endDate ?? "").trim();
   const description = String(body.description ?? "").trim();
+  const customerName = String(body.customerName ?? "").trim();
+  const customerContact = String(body.customerContact ?? "").trim();
+  const siteAddress = String(body.siteAddress ?? "").trim();
   const isOwnAccountSite = body.isOwnAccountSite === true;
   const budget = {
     personnel: body.budget?.personnel ?? "",
@@ -163,6 +166,9 @@ export async function POST(
       status,
       endDate: parsedEndDate,
       description: description || null,
+      customerName: customerName || null,
+      customerContact: customerContact || null,
+      siteAddress: siteAddress || null,
       isOwnAccountSite,
       budgetPersonnelCost: parseOptionalDecimal(budget.personnel),
       budgetEquipmentCost: parseOptionalDecimal(budget.equipment),

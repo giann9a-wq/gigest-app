@@ -228,7 +228,7 @@ async function getImportedSourceAllocations(sourceFingerprints: Array<string | n
 }
 
 function getAlreadyImportedSourceNote(
-  currentJobOrderId: string,
+  currentJobOrderId: string | null,
   allocations: ImportedSourceAllocation[]
 ) {
   const jobOrders = [
@@ -1629,7 +1629,7 @@ export async function getCostImportSessionDetails(sessionId: string) {
     rows: session.rows.map((row) => ({
       id: row.id,
       jobOrderId: row.jobOrderId,
-      jobOrderName: row.jobOrder.name,
+      jobOrderName: row.jobOrder?.name ?? "",
       rowIndex: row.rowIndex,
       sourceAccountCode: row.sourceAccountCode,
       sourceAccountDescription: row.sourceAccountDescription,
@@ -2068,7 +2068,13 @@ export async function applyApprovedCostImportRows(sessionId: string) {
 
   const rowIds = session.rows.map((row) => row.id);
   const fingerprints = session.rows.map((row) => row.fingerprint).filter((value): value is string => Boolean(value));
-  const targetJobOrderIds = [...new Set(session.rows.map((row) => row.jobOrderId))];
+  const targetJobOrderIds = [
+    ...new Set(
+      session.rows
+        .map((row) => row.jobOrderId)
+        .filter((jobOrderId): jobOrderId is string => Boolean(jobOrderId))
+    ),
+  ];
   const importedSourceAllocations = await getImportedSourceAllocations(
     session.rows.map((row) => row.sourceRowFingerprint)
   );
@@ -2130,7 +2136,8 @@ export async function applyApprovedCostImportRows(sessionId: string) {
   for (const entry of existingEntries) addExistingEntry(entry);
 
   const affectedJobOrderIds = new Set<string>(
-    session.rows.length > 0 ? session.rows.map((row) => row.jobOrderId) : [session.jobOrderId]
+    (session.rows.length > 0 ? session.rows.map((row) => row.jobOrderId) : [session.jobOrderId])
+      .filter((jobOrderId): jobOrderId is string => Boolean(jobOrderId))
   );
 
   let createdCount = 0;
@@ -2139,12 +2146,13 @@ export async function applyApprovedCostImportRows(sessionId: string) {
 
   await prisma.$transaction(async (tx) => {
     for (const row of session.rows) {
-      if (!row.finalCategory || row.amount == null) {
+      if (!row.jobOrderId || !row.finalCategory || row.amount == null) {
         await tx.costImportRowStaging.update({
           where: { id: row.id },
           data: {
             matchStatus: CostImportMatchStatus.INVALID,
-            validationNote: "Riga approvata ma ancora incompleta: servono almeno categoria finale e importo.",
+            validationNote:
+              "Riga approvata ma ancora incompleta: servono commessa, categoria finale e importo.",
           },
         });
         continue;

@@ -1,0 +1,2 @@
+ALTER INDEX "WhatsAppUploadSession_whatsappPhone_status_lastInteractionAt_id"
+RENAME TO "WhatsAppUploadSession_whatsappPhone_status_lastInteractionA_idx";

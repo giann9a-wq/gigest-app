@@ -178,6 +178,24 @@ export async function ensureEquipmentMaintenanceFolder(input: {
   return ensureFolder(accessToken, year, equipmentId);
 }
 
+export async function ensurePhotoRepositoryFolder(input: {
+  jobOrderName: string;
+  phaseName: string;
+  uploadDate?: Date;
+}) {
+  const accessToken = await getGoogleDriveAccessToken();
+  const configuredRootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
+  const rootId =
+    configuredRootId ||
+    (await ensureFolder(accessToken, sanitizeDriveName(process.env.GOOGLE_DRIVE_ROOT_FOLDER_NAME || "GiGEST Documentale")));
+  const documentTypeId = await ensureFolder(accessToken, "Foto cantiere", rootId);
+  const jobOrderId = await ensureFolder(accessToken, sanitizeDriveName(input.jobOrderName), documentTypeId);
+  const uploadDate = input.uploadDate ?? new Date();
+  const yearId = await ensureFolder(accessToken, String(uploadDate.getUTCFullYear()), jobOrderId);
+
+  return ensureFolder(accessToken, sanitizeDriveName(input.phaseName), yearId);
+}
+
 export async function uploadDocumentBufferToDrive(input: {
   fileName: string;
   mimeType: string;

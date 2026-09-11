@@ -1,0 +1,11 @@
+.git
+.next
+.env
+.env.*
+.vercel
+node_modules
+coverage
+db-costs.json
+tmp
+tsconfig.tsbuildinfo
+prisma/dev.db*

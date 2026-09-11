@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 export type CaricamentiFilters = {
-  resourceValue: string;
+  resourceValues: string[];
   jobOrderId?: string;
   from?: string;
   to?: string;
@@ -39,26 +39,38 @@ function getDayEnd(date: Date) {
 }
 
 export function validateCaricamentiFilters(filters: CaricamentiFilters) {
-  const resourceValue = filters.resourceValue.trim();
+  const resourceValues = Array.from(
+    new Set(filters.resourceValues.map((value) => value.trim()).filter(Boolean))
+  );
   const jobOrderId = filters.jobOrderId?.trim() ?? "";
   const from = parseOptionalDate(filters.from);
   const to = parseOptionalDate(filters.to);
 
-  if (!resourceValue) {
+  if (resourceValues.length === 0) {
     return {
       ok: false as const,
       status: 400,
-      error: "Risorsa obbligatoria",
+      error: "Seleziona almeno una risorsa",
     };
   }
 
-  const [resourceType, resourceId] = resourceValue.split(":");
+  const resources = resourceValues.map((resourceValue) => {
+    const [resourceType, resourceId, ...extraParts] = resourceValue.split(":");
+    if (
+      extraParts.length > 0 ||
+      !resourceId ||
+      (resourceType !== "PERSON" && resourceType !== "EQUIPMENT")
+    ) {
+      return null;
+    }
+    return { resourceType, resourceId } as const;
+  });
 
-  if (!resourceType || !resourceId || (resourceType !== "PERSON" && resourceType !== "EQUIPMENT")) {
+  if (resources.some((resource) => resource === null)) {
     return {
       ok: false as const,
       status: 400,
-      error: "Risorsa non valida",
+      error: "Una o più risorse non sono valide",
     };
   }
 
@@ -81,8 +93,7 @@ export function validateCaricamentiFilters(filters: CaricamentiFilters) {
   return {
     ok: true as const,
     value: {
-      resourceType: resourceType as "PERSON" | "EQUIPMENT",
-      resourceId,
+      resources: resources.filter((resource): resource is NonNullable<typeof resource> => resource !== null),
       jobOrderId,
       from,
       to,
@@ -97,13 +108,15 @@ export async function getCaricamentiRows(filters: CaricamentiFilters): Promise<C
     throw new Error(validation.error);
   }
 
-  const { resourceType, resourceId, jobOrderId, from, to } = validation.value;
+  const { resources, jobOrderId, from, to } = validation.value;
 
   const rows = await prisma.diaryActivity.findMany({
     where: {
-      resourceType,
-      personId: resourceType === "PERSON" ? resourceId : undefined,
-      equipmentId: resourceType === "EQUIPMENT" ? resourceId : undefined,
+      OR: resources.map(({ resourceType, resourceId }) =>
+        resourceType === "PERSON"
+          ? { resourceType: "PERSON" as const, personId: resourceId }
+          : { resourceType: "EQUIPMENT" as const, equipmentId: resourceId }
+      ),
       jobOrderId: jobOrderId || undefined,
       referenceDate: {
         ...(from ? { gte: from } : {}),

@@ -167,13 +167,14 @@ export async function POST(request: NextRequest) {
     const idsToDelete = existing.map((x) => x.id).filter((id) => !incomingIds.has(id));
 
     if (idsToDelete.length > 0) {
-      const linkedActivitiesCount = await tx.diaryActivity.count({
-        where: { jobOrderId: { in: idsToDelete } },
-      });
+      const [linkedActivitiesCount, linkedPhotoUploadsCount] = await Promise.all([
+        tx.diaryActivity.count({ where: { jobOrderId: { in: idsToDelete } } }),
+        tx.photoUpload.count({ where: { jobOrderId: { in: idsToDelete } } }),
+      ]);
 
-      if (linkedActivitiesCount > 0) {
+      if (linkedActivitiesCount > 0 || linkedPhotoUploadsCount > 0) {
         throw new Error(
-          "Non è possibile eliminare commesse già utilizzate nel Diario. Impostale come ENDED invece di rimuoverle."
+          "Non è possibile eliminare commesse già utilizzate nel Diario o nel repository fotografico. Impostale come ENDED invece di rimuoverle."
         );
       }
 
