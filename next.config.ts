@@ -6,7 +6,6 @@ const nextConfig: NextConfig = {
     "/api/preventivi/*/export/pdf": [
       "./assets/branding/giani-letterhead.jpg",
       "./node_modules/pdfkit/js/data/**/*",
-      "./node_modules/pdfkit/js/standard-fonts/**/*",
       "./node_modules/pdfkit/package.json",
     ],
   },

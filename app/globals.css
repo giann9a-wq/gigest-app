@@ -327,14 +327,27 @@ a {
 .quotes-toolbar, .quotes-save { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
 .quotes-toolbar span { color: #6b7280; font-size: 0.82rem; }
 .quote-chapters { display: grid; gap: 0.8rem; }
-.quote-chapter { border: 1px solid #e5e7eb; border-left: 4px solid #e75c17; border-radius: 10px; padding: 0.8rem; background: #fff; display: grid; gap: 0.65rem; }
+.quote-chapter { border: 1px solid #e5e7eb; border-left: 4px solid #e75c17; border-radius: 10px; background: #fff; overflow: hidden; }
 .quote-chapter.sub { margin-left: 1.5rem; border-left-color: #f5a373; background: #fffaf7; }
+.quote-chapter-summary, .quote-line-summary { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.85rem 3rem 0.85rem 0.85rem; cursor: pointer; list-style: none; }
+.quote-chapter-summary::-webkit-details-marker, .quote-line-summary::-webkit-details-marker { display: none; }
+.quote-chapter-summary::after, .quote-line-summary::after { content: "+"; position: absolute; right: 0.9rem; top: 50%; transform: translateY(-50%); color: #c64608; font-size: 1.2rem; font-weight: 900; }
+.quote-chapter[open] > .quote-chapter-summary::after, .quote-line-accordion[open] > .quote-line-summary::after { content: "−"; }
+.quote-chapter-summary > span, .quote-line-summary > span { color: #9a3412; font-size: 0.68rem; font-weight: 900; letter-spacing: 0.035em; text-transform: uppercase; }
+.quote-chapter-summary > strong, .quote-line-summary > strong { min-width: 0; color: #1f2937; overflow-wrap: anywhere; }
+.quote-chapter-summary > small, .quote-line-summary > small { color: #6b7280; font-size: 0.76rem; font-weight: 800; white-space: nowrap; }
+.quote-chapter-body { display: grid; gap: 0.65rem; padding: 0.8rem; border-top: 1px solid #e5e7eb; }
 .quote-chapter-head { display: flex; gap: 0.75rem; align-items: center; }
 .quote-chapter-head > input { flex: 1; font-weight: 800; font-size: 1rem; }
 .quote-chapter-head > div { display: flex; gap: 0.4rem; }
 .quote-chapter-head button, .saved-quotes button, .saved-quotes a { border: 1px solid #f0b08d; background: #fff; color: #c64608; border-radius: 7px; padding: 0.42rem 0.58rem; font-weight: 700; font-size: 0.78rem; text-decoration: none; cursor: pointer; }
 .quote-chapter-head button.danger, .quote-line-remove { color: #b42318; border-color: #f4b4ae; }
-.quote-line { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.7rem; align-items: end; padding: 0.8rem; border: 1px solid #e5e7eb; border-radius: 9px; background: #fbfcfd; }
+.quote-lines { display: grid; gap: 0.6rem; }
+.quote-line-accordion { border: 1px solid #e5e7eb; border-radius: 9px; background: #fbfcfd; overflow: hidden; }
+.quote-line-summary { background: #fbfcfd; }
+.quote-line-summary > strong { font-size: 0.82rem; line-height: 1.35; }
+.quote-line-summary > small { color: #1f2937; font-size: 0.82rem; }
+.quote-line { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.7rem; align-items: end; padding: 0.8rem; border-top: 1px solid #e5e7eb; background: #fbfcfd; }
 .quote-line-field { min-width: 0; display: grid; gap: 0.32rem; color: #374151; font-size: 0.82rem; font-weight: 700; }
 .quote-line-field > span:first-child { color: #4b5563; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.025em; text-transform: uppercase; }
 .quote-line-source { grid-column: span 3; }
@@ -438,6 +451,8 @@ a {
   .quotes-form-grid, .price-list-import-form { grid-template-columns: 1fr; }
   .quotes-form-grid label.wide { grid-column: span 1; }
   .quote-chapter.sub { margin-left: 0.6rem; }
+  .quote-chapter-summary, .quote-line-summary { grid-template-columns: 1fr; gap: 0.2rem; }
+  .quote-chapter-summary > small, .quote-line-summary > small { white-space: normal; }
   .quotes-page-header, .quote-chapter-head, .quotes-toolbar, .quotes-save, .quote-totals, .quote-text-sections-head, .quote-text-section-title, .saved-quotes article { align-items: stretch; flex-direction: column; }
   .quote-chapter-head > div, .saved-quotes article > div:last-child { flex-wrap: wrap; }
   .quote-line { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0.65rem; }

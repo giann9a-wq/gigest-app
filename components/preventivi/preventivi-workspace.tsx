@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type SourceType = "PERSON_ROLE" | "EQUIPMENT" | "PRICE_LIST" | "FREE";
-type Line = { clientId: string; sourceType: SourceType; sourceReference: string; priceListItemId: string; code: string; description: string; unit: string; quantity: number; unitPrice: number; discountPercent: number };
+type NumericValue = number | string;
+type Line = { clientId: string; sourceType: SourceType; sourceReference: string; priceListItemId: string; code: string; description: string; unit: string; quantity: NumericValue; unitPrice: NumericValue; discountPercent: NumericValue };
 type Chapter = { clientId: string; parentClientId: string | null; title: string; description: string; lines: Line[] };
 type TextSection = { clientId: string; title: string; content: string };
-type QuoteForm = { id?: string; number?: string; title: string; customerName: string; customerContact: string; siteAddress: string; description: string; plannedStartDate: string; plannedEndDate: string; isOwnAccountSite: boolean; generalDiscountPercent: number; textSections: TextSection[]; chapters: Chapter[] };
+type QuoteForm = { id?: string; number?: string; title: string; customerName: string; customerContact: string; siteAddress: string; description: string; plannedStartDate: string; plannedEndDate: string; isOwnAccountSite: boolean; generalDiscountPercent: NumericValue; textSections: TextSection[]; chapters: Chapter[] };
 type Options = { roles: Array<{ role: string; hourlyCost: number }>; equipment: Array<{ id: string; name: string; hourlyCost: number }>; priceListVersion: { id: string; name: string; itemCount: number } | null };
 type PriceItem = { id: string; code: string; description: string; unit: string; price: number; sourceFile: string; category: string };
 type PricePickerTarget = { chapterId: string; lineId: string };
@@ -33,6 +34,11 @@ const money = (value: number) => {
   return `${sign}${groupedInteger},${decimalPart} €`;
 };
 const dateTime = (value: string) => new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+const normalizeNumericValue = (value: string): NumericValue => {
+  if (value === "") return "";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : "";
+};
 
 async function api(url: string, options?: RequestInit) {
   const response = await fetch(url, options); const data = await response.json();
@@ -237,31 +243,37 @@ export function PreventiviWorkspace({ mode = "history", quoteId }: PreventiviWor
         </div>
 
         <div className="quotes-toolbar"><button className="mobile-button-secondary" onClick={() => setForm((current) => ({ ...current, chapters: [...current.chapters, { clientId: uid(), parentClientId: null, title: "Nuovo macro capitolo", description: "", lines: [] }] }))}>+ Macro capitolo</button><span>{options.priceListVersion ? `${options.priceListVersion.name}: ${options.priceListVersion.itemCount.toLocaleString("it-IT")} voci` : "Listino non ancora inizializzato"}</span></div>
-        <div className="quote-chapters">{form.chapters.map((chapter) => <section key={chapter.clientId} className={`quote-chapter ${chapter.parentClientId ? "sub" : ""}`}>
-          <div className="quote-chapter-head"><input value={chapter.title} onChange={(e) => updateChapter(chapter.clientId, { title: e.target.value })} /><div>{!chapter.parentClientId && <button onClick={() => setForm((current) => ({ ...current, chapters: [...current.chapters, { clientId: uid(), parentClientId: chapter.clientId, title: "Nuovo sottocapitolo", description: "", lines: [] }] }))}>+ Sottocapitolo</button>}<button onClick={() => addLine(chapter.clientId)}>+ Voce</button><button className="danger" onClick={() => removeChapter(chapter.clientId)}>Rimuovi</button></div></div>
-          {chapter.lines.map((line) => <div className="quote-line" key={line.clientId}>
-            <label className="quote-line-field quote-line-source">
-              <span>Origine voce</span>
-              <select value={line.sourceType} onChange={(e) => updateLine(chapter.clientId, line.clientId, { sourceType: e.target.value as SourceType, sourceReference: "", priceListItemId: "", code: "", description: "", unit: e.target.value === "PERSON_ROLE" || e.target.value === "EQUIPMENT" ? "h" : "a corpo", unitPrice: 0 })}><option value="PERSON_ROLE">Ruolo personale</option><option value="EQUIPMENT">Mezzo / attrezzatura</option><option value="PRICE_LIST">Listino edilizia</option><option value="FREE">Voce libera</option></select>
-            </label>
-            {line.sourceType === "PERSON_ROLE" && <label className="quote-line-field quote-line-selector"><span>Ruolo</span><select value={line.sourceReference} onChange={(e) => { const role = options.roles.find((item) => item.role === e.target.value); updateLine(chapter.clientId, line.clientId, { sourceReference: e.target.value, description: e.target.value, unit: "h", unitPrice: role?.hourlyCost ?? 0 }); }}><option value="">Seleziona ruolo</option>{options.roles.map((item) => <option key={item.role}>{item.role}</option>)}</select></label>}
-            {line.sourceType === "EQUIPMENT" && <label className="quote-line-field quote-line-selector"><span>Mezzo o attrezzatura</span><select value={line.sourceReference} onChange={(e) => { const item = options.equipment.find((x) => x.id === e.target.value); updateLine(chapter.clientId, line.clientId, { sourceReference: e.target.value, description: item?.name ?? "", unit: "h", unitPrice: item?.hourlyCost ?? 0 }); }}><option value="">Seleziona mezzo</option>{options.equipment.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
-            {line.sourceType === "PRICE_LIST" && <div className="quote-line-field quote-line-selector"><span>Voce di listino</span><button type="button" className="price-list-open-picker" onClick={() => openPricePicker(chapter.clientId, line)}><strong>{line.code || "Cerca nel listino"}</strong><span>{line.priceListItemId ? "Cambia voce selezionata" : "Apri ricerca completa"}</span></button></div>}
-            {line.sourceType === "FREE" && <div className="quote-line-field quote-line-selector"><span>Compilazione</span><div className="quote-line-free-note">Inserimento manuale</div></div>}
-            <label className="quote-line-field quote-line-description">
-              <span>Descrizione voce (editabile)</span>
-              <textarea rows={3} placeholder="Descrizione completa della lavorazione o risorsa" value={line.description} onChange={(e) => updateLine(chapter.clientId, line.clientId, { description: e.target.value })} />
-            </label>
-            <label className="quote-line-field quote-line-unit"><span>U.M.</span><input list="quote-units" value={line.unit} onChange={(e) => updateLine(chapter.clientId, line.clientId, { unit: e.target.value })} /></label>
-            <label className="quote-line-field quote-line-quantity"><span>Quantità</span><input type="number" min="0" step="0.001" value={line.quantity} onChange={(e) => updateLine(chapter.clientId, line.clientId, { quantity: Number(e.target.value) })} /></label>
-            <label className="quote-line-field quote-line-price"><span>Prezzo unitario (€)</span><input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(chapter.clientId, line.clientId, { unitPrice: Number(e.target.value) })} /></label>
-            <label className="quote-line-field quote-line-discount"><span>Sconto (%)</span><input type="number" min="0" max="100" step="0.01" value={line.discountPercent} onChange={(e) => updateLine(chapter.clientId, line.clientId, { discountPercent: Number(e.target.value) })} /></label>
-            <div className="quote-line-field quote-line-total"><span>Totale netto</span><strong>{money(line.quantity * line.unitPrice * (1 - line.discountPercent / 100))}</strong></div>
-            <button type="button" className="quote-line-remove" aria-label="Rimuovi voce" title="Rimuovi voce" onClick={() => updateChapter(chapter.clientId, { lines: chapter.lines.filter((item) => item.clientId !== line.clientId) })}>×</button>
-          </div>)}
-        </section>)}</div>
+        <div className="quote-chapters">{form.chapters.map((chapter) => <details key={chapter.clientId} className={`quote-chapter ${chapter.parentClientId ? "sub" : ""}`}>
+          <summary className="quote-chapter-summary"><span>{chapter.parentClientId ? "Sottocapitolo" : "Macro capitolo"}</span><strong>{chapter.title || "Senza titolo"}</strong><small>{chapter.lines.length} {chapter.lines.length === 1 ? "voce" : "voci"}</small></summary>
+          <div className="quote-chapter-body">
+            <div className="quote-chapter-head"><input value={chapter.title} onChange={(e) => updateChapter(chapter.clientId, { title: e.target.value })} /><div>{!chapter.parentClientId && <button onClick={() => setForm((current) => ({ ...current, chapters: [...current.chapters, { clientId: uid(), parentClientId: chapter.clientId, title: "Nuovo sottocapitolo", description: "", lines: [] }] }))}>+ Sottocapitolo</button>}<button onClick={() => addLine(chapter.clientId)}>+ Voce</button><button className="danger" onClick={() => removeChapter(chapter.clientId)}>Rimuovi</button></div></div>
+            <div className="quote-lines">{chapter.lines.map((line) => <details className="quote-line-accordion" key={line.clientId}>
+              <summary className="quote-line-summary"><span>{line.sourceType === "PERSON_ROLE" ? "Personale" : line.sourceType === "EQUIPMENT" ? "Mezzo / attrezzatura" : line.sourceType === "PRICE_LIST" ? "Listino edilizia" : "Voce libera"}</span><strong>{line.code ? `${line.code} · ${line.description || "Voce senza descrizione"}` : line.description || "Nuova voce da compilare"}</strong><small>{money(Number(line.quantity) * Number(line.unitPrice) * (1 - Number(line.discountPercent) / 100))}</small></summary>
+              <div className="quote-line">
+                <label className="quote-line-field quote-line-source">
+                  <span>Origine voce</span>
+                  <select value={line.sourceType} onChange={(e) => updateLine(chapter.clientId, line.clientId, { sourceType: e.target.value as SourceType, sourceReference: "", priceListItemId: "", code: "", description: "", unit: e.target.value === "PERSON_ROLE" || e.target.value === "EQUIPMENT" ? "h" : "a corpo", unitPrice: 0 })}><option value="PERSON_ROLE">Ruolo personale</option><option value="EQUIPMENT">Mezzo / attrezzatura</option><option value="PRICE_LIST">Listino edilizia</option><option value="FREE">Voce libera</option></select>
+                </label>
+                {line.sourceType === "PERSON_ROLE" && <label className="quote-line-field quote-line-selector"><span>Ruolo</span><select value={line.sourceReference} onChange={(e) => { const role = options.roles.find((item) => item.role === e.target.value); updateLine(chapter.clientId, line.clientId, { sourceReference: e.target.value, description: e.target.value, unit: "h", unitPrice: role?.hourlyCost ?? 0 }); }}><option value="">Seleziona ruolo</option>{options.roles.map((item) => <option key={item.role}>{item.role}</option>)}</select></label>}
+                {line.sourceType === "EQUIPMENT" && <label className="quote-line-field quote-line-selector"><span>Mezzo o attrezzatura</span><select value={line.sourceReference} onChange={(e) => { const item = options.equipment.find((x) => x.id === e.target.value); updateLine(chapter.clientId, line.clientId, { sourceReference: e.target.value, description: item?.name ?? "", unit: "h", unitPrice: item?.hourlyCost ?? 0 }); }}><option value="">Seleziona mezzo</option>{options.equipment.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+                {line.sourceType === "PRICE_LIST" && <div className="quote-line-field quote-line-selector"><span>Voce di listino</span><button type="button" className="price-list-open-picker" onClick={() => openPricePicker(chapter.clientId, line)}><strong>{line.code || "Cerca nel listino"}</strong><span>{line.priceListItemId ? "Cambia voce selezionata" : "Apri ricerca completa"}</span></button></div>}
+                {line.sourceType === "FREE" && <div className="quote-line-field quote-line-selector"><span>Compilazione</span><div className="quote-line-free-note">Inserimento manuale</div></div>}
+                <label className="quote-line-field quote-line-description">
+                  <span>Descrizione voce (editabile)</span>
+                  <textarea rows={3} placeholder="Descrizione completa della lavorazione o risorsa" value={line.description} onChange={(e) => updateLine(chapter.clientId, line.clientId, { description: e.target.value })} />
+                </label>
+                <label className="quote-line-field quote-line-unit"><span>U.M.</span><input list="quote-units" value={line.unit} onChange={(e) => updateLine(chapter.clientId, line.clientId, { unit: e.target.value })} /></label>
+                <label className="quote-line-field quote-line-quantity"><span>Quantità</span><input type="number" min="0" step="0.001" value={line.quantity} onChange={(e) => updateLine(chapter.clientId, line.clientId, { quantity: e.target.value })} onBlur={(e) => updateLine(chapter.clientId, line.clientId, { quantity: normalizeNumericValue(e.target.value) })} /></label>
+                <label className="quote-line-field quote-line-price"><span>Prezzo unitario (€)</span><input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(chapter.clientId, line.clientId, { unitPrice: e.target.value })} onBlur={(e) => updateLine(chapter.clientId, line.clientId, { unitPrice: normalizeNumericValue(e.target.value) })} /></label>
+                <label className="quote-line-field quote-line-discount"><span>Sconto (%)</span><input type="number" min="0" max="100" step="0.01" value={line.discountPercent} onChange={(e) => updateLine(chapter.clientId, line.clientId, { discountPercent: e.target.value })} onBlur={(e) => updateLine(chapter.clientId, line.clientId, { discountPercent: normalizeNumericValue(e.target.value) })} /></label>
+                <div className="quote-line-field quote-line-total"><span>Totale netto</span><strong>{money(Number(line.quantity) * Number(line.unitPrice) * (1 - Number(line.discountPercent) / 100))}</strong></div>
+                <button type="button" className="quote-line-remove" aria-label="Rimuovi voce" title="Rimuovi voce" onClick={() => updateChapter(chapter.clientId, { lines: chapter.lines.filter((item) => item.clientId !== line.clientId) })}>×</button>
+              </div>
+            </details>)}</div>
+          </div>
+        </details>)}</div>
         <datalist id="quote-units">{units.map((unit) => <option key={unit} value={unit} />)}</datalist>
-        <div className="quote-totals"><label>Sconto generale % <input type="number" min="0" max="100" step="0.01" value={form.generalDiscountPercent} onChange={(e) => setForm({ ...form, generalDiscountPercent: Number(e.target.value) })} /></label><div><span>Lordo {money(totals.gross)}</span><span>Sconti voci -{money(totals.lineDiscount)}</span><span>Sconto generale -{money(totals.general)}</span><strong>Totale {money(totals.total)}</strong></div></div>
+        <div className="quote-totals"><label>Sconto generale % <input type="number" min="0" max="100" step="0.01" value={form.generalDiscountPercent} onChange={(e) => setForm({ ...form, generalDiscountPercent: e.target.value })} onBlur={(e) => setForm((current) => ({ ...current, generalDiscountPercent: normalizeNumericValue(e.target.value) }))} /></label><div><span>Lordo {money(totals.gross)}</span><span>Sconti voci -{money(totals.lineDiscount)}</span><span>Sconto generale -{money(totals.general)}</span><strong>Totale {money(totals.total)}</strong></div></div>
 
         <section className="quote-text-sections">
           <div className="quote-text-sections-head">
