@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
       OR: [
         { code: { contains: token, mode: "insensitive" as const } },
         { description: { contains: token, mode: "insensitive" as const } },
+        { regionalDescription: { contains: token, mode: "insensitive" as const } },
+        { detailDescription: { contains: token, mode: "insensitive" as const } },
       ],
     })),
   };
@@ -56,6 +58,8 @@ export async function GET(request: NextRequest) {
       id: item.id,
       code: item.code,
       description: item.description,
+      regionalDescription: item.regionalDescription ?? item.description,
+      detailDescription: item.detailDescription ?? "",
       unit: item.unit ?? "",
       price: Number(item.price),
       sourceFile: item.sourceFile,

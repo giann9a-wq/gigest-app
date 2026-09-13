@@ -554,15 +554,17 @@ model PriceListVersion {
 }
 
 model PriceListItem {
-  id          String   @id @default(cuid())
-  versionId   String
-  code        String
-  description String   @db.Text
-  unit        String?
-  price       Decimal  @db.Decimal(14, 4)
-  sourceFile  String
-  category    String?
-  createdAt   DateTime @default(now())
+  id                    String   @id @default(cuid())
+  versionId             String
+  code                  String
+  description           String   @db.Text
+  regionalDescription   String?  @db.Text
+  detailDescription     String?  @db.Text
+  unit                  String?
+  price                 Decimal  @db.Decimal(14, 4)
+  sourceFile            String
+  category              String?
+  createdAt             DateTime @default(now())
 
   version    PriceListVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   quoteLines QuoteLine[]
@@ -637,6 +639,9 @@ model QuoteLine {
   priceListItemId String?
   code            String?
   description     String              @db.Text
+  regionalDescription String?         @db.Text
+  detailDescription   String?         @db.Text
+  includeDetail       Boolean         @default(true)
   unit            String
   quantity        Decimal             @default(1) @db.Decimal(14, 3)
   unitPrice       Decimal             @default(0) @db.Decimal(14, 4)

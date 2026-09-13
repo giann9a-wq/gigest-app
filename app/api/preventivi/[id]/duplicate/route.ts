@@ -25,7 +25,7 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     for (const chapter of original.chapters) {
       const created = await tx.quoteChapter.create({ data: { quoteId: copy.id, parentId: chapter.parentId ? idMap.get(chapter.parentId) ?? null : null, title: chapter.title, description: chapter.description, sortOrder: chapter.sortOrder } });
       idMap.set(chapter.id, created.id);
-      if (chapter.lines.length) await tx.quoteLine.createMany({ data: chapter.lines.map((line) => ({ chapterId: created.id, sourceType: line.sourceType, sourceReference: line.sourceReference, priceListItemId: line.priceListItemId, code: line.code, description: line.description, unit: line.unit, quantity: line.quantity, unitPrice: line.unitPrice, discountPercent: line.discountPercent, sortOrder: line.sortOrder })) });
+      if (chapter.lines.length) await tx.quoteLine.createMany({ data: chapter.lines.map((line) => ({ chapterId: created.id, sourceType: line.sourceType, sourceReference: line.sourceReference, priceListItemId: line.priceListItemId, code: line.code, description: line.description, regionalDescription: line.regionalDescription, detailDescription: line.detailDescription, includeDetail: line.includeDetail, unit: line.unit, quantity: line.quantity, unitPrice: line.unitPrice, discountPercent: line.discountPercent, sortOrder: line.sortOrder })) });
     }
     return tx.quote.findUniqueOrThrow({ where: { id: copy.id }, include: quoteInclude });
   });

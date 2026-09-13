@@ -35,8 +35,13 @@ export function PriceListImportPanel() {
       for (const source of workbooks) {
         const workbook = XLSX.read(source.data, { type: "array", dense: true }); const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, raw: true }); const headers = (rows[0] ?? []).map((value) => String(value ?? "").trim());
-        const ci = headers.indexOf("Codice"), di = headers.indexOf("Declaratoria"), pi = headers.indexOf("Prezzo"), ui = headers.findIndex((v) => v === "U.M." || v === "U. M."), gi = headers.indexOf("Descr. Liv. 1");
-        const parsed = rows.slice(1).map((row) => ({ code: String(row[ci] ?? "").trim(), description: String(row[di] ?? "").replace(/\s+/g, " ").trim(), unit: String(row[ui] ?? "").replace(/^1\s+/, "").trim(), price: Number(row[pi]), sourceFile: source.name, category: gi >= 0 ? String(row[gi] ?? "").trim() : "" })).filter((row) => row.code && row.description && Number.isFinite(row.price));
+        const ci = headers.indexOf("Codice"), di = headers.indexOf("Declaratoria"), ri = headers.indexOf("Declaratoria Regione"), ddi = headers.indexOf("Declaratoria Regione Dettaglio"), pi = headers.indexOf("Prezzo"), ui = headers.findIndex((v) => v === "U.M." || v === "U. M."), gi = headers.indexOf("Descr. Liv. 1");
+        const parsed = rows.slice(1).map((row) => {
+          const legacyDescription = String(row[di] ?? "").replace(/\s+/g, " ").trim();
+          const regionalDescription = String(row[ri >= 0 ? ri : di] ?? "").replace(/\s+/g, " ").trim();
+          const detailDescription = ddi >= 0 ? String(row[ddi] ?? "").replace(/\s+/g, " ").trim() : "";
+          return { code: String(row[ci] ?? "").trim(), description: [regionalDescription, detailDescription].filter(Boolean).join("\n") || legacyDescription, regionalDescription, detailDescription, unit: String(row[ui] ?? "").replace(/^1\s+/, "").trim(), price: Number(row[pi]), sourceFile: source.name, category: gi >= 0 ? String(row[gi] ?? "").trim() : "" };
+        }).filter((row) => row.code && row.description && Number.isFinite(row.price));
         for (let index = 0; index < parsed.length; index += 400) {
           const response = await fetch("/api/admin/prezzario/chunk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "batch", versionId: startData.versionId, rows: parsed.slice(index, index + 400) }) });
           const data = await response.json(); if (!response.ok) throw new Error(data.error); imported += Math.min(400, parsed.length - index); setMessage(`Importazione in corso: ${imported.toLocaleString("it-IT")} voci elaborate...`);

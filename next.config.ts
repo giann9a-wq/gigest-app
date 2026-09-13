@@ -5,8 +5,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/preventivi/*/export/pdf": [
       "./assets/branding/giani-letterhead.jpg",
-      "./node_modules/pdfkit/js/data/**/*",
       "./node_modules/pdfkit/package.json",
+      "./node_modules/pdfkit/js/pdfkit.standalone.js",
     ],
   },
 };

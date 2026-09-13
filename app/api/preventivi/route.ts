@@ -75,7 +75,11 @@ export async function POST(request: NextRequest) {
             chapterId: created.id, sourceType: line.sourceType as QuoteLineSourceType,
             sourceReference: String(line.sourceReference ?? "").trim() || null,
             priceListItemId: line.priceListItemId || null, code: String(line.code ?? "").trim() || null,
-            description: String(line.description).trim(), unit: String(line.unit).trim(),
+            description: String(line.description).trim(),
+            regionalDescription: String(line.regionalDescription ?? "").trim() || null,
+            detailDescription: String(line.detailDescription ?? "").trim() || null,
+            includeDetail: line.includeDetail !== false,
+            unit: String(line.unit).trim(),
             quantity: decimal(line.quantity, 3), unitPrice: decimal(line.unitPrice, 4), discountPercent: decimal(line.discountPercent), sortOrder: line.sortOrder ?? lineIndex,
           })) });
         }

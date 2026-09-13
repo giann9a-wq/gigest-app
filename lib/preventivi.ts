@@ -38,6 +38,9 @@ export type QuotePayload = {
       priceListItemId?: string;
       code?: string;
       description?: string;
+      regionalDescription?: string;
+      detailDescription?: string;
+      includeDetail?: boolean;
       unit?: string;
       quantity?: number | string;
       unitPrice?: number | string;

@@ -19,6 +19,8 @@ export async function POST(request: NextRequest) {
       const rows = Array.isArray(body.rows) ? body.rows : [];
       await prisma.priceListItem.createMany({ data: rows.map((row: Record<string, unknown>) => ({
         versionId, code: String(row.code ?? "").trim(), description: String(row.description ?? "").trim(),
+        regionalDescription: String(row.regionalDescription ?? "").trim() || null,
+        detailDescription: String(row.detailDescription ?? "").trim() || null,
         unit: String(row.unit ?? "").trim() || null, price: new Prisma.Decimal(Number(row.price ?? 0).toFixed(4)),
         sourceFile: String(row.sourceFile ?? "upload.xlsx"), category: String(row.category ?? "").trim() || null,
       })).filter((row: { code: string; description: string }) => row.code && row.description), skipDuplicates: true });

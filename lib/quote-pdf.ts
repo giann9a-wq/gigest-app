@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import PDFDocument from "pdfkit";
+import PDFDocument from "pdfkit/js/pdfkit.standalone.js";
 
 type PdfLine = {
   code: string | null;
@@ -67,7 +67,7 @@ function date(value: Date) {
 }
 
 export async function createQuotePdf(quote: QuotePdfInput) {
-  const letterhead = fs.readFileSync(path.join(process.cwd(), "assets", "branding", "giani-letterhead.jpg"));
+  const letterhead = `data:image/jpeg;base64,${fs.readFileSync(path.join(process.cwd(), "assets", "branding", "giani-letterhead.jpg")).toString("base64")}`;
   const doc = new PDFDocument({ size: "A4", margin: 0, bufferPages: true, autoFirstPage: false, info: { Title: `Preventivo ${quote.number}`, Author: "Impresa Giani Giovanni S.r.l." } });
   const chunks: Buffer[] = [];
   doc.on("data", (chunk: Buffer) => chunks.push(chunk));

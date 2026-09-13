@@ -10,6 +10,8 @@ export type PriceListSource = {
 type ParsedItem = {
   code: string;
   description: string;
+  regionalDescription: string | null;
+  detailDescription: string | null;
   unit: string | null;
   price: Prisma.Decimal;
   sourceFile: string;
@@ -53,6 +55,8 @@ export function parsePriceListWorkbook(source: PriceListSource): ParsedItem[] {
   const headers = (rows[0] ?? []).map(cleanText);
   const codeIndex = headers.indexOf("Codice");
   const descriptionIndex = headers.indexOf("Declaratoria");
+  const regionalDescriptionIndex = headers.indexOf("Declaratoria Regione");
+  const detailDescriptionIndex = headers.indexOf("Declaratoria Regione Dettaglio");
   const priceIndex = headers.indexOf("Prezzo");
   const unitIndex = headers.findIndex((header) => header === "U.M." || header === "U. M.");
   const categoryIndex = headers.indexOf("Descr. Liv. 1");
@@ -66,7 +70,10 @@ export function parsePriceListWorkbook(source: PriceListSource): ParsedItem[] {
 
   for (const row of rows.slice(1)) {
     const code = cleanText(row[codeIndex]);
-    const description = cleanText(row[descriptionIndex]);
+    const legacyDescription = cleanText(row[descriptionIndex]);
+    const regionalDescription = regionalDescriptionIndex >= 0 ? cleanText(row[regionalDescriptionIndex]) : legacyDescription;
+    const detailDescription = detailDescriptionIndex >= 0 ? cleanText(row[detailDescriptionIndex]) : "";
+    const description = [regionalDescription, detailDescription].filter(Boolean).join("\n");
     const price = parsePrice(row[priceIndex]);
     if (!code || !description || price === null) continue;
 
@@ -77,6 +84,8 @@ export function parsePriceListWorkbook(source: PriceListSource): ParsedItem[] {
     items.push({
       code,
       description,
+      regionalDescription: regionalDescription || null,
+      detailDescription: detailDescription || null,
       unit: unitIndex >= 0 ? normalizeUnit(row[unitIndex]) : null,
       price: new Prisma.Decimal(price.toFixed(4)),
       sourceFile: source.name,

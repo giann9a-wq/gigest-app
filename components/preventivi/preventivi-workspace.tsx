@@ -6,19 +6,19 @@ import { useRouter } from "next/navigation";
 
 type SourceType = "PERSON_ROLE" | "EQUIPMENT" | "PRICE_LIST" | "FREE";
 type NumericValue = number | string;
-type Line = { clientId: string; sourceType: SourceType; sourceReference: string; priceListItemId: string; code: string; description: string; unit: string; quantity: NumericValue; unitPrice: NumericValue; discountPercent: NumericValue };
+type Line = { clientId: string; sourceType: SourceType; sourceReference: string; priceListItemId: string; code: string; description: string; regionalDescription: string; detailDescription: string; includeDetail: boolean; unit: string; quantity: NumericValue; unitPrice: NumericValue; discountPercent: NumericValue };
 type Chapter = { clientId: string; parentClientId: string | null; title: string; description: string; lines: Line[] };
 type TextSection = { clientId: string; title: string; content: string };
 type QuoteForm = { id?: string; number?: string; title: string; customerName: string; customerContact: string; siteAddress: string; description: string; plannedStartDate: string; plannedEndDate: string; isOwnAccountSite: boolean; generalDiscountPercent: NumericValue; textSections: TextSection[]; chapters: Chapter[] };
 type Options = { roles: Array<{ role: string; hourlyCost: number }>; equipment: Array<{ id: string; name: string; hourlyCost: number }>; priceListVersion: { id: string; name: string; itemCount: number } | null };
-type PriceItem = { id: string; code: string; description: string; unit: string; price: number; sourceFile: string; category: string };
+type PriceItem = { id: string; code: string; description: string; regionalDescription: string; detailDescription: string; unit: string; price: number; sourceFile: string; category: string };
 type PricePickerTarget = { chapterId: string; lineId: string };
 type QuoteRow = QuoteForm & { id: string; number: string; status: string; updatedAt: string; totals: { gross: number; lineDiscounts: number; generalDiscount: number; total: number }; opportunity?: { id: string; status: string; notes?: string | null; jobOrder?: { id: string; name: string } | null } | null };
 type PreventiviWorkspaceProps = { mode?: "history" | "form"; quoteId?: string };
 
 const units = ["m", "h", "m²", "m³", "kg", "cad", "a corpo"];
 const uid = () => Math.random().toString(36).slice(2, 10);
-const emptyLine = (sourceType: SourceType = "FREE"): Line => ({ clientId: uid(), sourceType, sourceReference: "", priceListItemId: "", code: "", description: "", unit: sourceType === "PERSON_ROLE" || sourceType === "EQUIPMENT" ? "h" : "a corpo", quantity: 1, unitPrice: 0, discountPercent: 0 });
+const emptyLine = (sourceType: SourceType = "FREE"): Line => ({ clientId: uid(), sourceType, sourceReference: "", priceListItemId: "", code: "", description: "", regionalDescription: "", detailDescription: "", includeDetail: true, unit: sourceType === "PERSON_ROLE" || sourceType === "EQUIPMENT" ? "h" : "a corpo", quantity: 1, unitPrice: 0, discountPercent: 0 });
 const defaultTextSections = (): TextSection[] => [
   { clientId: uid(), title: "Note all'offerta", content: "" },
   { clientId: uid(), title: "Tempistiche e fasi di lavoro", content: "" },
@@ -39,6 +39,7 @@ const normalizeNumericValue = (value: string): NumericValue => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : "";
 };
+const composePriceDescription = (regionalDescription: string, detailDescription: string, includeDetail: boolean) => [regionalDescription.trim(), includeDetail ? detailDescription.trim() : ""].filter(Boolean).join("\n");
 
 async function api(url: string, options?: RequestInit) {
   const response = await fetch(url, options); const data = await response.json();
@@ -66,7 +67,7 @@ export function PreventiviWorkspace({ mode = "history", quoteId }: PreventiviWor
   async function loadQuotes() { const data = await api("/api/preventivi"); setQuotes(data.rows); }
   async function loadOptions() { const data = await api("/api/preventivi/options"); setOptions(data); }
   function hydrateQuote(quote: QuoteRow) {
-    setForm({ ...quote, textSections: quote.textSections?.length ? quote.textSections.map((section: any) => ({ ...section, clientId: section.id })) : defaultTextSections(), chapters: quote.chapters.map((chapter: any) => ({ ...chapter, clientId: chapter.id, parentClientId: chapter.parentId, lines: chapter.lines.map((line: any) => ({ ...line, clientId: line.id, sourceReference: line.sourceReference ?? "", priceListItemId: line.priceListItemId ?? "", code: line.code ?? "" })) })) });
+    setForm({ ...quote, textSections: quote.textSections?.length ? quote.textSections.map((section: any) => ({ ...section, clientId: section.id })) : defaultTextSections(), chapters: quote.chapters.map((chapter: any) => ({ ...chapter, clientId: chapter.id, parentClientId: chapter.parentId, lines: chapter.lines.map((line: any) => ({ ...line, clientId: line.id, sourceReference: line.sourceReference ?? "", priceListItemId: line.priceListItemId ?? "", code: line.code ?? "", regionalDescription: line.regionalDescription ?? line.description ?? "", detailDescription: line.detailDescription ?? "", includeDetail: line.includeDetail !== false })) })) });
   }
   useEffect(() => {
     if (mode === "history") {
@@ -184,7 +185,10 @@ export function PreventiviWorkspace({ mode = "history", quoteId }: PreventiviWor
       priceListItemId: item.id,
       sourceReference: item.id,
       code: item.code,
-      description: item.description,
+      regionalDescription: item.regionalDescription,
+      detailDescription: item.detailDescription,
+      includeDetail: true,
+      description: composePriceDescription(item.regionalDescription, item.detailDescription, true),
       unit: item.unit || "a corpo",
       unitPrice: item.price,
     });
@@ -252,16 +256,20 @@ export function PreventiviWorkspace({ mode = "history", quoteId }: PreventiviWor
               <div className="quote-line">
                 <label className="quote-line-field quote-line-source">
                   <span>Origine voce</span>
-                  <select value={line.sourceType} onChange={(e) => updateLine(chapter.clientId, line.clientId, { sourceType: e.target.value as SourceType, sourceReference: "", priceListItemId: "", code: "", description: "", unit: e.target.value === "PERSON_ROLE" || e.target.value === "EQUIPMENT" ? "h" : "a corpo", unitPrice: 0 })}><option value="PERSON_ROLE">Ruolo personale</option><option value="EQUIPMENT">Mezzo / attrezzatura</option><option value="PRICE_LIST">Listino edilizia</option><option value="FREE">Voce libera</option></select>
+                  <select value={line.sourceType} onChange={(e) => updateLine(chapter.clientId, line.clientId, { sourceType: e.target.value as SourceType, sourceReference: "", priceListItemId: "", code: "", description: "", regionalDescription: "", detailDescription: "", includeDetail: true, unit: e.target.value === "PERSON_ROLE" || e.target.value === "EQUIPMENT" ? "h" : "a corpo", unitPrice: 0 })}><option value="PERSON_ROLE">Ruolo personale</option><option value="EQUIPMENT">Mezzo / attrezzatura</option><option value="PRICE_LIST">Listino edilizia</option><option value="FREE">Voce libera</option></select>
                 </label>
                 {line.sourceType === "PERSON_ROLE" && <label className="quote-line-field quote-line-selector"><span>Ruolo</span><select value={line.sourceReference} onChange={(e) => { const role = options.roles.find((item) => item.role === e.target.value); updateLine(chapter.clientId, line.clientId, { sourceReference: e.target.value, description: e.target.value, unit: "h", unitPrice: role?.hourlyCost ?? 0 }); }}><option value="">Seleziona ruolo</option>{options.roles.map((item) => <option key={item.role}>{item.role}</option>)}</select></label>}
                 {line.sourceType === "EQUIPMENT" && <label className="quote-line-field quote-line-selector"><span>Mezzo o attrezzatura</span><select value={line.sourceReference} onChange={(e) => { const item = options.equipment.find((x) => x.id === e.target.value); updateLine(chapter.clientId, line.clientId, { sourceReference: e.target.value, description: item?.name ?? "", unit: "h", unitPrice: item?.hourlyCost ?? 0 }); }}><option value="">Seleziona mezzo</option>{options.equipment.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
                 {line.sourceType === "PRICE_LIST" && <div className="quote-line-field quote-line-selector"><span>Voce di listino</span><button type="button" className="price-list-open-picker" onClick={() => openPricePicker(chapter.clientId, line)}><strong>{line.code || "Cerca nel listino"}</strong><span>{line.priceListItemId ? "Cambia voce selezionata" : "Apri ricerca completa"}</span></button></div>}
                 {line.sourceType === "FREE" && <div className="quote-line-field quote-line-selector"><span>Compilazione</span><div className="quote-line-free-note">Inserimento manuale</div></div>}
-                <label className="quote-line-field quote-line-description">
+                {line.sourceType === "PRICE_LIST" ? <div className="quote-line-price-descriptions">
+                  <label className="quote-line-field"><span>Declaratoria Regione (editabile)</span><textarea rows={3} value={line.regionalDescription} onChange={(e) => { const regionalDescription = e.target.value; updateLine(chapter.clientId, line.clientId, { regionalDescription, description: composePriceDescription(regionalDescription, line.detailDescription, line.includeDetail) }); }} /></label>
+                  <label className="quote-line-field"><span>Dettaglio (editabile)</span><textarea rows={4} value={line.detailDescription} onChange={(e) => { const detailDescription = e.target.value; updateLine(chapter.clientId, line.clientId, { detailDescription, description: composePriceDescription(line.regionalDescription, detailDescription, line.includeDetail) }); }} /></label>
+                  <label className="quote-line-include-detail"><input type="checkbox" checked={line.includeDetail} onChange={(e) => { const includeDetail = e.target.checked; updateLine(chapter.clientId, line.clientId, { includeDetail, description: composePriceDescription(line.regionalDescription, line.detailDescription, includeDetail) }); }} /><span>Includi il dettaglio nella voce e negli export PDF/Excel</span></label>
+                </div> : <label className="quote-line-field quote-line-description">
                   <span>Descrizione voce (editabile)</span>
                   <textarea rows={3} placeholder="Descrizione completa della lavorazione o risorsa" value={line.description} onChange={(e) => updateLine(chapter.clientId, line.clientId, { description: e.target.value })} />
-                </label>
+                </label>}
                 <label className="quote-line-field quote-line-unit"><span>U.M.</span><input list="quote-units" value={line.unit} onChange={(e) => updateLine(chapter.clientId, line.clientId, { unit: e.target.value })} /></label>
                 <label className="quote-line-field quote-line-quantity"><span>Quantità</span><input type="number" min="0" step="0.001" value={line.quantity} onChange={(e) => updateLine(chapter.clientId, line.clientId, { quantity: e.target.value })} onBlur={(e) => updateLine(chapter.clientId, line.clientId, { quantity: normalizeNumericValue(e.target.value) })} /></label>
                 <label className="quote-line-field quote-line-price"><span>Prezzo unitario (€)</span><input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(chapter.clientId, line.clientId, { unitPrice: e.target.value })} onBlur={(e) => updateLine(chapter.clientId, line.clientId, { unitPrice: normalizeNumericValue(e.target.value) })} /></label>
@@ -334,7 +342,10 @@ export function PreventiviWorkspace({ mode = "history", quoteId }: PreventiviWor
               <strong>{item.code}</strong>
               <div><span>U.M. {item.unit || "-"}</span><strong>{money(item.price)}</strong></div>
             </div>
-            <p>{item.description}</p>
+            <div className="price-list-picker-descriptions">
+              <div><strong>Declaratoria Regione</strong><p>{item.regionalDescription || item.description}</p></div>
+              {item.detailDescription ? <div><strong>Dettaglio</strong><p>{item.detailDescription}</p></div> : null}
+            </div>
             <div className="price-list-picker-row-foot">
               <span>{item.category || "Voce di listino"}</span>
               <button type="button" onClick={() => selectPriceItem(item)}>Usa questa voce</button>

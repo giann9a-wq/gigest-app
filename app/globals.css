@@ -354,6 +354,10 @@ a {
 .quote-line-selector { grid-column: span 9; }
 .quote-line-description { grid-column: 1 / -1; }
 .quote-line-description textarea { min-height: 92px; line-height: 1.4; resize: vertical; white-space: pre-wrap; overflow-wrap: anywhere; }
+.quote-line-price-descriptions { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.7rem; }
+.quote-line-price-descriptions textarea { min-height: 92px; line-height: 1.4; resize: vertical; white-space: pre-wrap; overflow-wrap: anywhere; }
+.quote-line-include-detail { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; color: #374151; font-size: 0.8rem; font-weight: 800; }
+.quote-line-include-detail input { width: auto; }
 .quote-line-unit, .quote-line-quantity, .quote-line-discount { grid-column: span 2; }
 .quote-line-price { grid-column: span 3; }
 .quote-line-total { grid-column: span 2; align-self: stretch; align-content: end; }
@@ -435,6 +439,9 @@ a {
 .price-list-picker-row-head > strong { color: #9a3412; overflow-wrap: anywhere; }
 .price-list-picker-row-head > div { display: flex; align-items: center; gap: 1rem; white-space: nowrap; }
 .price-list-picker-row-head span, .price-list-picker-row-foot > span { color: #6b7280; font-size: 0.78rem; }
+.price-list-picker-descriptions { display: grid; gap: 0.55rem; }
+.price-list-picker-descriptions > div { display: grid; gap: 0.18rem; }
+.price-list-picker-descriptions > div > strong { color: #6b7280; font-size: 0.7rem; letter-spacing: 0.035em; text-transform: uppercase; }
 .price-list-picker-row p { margin: 0; color: #1f2937; line-height: 1.48; white-space: pre-wrap; overflow-wrap: anywhere; }
 .price-list-picker-row-foot button, .price-list-picker-footer button { border: 1px solid #e75c17; border-radius: 8px; background: #fff4ed; color: #b6430d; padding: 0.48rem 0.7rem; font-weight: 800; cursor: pointer; }
 .price-list-picker-row-foot button:hover, .price-list-picker-footer button:hover { background: #e75c17; color: #fff; }
@@ -457,6 +464,7 @@ a {
   .quote-chapter-head > div, .saved-quotes article > div:last-child { flex-wrap: wrap; }
   .quote-line { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0.65rem; }
   .quote-line-source, .quote-line-selector, .quote-line-description { grid-column: 1 / -1; }
+  .quote-line-price-descriptions { grid-template-columns: 1fr; }
   .quote-line-unit, .quote-line-quantity, .quote-line-price, .quote-line-discount { grid-column: span 1; }
   .quote-line-total { grid-column: span 1; }
   .quote-line-remove { grid-column: span 1; }
