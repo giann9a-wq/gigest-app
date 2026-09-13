@@ -317,7 +317,7 @@ a {
 .quotes-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8rem; }
 .quotes-form-grid label, .price-list-import-form label { display: grid; gap: 0.35rem; color: #374151; font-size: 0.82rem; font-weight: 700; }
 .quotes-form-grid label.wide { grid-column: span 2; }
-.quotes-form-grid input, .quotes-form-grid textarea, .quote-chapter input, .quote-line input, .quote-line select, .quote-line textarea, .quote-totals input, .opportunities-table select, .price-list-import-form input { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111827; padding: 0.58rem 0.65rem; font: inherit; }
+.quotes-form-grid input, .quotes-form-grid textarea, .quote-chapter input, .quote-line input, .quote-line select, .quote-line textarea, .quote-text-section input, .quote-text-section textarea, .quote-totals input, .opportunities-table select, .price-list-import-form input { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111827; padding: 0.58rem 0.65rem; font: inherit; }
 .quotes-form-grid textarea { min-height: 74px; resize: vertical; }
 .quotes-checkbox { align-content: center; grid-template-columns: auto 1fr !important; }
 .quotes-checkbox input { width: auto; }
@@ -354,6 +354,20 @@ a {
 .quote-totals > div { min-width: 280px; display: grid; gap: 0.35rem; }
 .quote-totals span, .quote-totals strong { display: flex; justify-content: space-between; }
 .quote-totals strong { color: #c64608; font-size: 1.12rem; border-top: 1px solid #ddd; padding-top: 0.45rem; }
+.quote-text-sections { display: grid; gap: 0.75rem; border-top: 2px solid #f3f4f6; padding-top: 1rem; }
+.quote-text-sections-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
+.quote-text-sections-head h2 { margin: 0 0 0.2rem; font-size: 1.05rem; }
+.quote-text-sections-head p { margin: 0; color: #6b7280; font-size: 0.8rem; }
+.quote-text-sections-list { display: grid; gap: 0.65rem; }
+.quote-text-section { display: grid; gap: 0.6rem; border: 1px solid #e5e7eb; border-left: 4px solid #9ca3af; border-radius: 9px; padding: 0.75rem; background: #fbfcfd; }
+.quote-text-section label { display: grid; gap: 0.32rem; color: #374151; font-size: 0.78rem; font-weight: 800; }
+.quote-text-section textarea { min-height: 112px; line-height: 1.45; resize: vertical; }
+.quote-text-section-title { display: flex; align-items: flex-end; gap: 0.75rem; }
+.quote-text-section-title > label { flex: 1; }
+.quote-text-section-title > div { display: flex; gap: 0.35rem; }
+.quote-text-section-title button { min-width: 34px; height: 38px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #4b5563; font-weight: 800; cursor: pointer; }
+.quote-text-section-title button.danger { color: #b42318; border-color: #f4b4ae; padding-inline: 0.55rem; }
+.quote-text-section-title button:disabled { opacity: 0.35; cursor: default; }
 .quotes-section-title { margin: 0.6rem 0 0; font-size: 1.05rem; }
 .saved-quotes, .price-list-versions { display: grid; gap: 0.45rem; }
 .saved-quotes article, .price-list-versions article { border: 1px solid #e5e7eb; border-radius: 9px; padding: 0.7rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
@@ -402,7 +416,7 @@ a {
   .quotes-form-grid, .price-list-import-form { grid-template-columns: 1fr; }
   .quotes-form-grid label.wide { grid-column: span 1; }
   .quote-chapter.sub { margin-left: 0.6rem; }
-  .quote-chapter-head, .quotes-toolbar, .quotes-save, .quote-totals, .saved-quotes article { align-items: stretch; flex-direction: column; }
+  .quote-chapter-head, .quotes-toolbar, .quotes-save, .quote-totals, .quote-text-sections-head, .quote-text-section-title, .saved-quotes article { align-items: stretch; flex-direction: column; }
   .quote-chapter-head > div, .saved-quotes article > div:last-child { flex-wrap: wrap; }
   .quote-line { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0.65rem; }
   .quote-line-source, .quote-line-selector, .quote-line-description { grid-column: 1 / -1; }

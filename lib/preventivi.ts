@@ -1,6 +1,7 @@
 import { Prisma, QuoteLineSourceType } from "@prisma/client";
 
 export const quoteInclude = {
+  textSections: { orderBy: { sortOrder: "asc" as const } },
   chapters: {
     orderBy: { sortOrder: "asc" as const },
     include: { lines: { orderBy: { sortOrder: "asc" as const } } },
@@ -19,6 +20,12 @@ export type QuotePayload = {
   plannedEndDate?: string;
   isOwnAccountSite?: boolean;
   generalDiscountPercent?: number | string;
+  textSections?: Array<{
+    clientId?: string;
+    title?: string;
+    content?: string;
+    sortOrder?: number;
+  }>;
   chapters?: Array<{
     clientId?: string;
     parentClientId?: string | null;
@@ -62,6 +69,9 @@ export function validateQuotePayload(payload: QuotePayload) {
   if (discount < 0 || discount > 100) throw new Error("Lo sconto generale deve essere tra 0 e 100.");
   if (!Array.isArray(payload.chapters) || payload.chapters.length === 0) {
     throw new Error("Inserisci almeno un macro capitolo.");
+  }
+  for (const section of payload.textSections ?? []) {
+    if (!String(section.title ?? "").trim()) throw new Error("Ogni sezione testuale deve avere un titolo.");
   }
   for (const chapter of payload.chapters) {
     if (!String(chapter.title ?? "").trim()) throw new Error("Ogni capitolo deve avere un titolo.");

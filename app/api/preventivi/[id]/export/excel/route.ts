@@ -23,5 +23,10 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
   const summary = XLSX.utils.aoa_to_sheet([["Preventivo", quote.number], ["Titolo", quote.title], ["Cliente", quote.customerName], ["Contatto", quote.customerContact ?? ""], ["Cantiere", quote.siteAddress ?? ""], [], ["Lordo", totals.gross], ["Sconti voci", totals.lineDiscounts], ["Sconto generale %", Number(quote.generalDiscountPercent)], ["Totale", totals.total]]);
   summary["!cols"] = [{ wch: 24 }, { wch: 55 }];
   XLSX.utils.book_append_sheet(workbook, summary, "Riepilogo");
+  if (quote.textSections.length) {
+    const texts = XLSX.utils.json_to_sheet(quote.textSections.map((section) => ({ Sezione: section.title, Testo: section.content })));
+    texts["!cols"] = [{ wch: 32 }, { wch: 110 }];
+    XLSX.utils.book_append_sheet(workbook, texts, "Testi offerta");
+  }
   return makeExcelResponse(workbook, `${quote.number}.xlsx`);
 }

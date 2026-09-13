@@ -17,6 +17,11 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
       isOwnAccountSite: original.isOwnAccountSite, generalDiscountPercent: original.generalDiscountPercent, createdById: user.id,
     } });
     const idMap = new Map<string, string>();
+    if (original.textSections.length) {
+      await tx.quoteTextSection.createMany({ data: original.textSections.map((section) => ({
+        quoteId: copy.id, title: section.title, content: section.content, sortOrder: section.sortOrder,
+      })) });
+    }
     for (const chapter of original.chapters) {
       const created = await tx.quoteChapter.create({ data: { quoteId: copy.id, parentId: chapter.parentId ? idMap.get(chapter.parentId) ?? null : null, title: chapter.title, description: chapter.description, sortOrder: chapter.sortOrder } });
       idMap.set(chapter.id, created.id);

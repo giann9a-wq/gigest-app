@@ -48,7 +48,20 @@ export async function POST(request: NextRequest) {
             },
           });
 
-      if (payload.id) await tx.quoteChapter.deleteMany({ where: { quoteId: quote.id } });
+      if (payload.id) {
+        await tx.quoteChapter.deleteMany({ where: { quoteId: quote.id } });
+        await tx.quoteTextSection.deleteMany({ where: { quoteId: quote.id } });
+      }
+      if ((payload.textSections ?? []).length > 0) {
+        await tx.quoteTextSection.createMany({
+          data: (payload.textSections ?? []).map((section, index) => ({
+            quoteId: quote.id,
+            title: String(section.title).trim(),
+            content: String(section.content ?? "").trim(),
+            sortOrder: section.sortOrder ?? index,
+          })),
+        });
+      }
       const chapterIds = new Map<string, string>();
       for (const [index, chapter] of (payload.chapters ?? []).entries()) {
         const clientId = chapter.clientId || `chapter-${index}`;

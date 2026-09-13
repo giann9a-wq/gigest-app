@@ -20,6 +20,7 @@
     "jszip": "^3.10.2",
     "next": "^15.0.0",
     "next-auth": "5.0.0-beta.26",
+    "pdfkit": "^0.20.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "xlsx": "^0.18.5",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "eslint": "^9.23.0",

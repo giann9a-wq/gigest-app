@@ -6,7 +6,8 @@ import Link from "next/link";
 type SourceType = "PERSON_ROLE" | "EQUIPMENT" | "PRICE_LIST" | "FREE";
 type Line = { clientId: string; sourceType: SourceType; sourceReference: string; priceListItemId: string; code: string; description: string; unit: string; quantity: number; unitPrice: number; discountPercent: number };
 type Chapter = { clientId: string; parentClientId: string | null; title: string; description: string; lines: Line[] };
-type QuoteForm = { id?: string; number?: string; title: string; customerName: string; customerContact: string; siteAddress: string; description: string; plannedStartDate: string; plannedEndDate: string; isOwnAccountSite: boolean; generalDiscountPercent: number; chapters: Chapter[] };
+type TextSection = { clientId: string; title: string; content: string };
+type QuoteForm = { id?: string; number?: string; title: string; customerName: string; customerContact: string; siteAddress: string; description: string; plannedStartDate: string; plannedEndDate: string; isOwnAccountSite: boolean; generalDiscountPercent: number; textSections: TextSection[]; chapters: Chapter[] };
 type Options = { roles: Array<{ role: string; hourlyCost: number }>; equipment: Array<{ id: string; name: string; hourlyCost: number }>; priceListVersion: { id: string; name: string; itemCount: number } | null };
 type PriceItem = { id: string; code: string; description: string; unit: string; price: number; sourceFile: string; category: string };
 type PricePickerTarget = { chapterId: string; lineId: string };
@@ -15,7 +16,13 @@ type QuoteRow = QuoteForm & { id: string; number: string; status: string; update
 const units = ["m", "h", "m²", "m³", "kg", "cad", "a corpo"];
 const uid = () => Math.random().toString(36).slice(2, 10);
 const emptyLine = (sourceType: SourceType = "FREE"): Line => ({ clientId: uid(), sourceType, sourceReference: "", priceListItemId: "", code: "", description: "", unit: sourceType === "PERSON_ROLE" || sourceType === "EQUIPMENT" ? "h" : "a corpo", quantity: 1, unitPrice: 0, discountPercent: 0 });
-const emptyQuote = (): QuoteForm => ({ title: "", customerName: "", customerContact: "", siteAddress: "", description: "", plannedStartDate: "", plannedEndDate: "", isOwnAccountSite: false, generalDiscountPercent: 0, chapters: [{ clientId: uid(), parentClientId: null, title: "Lavorazioni", description: "", lines: [] }] });
+const defaultTextSections = (): TextSection[] => [
+  { clientId: uid(), title: "Note all'offerta", content: "" },
+  { clientId: uid(), title: "Tempistiche e fasi di lavoro", content: "" },
+  { clientId: uid(), title: "Modalità di pagamento", content: "" },
+  { clientId: uid(), title: "Esclusioni", content: "" },
+];
+const emptyQuote = (): QuoteForm => ({ title: "", customerName: "", customerContact: "", siteAddress: "", description: "", plannedStartDate: "", plannedEndDate: "", isOwnAccountSite: false, generalDiscountPercent: 0, textSections: defaultTextSections(), chapters: [{ clientId: uid(), parentClientId: null, title: "Lavorazioni", description: "", lines: [] }] });
 const money = (value: number) => {
   const safeValue = Number.isFinite(value) ? value : 0;
   const sign = safeValue < 0 ? "-" : "";
@@ -106,9 +113,20 @@ export function PreventiviWorkspace() {
 
   function updateChapter(id: string, patch: Partial<Chapter>) { setForm((current) => ({ ...current, chapters: current.chapters.map((item) => item.clientId === id ? { ...item, ...patch } : item) })); }
   function updateLine(chapterId: string, lineId: string, patch: Partial<Line>) { setForm((current) => ({ ...current, chapters: current.chapters.map((chapter) => chapter.clientId === chapterId ? { ...chapter, lines: chapter.lines.map((line) => line.clientId === lineId ? { ...line, ...patch } : line) } : chapter) })); }
+  function updateTextSection(id: string, patch: Partial<TextSection>) { setForm((current) => ({ ...current, textSections: current.textSections.map((section) => section.clientId === id ? { ...section, ...patch } : section) })); }
+  function moveTextSection(id: string, direction: -1 | 1) {
+    setForm((current) => {
+      const index = current.textSections.findIndex((section) => section.clientId === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.textSections.length) return current;
+      const textSections = [...current.textSections];
+      [textSections[index], textSections[target]] = [textSections[target], textSections[index]];
+      return { ...current, textSections };
+    });
+  }
   function addLine(chapterId: string) { updateChapter(chapterId, { lines: [...(form.chapters.find((item) => item.clientId === chapterId)?.lines ?? []), emptyLine()] }); }
   function removeChapter(id: string) { setForm((current) => ({ ...current, chapters: current.chapters.filter((item) => item.clientId !== id && item.parentClientId !== id) })); }
-  function editQuote(quote: QuoteRow) { setForm({ ...quote, chapters: quote.chapters.map((chapter: any) => ({ ...chapter, clientId: chapter.id, parentClientId: chapter.parentId, lines: chapter.lines.map((line: any) => ({ ...line, clientId: line.id, sourceReference: line.sourceReference ?? "", priceListItemId: line.priceListItemId ?? "", code: line.code ?? "" })) })) }); setTab("quote"); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function editQuote(quote: QuoteRow) { setForm({ ...quote, textSections: quote.textSections?.length ? quote.textSections.map((section: any) => ({ ...section, clientId: section.id })) : defaultTextSections(), chapters: quote.chapters.map((chapter: any) => ({ ...chapter, clientId: chapter.id, parentClientId: chapter.parentId, lines: chapter.lines.map((line: any) => ({ ...line, clientId: line.id, sourceReference: line.sourceReference ?? "", priceListItemId: line.priceListItemId ?? "", code: line.code ?? "" })) })) }); setTab("quote"); window.scrollTo({ top: 0, behavior: "smooth" }); }
 
   function openPricePicker(chapterId: string, line: Line) {
     setPricePickerTarget({ chapterId, lineId: line.clientId });
@@ -157,6 +175,7 @@ export function PreventiviWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          textSections: form.textSections.map((section, sortOrder) => ({ ...section, sortOrder })),
           chapters: form.chapters.map((chapter, sortOrder) => ({
             ...chapter,
             sortOrder,
@@ -187,7 +206,7 @@ export function PreventiviWorkspace() {
           <label><span>Indirizzo cantiere</span><input value={form.siteAddress} onChange={(e) => setForm({ ...form, siteAddress: e.target.value })} /></label>
           <label><span>Inizio previsto</span><input type="date" value={form.plannedStartDate} onChange={(e) => setForm({ ...form, plannedStartDate: e.target.value })} /></label>
           <label><span>Fine prevista</span><input type="date" value={form.plannedEndDate} onChange={(e) => setForm({ ...form, plannedEndDate: e.target.value })} /></label>
-          <label className="wide"><span>Descrizione</span><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
+          <label className="wide"><span>Introduzione / oggetto dei lavori</span><textarea placeholder="Testo introduttivo che comparirà nella lettera di offerta" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
           <label className="quotes-checkbox"><input type="checkbox" checked={form.isOwnAccountSite} onChange={(e) => setForm({ ...form, isOwnAccountSite: e.target.checked })} /><span>Cantiere conto proprio</span></label>
         </div>
 
@@ -217,6 +236,24 @@ export function PreventiviWorkspace() {
         </section>)}</div>
         <datalist id="quote-units">{units.map((unit) => <option key={unit} value={unit} />)}</datalist>
         <div className="quote-totals"><label>Sconto generale % <input type="number" min="0" max="100" step="0.01" value={form.generalDiscountPercent} onChange={(e) => setForm({ ...form, generalDiscountPercent: Number(e.target.value) })} /></label><div><span>Lordo {money(totals.gross)}</span><span>Sconti voci -{money(totals.lineDiscount)}</span><span>Sconto generale -{money(totals.general)}</span><strong>Totale {money(totals.total)}</strong></div></div>
+
+        <section className="quote-text-sections">
+          <div className="quote-text-sections-head">
+            <div><h2>Testi e condizioni dell'offerta</h2><p>Aggiungi e ordina liberamente note, tempi, condizioni, esclusioni, allegati o altri capitoli testuali.</p></div>
+            <button type="button" className="mobile-button-secondary" onClick={() => setForm((current) => ({ ...current, textSections: [...current.textSections, { clientId: uid(), title: "Nuova sezione", content: "" }] }))}>+ Sezione testuale</button>
+          </div>
+          <div className="quote-text-sections-list">{form.textSections.map((section, index) => <article key={section.clientId} className="quote-text-section">
+            <div className="quote-text-section-title">
+              <label><span>Titolo della sezione</span><input value={section.title} onChange={(event) => updateTextSection(section.clientId, { title: event.target.value })} /></label>
+              <div>
+                <button type="button" disabled={index === 0} aria-label="Sposta sezione in alto" title="Sposta in alto" onClick={() => moveTextSection(section.clientId, -1)}>↑</button>
+                <button type="button" disabled={index === form.textSections.length - 1} aria-label="Sposta sezione in basso" title="Sposta in basso" onClick={() => moveTextSection(section.clientId, 1)}>↓</button>
+                <button type="button" className="danger" onClick={() => setForm((current) => ({ ...current, textSections: current.textSections.filter((item) => item.clientId !== section.clientId) }))}>Rimuovi</button>
+              </div>
+            </div>
+            <label><span>Testo</span><textarea rows={5} placeholder="Scrivi il contenuto della sezione. Gli elenchi possono essere inseriti una voce per riga." value={section.content} onChange={(event) => updateTextSection(section.clientId, { content: event.target.value })} /></label>
+          </article>)}</div>
+        </section>
         <div className="quotes-save"><button className="mobile-button-secondary" onClick={() => setForm(emptyQuote())}>Nuovo / azzera</button><button className="button" disabled={saving} onClick={save}>{saving ? "Salvataggio..." : form.id ? "Salva modifiche" : "Salva preventivo e crea opportunità"}</button></div>
 
         <h2 className="quotes-section-title">Preventivi salvati</h2><div className="saved-quotes">{quotes.map((quote) => <article key={quote.id}><div><strong>{quote.number} · {quote.title}</strong><span>{quote.customerName} · {money(quote.totals.total)}</span></div><div><button onClick={() => editQuote(quote)}>Modifica</button><button onClick={() => duplicate(quote.id)}>Duplica</button><a href={`/api/preventivi/${quote.id}/export/pdf`}>PDF</a><a href={`/api/preventivi/${quote.id}/export/excel`}>Excel</a></div></article>)}</div>

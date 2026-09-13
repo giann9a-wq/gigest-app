@@ -590,11 +590,26 @@ model Quote {
   createdAt              DateTime    @default(now())
   updatedAt              DateTime    @updatedAt
 
-  chapters    QuoteChapter[]
-  opportunity Opportunity?
+  chapters     QuoteChapter[]
+  textSections QuoteTextSection[]
+  opportunity  Opportunity?
 
   @@index([status, updatedAt])
   @@index([customerName])
+}
+
+model QuoteTextSection {
+  id        String   @id @default(cuid())
+  quoteId   String
+  title     String
+  content   String   @db.Text
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId, sortOrder])
 }
 
 model QuoteChapter {
