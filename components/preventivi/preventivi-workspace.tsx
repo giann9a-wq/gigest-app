@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type SourceType = "PERSON_ROLE" | "EQUIPMENT" | "PRICE_LIST" | "FREE";
 type Line = { clientId: string; sourceType: SourceType; sourceReference: string; priceListItemId: string; code: string; description: string; unit: string; quantity: number; unitPrice: number; discountPercent: number };
@@ -12,6 +13,7 @@ type Options = { roles: Array<{ role: string; hourlyCost: number }>; equipment: 
 type PriceItem = { id: string; code: string; description: string; unit: string; price: number; sourceFile: string; category: string };
 type PricePickerTarget = { chapterId: string; lineId: string };
 type QuoteRow = QuoteForm & { id: string; number: string; status: string; updatedAt: string; totals: { gross: number; lineDiscounts: number; generalDiscount: number; total: number }; opportunity?: { id: string; status: string; notes?: string | null; jobOrder?: { id: string; name: string } | null } | null };
+type PreventiviWorkspaceProps = { mode?: "history" | "form"; quoteId?: string };
 
 const units = ["m", "h", "m²", "m³", "kg", "cad", "a corpo"];
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -30,14 +32,16 @@ const money = (value: number) => {
   const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `${sign}${groupedInteger},${decimalPart} €`;
 };
+const dateTime = (value: string) => new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 
 async function api(url: string, options?: RequestInit) {
   const response = await fetch(url, options); const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Operazione non riuscita"); return data;
 }
 
-export function PreventiviWorkspace() {
-  const [tab, setTab] = useState<"quote" | "opportunities">("quote");
+export function PreventiviWorkspace({ mode = "history", quoteId }: PreventiviWorkspaceProps) {
+  const router = useRouter();
+  const [tab, setTab] = useState<"history" | "opportunities">("history");
   const [quotes, setQuotes] = useState<QuoteRow[]>([]);
   const [form, setForm] = useState<QuoteForm>(emptyQuote());
   const [options, setOptions] = useState<Options>({ roles: [], equipment: [], priceListVersion: null });
@@ -49,12 +53,26 @@ export function PreventiviWorkspace() {
   const [priceHasMore, setPriceHasMore] = useState(false);
   const [priceLoading, setPriceLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingQuote, setLoadingQuote] = useState(Boolean(quoteId));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   async function loadQuotes() { const data = await api("/api/preventivi"); setQuotes(data.rows); }
   async function loadOptions() { const data = await api("/api/preventivi/options"); setOptions(data); }
-  useEffect(() => { Promise.all([loadQuotes(), loadOptions()]).catch((e) => setError(e.message)); }, []);
+  function hydrateQuote(quote: QuoteRow) {
+    setForm({ ...quote, textSections: quote.textSections?.length ? quote.textSections.map((section: any) => ({ ...section, clientId: section.id })) : defaultTextSections(), chapters: quote.chapters.map((chapter: any) => ({ ...chapter, clientId: chapter.id, parentClientId: chapter.parentId, lines: chapter.lines.map((line: any) => ({ ...line, clientId: line.id, sourceReference: line.sourceReference ?? "", priceListItemId: line.priceListItemId ?? "", code: line.code ?? "" })) })) });
+  }
+  useEffect(() => {
+    if (mode === "history") {
+      loadQuotes().catch((e) => setError(e.message));
+      return;
+    }
+    const requests: Promise<unknown>[] = [loadOptions()];
+    if (quoteId) {
+      requests.push(api(`/api/preventivi/${quoteId}`).then(({ quote }) => hydrateQuote(quote)));
+    }
+    Promise.all(requests).catch((e) => setError(e.message)).finally(() => setLoadingQuote(false));
+  }, [mode, quoteId]);
   useEffect(() => {
     if (!pricePickerTarget) return;
     const query = priceQuery.trim();
@@ -126,7 +144,7 @@ export function PreventiviWorkspace() {
   }
   function addLine(chapterId: string) { updateChapter(chapterId, { lines: [...(form.chapters.find((item) => item.clientId === chapterId)?.lines ?? []), emptyLine()] }); }
   function removeChapter(id: string) { setForm((current) => ({ ...current, chapters: current.chapters.filter((item) => item.clientId !== id && item.parentClientId !== id) })); }
-  function editQuote(quote: QuoteRow) { setForm({ ...quote, textSections: quote.textSections?.length ? quote.textSections.map((section: any) => ({ ...section, clientId: section.id })) : defaultTextSections(), chapters: quote.chapters.map((chapter: any) => ({ ...chapter, clientId: chapter.id, parentClientId: chapter.parentId, lines: chapter.lines.map((line: any) => ({ ...line, clientId: line.id, sourceReference: line.sourceReference ?? "", priceListItemId: line.priceListItemId ?? "", code: line.code ?? "" })) })) }); setTab("quote"); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function editQuote(quote: QuoteRow) { router.push(`/preventivi/${quote.id}`); }
 
   function openPricePicker(chapterId: string, line: Line) {
     setPricePickerTarget({ chapterId, lineId: line.clientId });
@@ -183,22 +201,30 @@ export function PreventiviWorkspace() {
           })),
         }),
       });
-      setForm(emptyQuote());
-      setMessage(`Preventivo ${data.quote.number} salvato e opportunità aperta.`);
-      await loadQuotes();
+      router.push("/preventivi");
+      router.refresh();
     }
     catch (e) { setError(e instanceof Error ? e.message : "Salvataggio non riuscito"); } finally { setSaving(false); }
   }
-  async function duplicate(id: string) { try { const data = await api(`/api/preventivi/${id}/duplicate`, { method: "POST" }); await loadQuotes(); editQuote(data.quote); setMessage("Copia creata in bozza: puoi modificarla e salvarla."); } catch (e) { setError(e instanceof Error ? e.message : "Duplicazione non riuscita"); } }
+  async function duplicate(id: string) { try { const data = await api(`/api/preventivi/${id}/duplicate`, { method: "POST" }); router.push(`/preventivi/${data.quote.id}`); } catch (e) { setError(e instanceof Error ? e.message : "Duplicazione non riuscita"); } }
+  async function removeQuote(quote: QuoteRow) {
+    if (!window.confirm(`Eliminare definitivamente il preventivo ${quote.number}?`)) return;
+    try {
+      await api(`/api/preventivi/${quote.id}`, { method: "DELETE" });
+      await loadQuotes();
+      setMessage(`Preventivo ${quote.number} eliminato.`);
+    } catch (e) { setError(e instanceof Error ? e.message : "Eliminazione non riuscita"); }
+  }
   async function changeOpportunity(id: string, status: string) { try { await api(`/api/opportunita/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) }); await loadQuotes(); setMessage(status === "APPROVED" ? "Opportunità approvata e commessa creata." : "Stato opportunità aggiornato."); } catch (e) { setError(e instanceof Error ? e.message : "Aggiornamento non riuscito"); } }
 
   return <div className="quotes-page">
     <section className="card quotes-shell">
-      <div className="mobile-section-header"><div><p className="dashboard-kicker">GiGEST</p><h1 className="mobile-section-title">Preventivi</h1><p className="mobile-section-subtitle">Componi offerte per capitoli e gestisci il passaggio da opportunità a commessa.</p></div></div>
-      <div className="quotes-tabs"><button className={tab === "quote" ? "active" : ""} onClick={() => setTab("quote")}>Nuovo Preventivo</button><button className={tab === "opportunities" ? "active" : ""} onClick={() => setTab("opportunities")}>Opportunità</button></div>
+      <div className="mobile-section-header quotes-page-header"><div><p className="dashboard-kicker">GiGEST</p><h1 className="mobile-section-title">{mode === "form" ? (quoteId ? "Modifica preventivo" : "Nuovo preventivo") : "Preventivi"}</h1><p className="mobile-section-subtitle">{mode === "form" ? "Compila l'offerta, le lavorazioni e le condizioni in una pagina dedicata." : "Consulta lo storico delle offerte e gestisci il passaggio da opportunità a commessa."}</p></div>{mode === "form" ? <Link className="mobile-button-secondary" href="/preventivi">← Torna allo storico</Link> : <Link className="button" href="/preventivi/nuovo">+ Crea nuovo preventivo</Link>}</div>
+      {mode === "history" ? <div className="quotes-tabs"><button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Storico preventivi</button><button className={tab === "opportunities" ? "active" : ""} onClick={() => setTab("opportunities")}>Opportunità</button></div> : null}
       {message && <div className="job-dashboard-success">{message}</div>}{error && <div className="job-dashboard-error">{error}</div>}
 
-      {tab === "quote" ? <>
+      {mode === "form" && loadingQuote ? <div className="quotes-loading">Caricamento preventivo...</div> : null}
+      {mode === "form" && !loadingQuote ? <>
         <div className="quotes-form-grid">
           <label><span>Titolo / nome futura commessa *</span><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
           <label><span>Cliente *</span><input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} /></label>
@@ -242,22 +268,26 @@ export function PreventiviWorkspace() {
             <div><h2>Testi e condizioni dell'offerta</h2><p>Aggiungi e ordina liberamente note, tempi, condizioni, esclusioni, allegati o altri capitoli testuali.</p></div>
             <button type="button" className="mobile-button-secondary" onClick={() => setForm((current) => ({ ...current, textSections: [...current.textSections, { clientId: uid(), title: "Nuova sezione", content: "" }] }))}>+ Sezione testuale</button>
           </div>
-          <div className="quote-text-sections-list">{form.textSections.map((section, index) => <article key={section.clientId} className="quote-text-section">
-            <div className="quote-text-section-title">
-              <label><span>Titolo della sezione</span><input value={section.title} onChange={(event) => updateTextSection(section.clientId, { title: event.target.value })} /></label>
-              <div>
-                <button type="button" disabled={index === 0} aria-label="Sposta sezione in alto" title="Sposta in alto" onClick={() => moveTextSection(section.clientId, -1)}>↑</button>
-                <button type="button" disabled={index === form.textSections.length - 1} aria-label="Sposta sezione in basso" title="Sposta in basso" onClick={() => moveTextSection(section.clientId, 1)}>↓</button>
-                <button type="button" className="danger" onClick={() => setForm((current) => ({ ...current, textSections: current.textSections.filter((item) => item.clientId !== section.clientId) }))}>Rimuovi</button>
+          <div className="quote-text-sections-list">{form.textSections.map((section, index) => <details key={section.clientId} className="quote-text-section">
+            <summary><strong>{section.title || "Sezione senza titolo"}</strong><span>{section.content.trim() ? "Testo compilato" : "Da compilare"}</span></summary>
+            <div className="quote-text-section-body">
+              <div className="quote-text-section-title">
+                <label><span>Titolo della sezione</span><input value={section.title} onChange={(event) => updateTextSection(section.clientId, { title: event.target.value })} /></label>
+                <div>
+                  <button type="button" disabled={index === 0} aria-label="Sposta sezione in alto" title="Sposta in alto" onClick={() => moveTextSection(section.clientId, -1)}>↑</button>
+                  <button type="button" disabled={index === form.textSections.length - 1} aria-label="Sposta sezione in basso" title="Sposta in basso" onClick={() => moveTextSection(section.clientId, 1)}>↓</button>
+                  <button type="button" className="danger" onClick={() => setForm((current) => ({ ...current, textSections: current.textSections.filter((item) => item.clientId !== section.clientId) }))}>Rimuovi</button>
+                </div>
               </div>
+              <label><span>Testo</span><textarea rows={5} placeholder="Scrivi il contenuto della sezione. Gli elenchi possono essere inseriti una voce per riga." value={section.content} onChange={(event) => updateTextSection(section.clientId, { content: event.target.value })} /></label>
             </div>
-            <label><span>Testo</span><textarea rows={5} placeholder="Scrivi il contenuto della sezione. Gli elenchi possono essere inseriti una voce per riga." value={section.content} onChange={(event) => updateTextSection(section.clientId, { content: event.target.value })} /></label>
-          </article>)}</div>
+          </details>)}</div>
         </section>
-        <div className="quotes-save"><button className="mobile-button-secondary" onClick={() => setForm(emptyQuote())}>Nuovo / azzera</button><button className="button" disabled={saving} onClick={save}>{saving ? "Salvataggio..." : form.id ? "Salva modifiche" : "Salva preventivo e crea opportunità"}</button></div>
+        <div className="quotes-save"><Link className="mobile-button-secondary" href="/preventivi">Annulla</Link><button className="button" disabled={saving} onClick={save}>{saving ? "Salvataggio..." : form.id ? "Salva modifiche" : "Salva preventivo e crea opportunità"}</button></div>
 
-        <h2 className="quotes-section-title">Preventivi salvati</h2><div className="saved-quotes">{quotes.map((quote) => <article key={quote.id}><div><strong>{quote.number} · {quote.title}</strong><span>{quote.customerName} · {money(quote.totals.total)}</span></div><div><button onClick={() => editQuote(quote)}>Modifica</button><button onClick={() => duplicate(quote.id)}>Duplica</button><a href={`/api/preventivi/${quote.id}/export/pdf`}>PDF</a><a href={`/api/preventivi/${quote.id}/export/excel`}>Excel</a></div></article>)}</div>
-      </> : <div className="opportunities-table-wrap"><table className="opportunities-table"><thead><tr><th>Preventivo</th><th>Cliente</th><th>Valore</th><th>Stato</th><th>Commessa</th></tr></thead><tbody>{quotes.filter((quote) => quote.opportunity).map((quote) => <tr key={quote.opportunity!.id}><td><button className="text-link" onClick={() => editQuote(quote)}>{quote.number} · {quote.title}</button></td><td>{quote.customerName}</td><td>{money(quote.totals.total)}</td><td><select value={quote.opportunity!.status} onChange={(e) => changeOpportunity(quote.opportunity!.id, e.target.value)}><option value="OPEN">Aperta</option><option value="SUSPENDED">Sospesa</option><option value="CLOSED">Chiusa</option><option value="APPROVED">Approvata</option></select></td><td>{quote.opportunity!.jobOrder ? <Link href={`/commesse/${quote.opportunity!.jobOrder.id}`}>{quote.opportunity!.jobOrder.name}</Link> : "-"}</td></tr>)}</tbody></table></div>}
+      </> : null}
+      {mode === "history" && tab === "history" ? <div className="quotes-history-table-wrap"><table className="quotes-history-table"><thead><tr><th>Preventivo</th><th>Cliente</th><th>Importo</th><th>Ultimo aggiornamento</th><th>Azioni</th></tr></thead><tbody>{quotes.map((quote) => <tr key={quote.id}><td><strong>{quote.number}</strong><span>{quote.title}</span></td><td>{quote.customerName}</td><td className="quotes-history-amount">{money(quote.totals.total)}</td><td>{dateTime(quote.updatedAt)}</td><td><div className="quotes-history-actions"><button onClick={() => editQuote(quote)}>Modifica</button><button onClick={() => duplicate(quote.id)}>Duplica</button><a href={`/api/preventivi/${quote.id}/export/pdf`}>PDF</a><a href={`/api/preventivi/${quote.id}/export/excel`}>Excel</a><button className="danger" aria-label={`Elimina ${quote.number}`} title="Elimina preventivo" onClick={() => removeQuote(quote)}>🗑</button></div></td></tr>)}</tbody></table>{quotes.length === 0 ? <div className="quotes-empty">Non ci sono ancora preventivi salvati.</div> : null}</div> : null}
+      {mode === "history" && tab === "opportunities" ? <div className="opportunities-table-wrap"><table className="opportunities-table"><thead><tr><th>Preventivo</th><th>Cliente</th><th>Valore</th><th>Stato</th><th>Commessa</th></tr></thead><tbody>{quotes.filter((quote) => quote.opportunity).map((quote) => <tr key={quote.opportunity!.id}><td><button className="text-link" onClick={() => editQuote(quote)}>{quote.number} · {quote.title}</button></td><td>{quote.customerName}</td><td>{money(quote.totals.total)}</td><td><select value={quote.opportunity!.status} onChange={(e) => changeOpportunity(quote.opportunity!.id, e.target.value)}><option value="OPEN">Aperta</option><option value="SUSPENDED">Sospesa</option><option value="CLOSED">Chiusa</option><option value="APPROVED">Approvata</option></select></td><td>{quote.opportunity!.jobOrder ? <Link href={`/commesse/${quote.opportunity!.jobOrder.id}`}>{quote.opportunity!.jobOrder.name}</Link> : "-"}</td></tr>)}</tbody></table></div> : null}
     </section>
     {pricePickerTarget ? <div className="price-list-picker-backdrop" onMouseDown={() => setPricePickerTarget(null)}>
       <div className="price-list-picker-modal" role="dialog" aria-modal="true" aria-labelledby="price-list-picker-title" onMouseDown={(event) => event.stopPropagation()}>
