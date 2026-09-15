@@ -1793,7 +1793,8 @@ a {
 .resource-price-new-form .button { min-height: 42px; }
 .resource-price-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
 .resource-price-toolbar .report-control { width: min(420px, 100%); }
-.resource-price-toolbar > span { color: #6b7280; font-size: 0.85rem; font-weight: 700; padding-bottom: 0.65rem; }
+.resource-price-toolbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.8rem; flex-wrap: wrap; }
+.resource-price-toolbar-actions > span { color: #6b7280; font-size: 0.85rem; font-weight: 700; }
 .resource-price-table { min-width: 900px; }
 .resource-price-table th:nth-child(1) { width: 36%; }
 .resource-price-table th:nth-child(2) { width: 18%; }
@@ -11607,5 +11608,5 @@ a {
 
   .resource-price-new-form { grid-template-columns: 1fr; }
   .resource-price-toolbar { align-items: stretch; flex-direction: column; }
-  .resource-price-toolbar > span { padding-bottom: 0; }
+  .resource-price-toolbar-actions { justify-content: space-between; }
 }

@@ -9,6 +9,13 @@ const allowedKinds = new Set<ResourcePriceListKind>([
   ResourcePriceListKind.EQUIPMENT,
 ]);
 
+type PriceUpdateBody = {
+  id?: unknown;
+  name?: unknown;
+  hourlyPrice?: unknown;
+  active?: unknown;
+};
+
 async function registeredRoleNames() {
   const people = await prisma.person.findMany({
     where: { roleDescription: { not: null } },
@@ -68,25 +75,37 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   if (!(await getActiveAppUser())) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   const body = await request.json();
-  const id = String(body.id ?? "");
-  const item = await prisma.resourcePriceListItem.findUnique({ where: { id } });
-  if (!item) return NextResponse.json({ error: "Voce non trovata" }, { status: 404 });
-  const price = Number(body.hourlyPrice);
-  if (!Number.isFinite(price) || price < 0) return NextResponse.json({ error: "Prezzo orario non valido" }, { status: 400 });
-  const requestedName = String(body.name ?? item.name).trim().replace(/\s+/g, " ");
-  const name = item.equipmentId ? item.name : requestedName;
-  if (!name) return NextResponse.json({ error: "Descrizione obbligatoria" }, { status: 400 });
+  const updates: PriceUpdateBody[] = Array.isArray(body.rows) ? body.rows : [body];
+  if (!updates.length) return NextResponse.json({ error: "Nessuna voce da salvare" }, { status: 400 });
+
+  const ids = updates.map((row) => String(row.id ?? ""));
+  const items = await prisma.resourcePriceListItem.findMany({ where: { id: { in: ids } } });
+  const itemsById = new Map(items.map((item) => [item.id, item]));
+  if (items.length !== new Set(ids).size) return NextResponse.json({ error: "Una o più voci non sono state trovate" }, { status: 404 });
+
+  const prepared: Array<{ id: string; name: string; hourlyPrice: Prisma.Decimal; active: boolean }> = [];
+  for (const row of updates) {
+    const id = String(row.id ?? "");
+    const item = itemsById.get(id)!;
+    const price = Number(row.hourlyPrice);
+    if (!Number.isFinite(price) || price < 0) return NextResponse.json({ error: "Prezzo orario non valido" }, { status: 400 });
+    const requestedName = String(row.name ?? item.name).trim().replace(/\s+/g, " ");
+    const name = item.equipmentId ? item.name : requestedName;
+    if (!name) return NextResponse.json({ error: "Descrizione obbligatoria" }, { status: 400 });
+    prepared.push({ id, name, hourlyPrice: new Prisma.Decimal(price.toFixed(2)), active: row.active !== false });
+  }
+
   try {
-    await prisma.resourcePriceListItem.update({
-      where: { id },
+    await prisma.$transaction(prepared.map((row) => prisma.resourcePriceListItem.update({
+      where: { id: row.id },
       data: {
-        name,
-        normalizedName: normalizeResourcePriceName(name),
-        hourlyPrice: new Prisma.Decimal(price.toFixed(2)),
-        active: body.active !== false,
+        name: row.name,
+        normalizedName: normalizeResourcePriceName(row.name),
+        hourlyPrice: row.hourlyPrice,
+        active: row.active,
       },
-    });
-    return NextResponse.json({ success: true });
+    })));
+    return NextResponse.json({ success: true, updated: prepared.length });
   } catch {
     return NextResponse.json({ error: "Esiste già una voce con questa descrizione" }, { status: 409 });
   }

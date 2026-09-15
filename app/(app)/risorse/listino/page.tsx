@@ -61,15 +61,15 @@ export default function ResourcePriceListPage() {
     setRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
   }
 
-  async function saveRow(row: PriceItem) {
-    setSavingId(row.id); setMessage(""); setError("");
+  async function savePriceList() {
+    setSavingId("list"); setMessage(""); setError("");
     try {
       await jsonFetch("/api/risorse/listino", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: row.id, name: row.name, hourlyPrice: row.hourlyPrice, active: row.active }),
+        body: JSON.stringify({ rows: rows.map(({ id, name, hourlyPrice, active }) => ({ id, name, hourlyPrice, active })) }),
       });
-      setMessage(`Prezzo aggiornato per “${row.name}”.`);
+      setMessage("Listino aggiornato.");
       await loadRows();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore durante il salvataggio");
@@ -140,7 +140,12 @@ export default function ResourcePriceListPage() {
             <span>Cerca</span>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filtra per descrizione" />
           </label>
-          <span>{visibleRows.length} voci visualizzate</span>
+          <div className="resource-price-toolbar-actions">
+            <span>{visibleRows.length} voci visualizzate</span>
+            <button className="button" type="button" onClick={savePriceList} disabled={loading || savingId === "list"}>
+              {savingId === "list" ? "Salvataggio..." : "Salva listino"}
+            </button>
+          </div>
         </div>
 
         <div className="mobile-table-shell commesse-table-shell">
@@ -153,7 +158,7 @@ export default function ResourcePriceListPage() {
                   <td><span className={row.isRegistered ? "resource-price-source registered" : "resource-price-source"}>{row.isRegistered ? "Risorsa registrata" : "Voce aggiunta"}</span></td>
                   <td><input type="number" min="0" step="0.01" value={row.hourlyPrice} onChange={(event) => updateRow(row.id, { hourlyPrice: event.target.value })} aria-label={`Prezzo orario ${row.name}`} /></td>
                   <td><label className="resource-price-active"><input type="checkbox" checked={row.active} onChange={(event) => updateRow(row.id, { active: event.target.checked })} /><span>{row.active ? "Sì" : "No"}</span></label></td>
-                  <td><div className="resource-price-actions"><button className="button" type="button" onClick={() => saveRow(row)} disabled={savingId === row.id}>Salva</button>{!row.isRegistered ? <button className="button danger" type="button" onClick={() => deleteItem(row)} disabled={savingId === row.id}>Elimina</button> : null}</div></td>
+                  <td><div className="resource-price-actions">{!row.isRegistered ? <button className="button danger" type="button" onClick={() => deleteItem(row)} disabled={savingId === row.id}>Elimina</button> : <span>—</span>}</div></td>
                 </tr>
               ))}
             </tbody>
