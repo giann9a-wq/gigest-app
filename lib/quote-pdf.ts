@@ -78,7 +78,7 @@ function alphabeticId(index: number) {
 }
 
 export async function createQuotePdf(quote: QuotePdfInput) {
-  const letterhead = `data:image/jpeg;base64,${fs.readFileSync(path.join(process.cwd(), "assets", "branding", "giani-letterhead.jpg")).toString("base64")}`;
+  const letterhead = `data:image/jpeg;base64,${fs.readFileSync(path.join(process.cwd(), "assets", "branding", "giani-letterhead-header.jpg")).toString("base64")}`;
   const doc = new PDFDocument({ size: "A4", margin: 0, bufferPages: true, autoFirstPage: false, info: { Title: `Preventivo ${quote.number}`, Author: "Impresa Giani Giovanni S.r.l." } });
   const chunks: Buffer[] = [];
   doc.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -89,7 +89,7 @@ export async function createQuotePdf(quote: QuotePdfInput) {
 
   function addPage() {
     doc.addPage();
-    doc.image(letterhead, 0, 0, { width: PAGE_WIDTH, height: PAGE_HEIGHT });
+    doc.image(letterhead, 28, 12, { width: 396.72, height: 87.12 });
     doc.x = LEFT;
     doc.y = TOP;
   }
