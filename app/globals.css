@@ -1785,6 +1785,30 @@ a {
   width: 180px;
 }
 
+.resource-price-list-intro { margin: 0.35rem 0 0; color: #6b7280; }
+.resource-price-kind-tabs { display: flex; gap: 0.5rem; margin: 1rem 0; border-bottom: 1px solid #e5e7eb; }
+.resource-price-kind-tabs button { border: 0; border-bottom: 3px solid transparent; background: transparent; color: #4b5563; padding: 0.7rem 0.9rem; font-weight: 800; cursor: pointer; }
+.resource-price-kind-tabs button.active { border-bottom-color: #e75c17; color: #b6430d; }
+.resource-price-new-form { display: grid; grid-template-columns: minmax(260px, 1fr) 180px auto; gap: 0.75rem; align-items: flex-end; padding: 1rem; margin-bottom: 1rem; border: 1px solid #fed7aa; border-radius: 12px; background: #fff8f3; }
+.resource-price-new-form .button { min-height: 42px; }
+.resource-price-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
+.resource-price-toolbar .report-control { width: min(420px, 100%); }
+.resource-price-toolbar > span { color: #6b7280; font-size: 0.85rem; font-weight: 700; padding-bottom: 0.65rem; }
+.resource-price-table { min-width: 900px; }
+.resource-price-table th:nth-child(1) { width: 36%; }
+.resource-price-table th:nth-child(2) { width: 18%; }
+.resource-price-table th:nth-child(3) { width: 16%; }
+.resource-price-table th:nth-child(4) { width: 15%; }
+.resource-price-table th:nth-child(5) { width: 15%; }
+.resource-price-table td > input { width: 100%; min-width: 120px; }
+.resource-price-table input:disabled { border-color: transparent; background: transparent; color: #1f2937; opacity: 1; }
+.resource-price-source { display: inline-flex; border-radius: 999px; background: #f3f4f6; color: #4b5563; padding: 0.28rem 0.55rem; font-size: 0.74rem; font-weight: 800; }
+.resource-price-source.registered { background: #ecfdf5; color: #166534; }
+.resource-price-active { display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 700; }
+.resource-price-active input { width: auto; min-width: auto; }
+.resource-price-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.resource-price-actions .button.danger { border-color: #f4b4ae; background: #fff; color: #b42318; }
+
 .mezzi-table {
   min-width: 820px;
 }
@@ -11580,4 +11604,8 @@ a {
   .diary-kpi-strip div {
     border-right: none;
   }
+
+  .resource-price-new-form { grid-template-columns: 1fr; }
+  .resource-price-toolbar { align-items: stretch; flex-direction: column; }
+  .resource-price-toolbar > span { padding-bottom: 0; }
 }

@@ -63,6 +63,11 @@ enum QuoteLineSourceType {
   FREE
 }
 
+enum ResourcePriceListKind {
+  PERSON_ROLE
+  EQUIPMENT
+}
+
 enum OpportunityStatus {
   OPEN
   CLOSED
@@ -440,6 +445,7 @@ model Equipment {
   costHistory     EquipmentCost[]
   maintenances    Maintenance[]
   diaryActivities DiaryActivity[]
+  priceListItem   ResourcePriceListItem?
 }
 
 model EquipmentCost {
@@ -454,6 +460,23 @@ model EquipmentCost {
   equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
 
   @@index([equipmentId, validFrom])
+}
+
+model ResourcePriceListItem {
+  id             String                @id @default(cuid())
+  kind           ResourcePriceListKind
+  name           String
+  normalizedName String
+  equipmentId    String?               @unique
+  hourlyPrice    Decimal               @default(0) @db.Decimal(10, 2)
+  active         Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  equipment Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+
+  @@unique([kind, normalizedName])
+  @@index([kind, active, name])
 }
 
 model Maintenance {
@@ -554,17 +577,17 @@ model PriceListVersion {
 }
 
 model PriceListItem {
-  id                    String   @id @default(cuid())
-  versionId             String
-  code                  String
-  description           String   @db.Text
-  regionalDescription   String?  @db.Text
-  detailDescription     String?  @db.Text
-  unit                  String?
-  price                 Decimal  @db.Decimal(14, 4)
-  sourceFile            String
-  category              String?
-  createdAt             DateTime @default(now())
+  id                  String   @id @default(cuid())
+  versionId           String
+  code                String
+  description         String   @db.Text
+  regionalDescription String?  @db.Text
+  detailDescription   String?  @db.Text
+  unit                String?
+  price               Decimal  @db.Decimal(14, 4)
+  sourceFile          String
+  category            String?
+  createdAt           DateTime @default(now())
 
   version    PriceListVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   quoteLines QuoteLine[]
@@ -632,23 +655,23 @@ model QuoteChapter {
 }
 
 model QuoteLine {
-  id              String              @id @default(cuid())
-  chapterId       String
-  sourceType      QuoteLineSourceType
-  sourceReference String?
-  priceListItemId String?
-  code            String?
-  description     String              @db.Text
-  regionalDescription String?         @db.Text
-  detailDescription   String?         @db.Text
-  includeDetail       Boolean         @default(true)
-  unit            String
-  quantity        Decimal             @default(1) @db.Decimal(14, 3)
-  unitPrice       Decimal             @default(0) @db.Decimal(14, 4)
-  discountPercent Decimal             @default(0) @db.Decimal(5, 2)
-  sortOrder       Int                 @default(0)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id                  String              @id @default(cuid())
+  chapterId           String
+  sourceType          QuoteLineSourceType
+  sourceReference     String?
+  priceListItemId     String?
+  code                String?
+  description         String              @db.Text
+  regionalDescription String?             @db.Text
+  detailDescription   String?             @db.Text
+  includeDetail       Boolean             @default(true)
+  unit                String
+  quantity            Decimal             @default(1) @db.Decimal(14, 3)
+  unitPrice           Decimal             @default(0) @db.Decimal(14, 4)
+  discountPercent     Decimal             @default(0) @db.Decimal(5, 2)
+  sortOrder           Int                 @default(0)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   chapter       QuoteChapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   priceListItem PriceListItem? @relation(fields: [priceListItemId], references: [id], onDelete: SetNull)

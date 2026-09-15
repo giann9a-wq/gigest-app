@@ -4,6 +4,7 @@ import type { Route } from "next";
 type ResourceTabKey =
   | "people"
   | "equipment"
+  | "price-list"
   | "maintenance"
   | "training"
   | "loadings"
@@ -12,6 +13,7 @@ type ResourceTabKey =
 const RESOURCE_TABS: Array<{ key: ResourceTabKey; href: Route; label: string }> = [
   { key: "people", href: "/risorse" as Route, label: "Personale" },
   { key: "equipment", href: "/mezzi" as Route, label: "Mezzi e Attrezzature" },
+  { key: "price-list", href: "/risorse/listino" as Route, label: "Listino" },
   { key: "maintenance", href: "/risorse/manutenzioni" as Route, label: "Manutenzioni" },
   { key: "training", href: "/risorse/formazione" as Route, label: "Formazione" },
   { key: "loadings", href: "/caricamenti" as Route, label: "Caricamenti" },

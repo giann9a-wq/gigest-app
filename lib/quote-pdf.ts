@@ -40,7 +40,7 @@ export type QuotePdfInput = {
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
 const LEFT = 76;
-const RIGHT = 44;
+const RIGHT = 58;
 const TOP = 142;
 const BOTTOM = 765;
 const CONTENT_WIDTH = PAGE_WIDTH - LEFT - RIGHT;
@@ -64,6 +64,17 @@ function quantity(value: unknown) {
 
 function date(value: Date) {
   return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }).format(value);
+}
+
+function alphabeticId(index: number) {
+  let value = index + 1;
+  let result = "";
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCharCode(65 + (value % 26)) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
 }
 
 export async function createQuotePdf(quote: QuotePdfInput) {
@@ -127,12 +138,12 @@ export async function createQuotePdf(quote: QuotePdfInput) {
   }
 
   const columns = [
-    { key: "code", label: "Codice", width: 50, align: "left" as const },
-    { key: "description", label: "Descrizione", width: 192, align: "left" as const },
+    { key: "id", label: "ID", width: 34, align: "center" as const },
+    { key: "description", label: "Descrizione", width: 196, align: "left" as const },
     { key: "unit", label: "U.M.", width: 32, align: "center" as const },
     { key: "quantity", label: "Quantità", width: 42, align: "right" as const },
     { key: "unitPrice", label: "Prezzo", width: 58, align: "right" as const },
-    { key: "discount", label: "Sc.", width: 40, align: "right" as const },
+    { key: "discount", label: "Sc.", width: 38, align: "right" as const },
     { key: "total", label: "Totale", width: 61, align: "right" as const },
   ];
 
@@ -167,11 +178,11 @@ export async function createQuotePdf(quote: QuotePdfInput) {
     }
   }
 
-  function lineRow(line: PdfLine, chapter: PdfChapter, rowIndex: number) {
+  function lineRow(line: PdfLine, chapter: PdfChapter, rowIndex: number, identifier: string) {
     const gross = numberValue(line.quantity) * numberValue(line.unitPrice);
     const total = gross * (1 - numberValue(line.discountPercent) / 100);
     const values: Record<string, string> = {
-      code: line.code ?? "",
+      id: identifier,
       description: line.description,
       unit: line.unit,
       quantity: quantity(line.quantity),
@@ -200,11 +211,22 @@ export async function createQuotePdf(quote: QuotePdfInput) {
 
   addPage();
   const issueDate = quote.savedAt ?? quote.updatedAt;
-  doc.font("Helvetica").fontSize(9).fillColor(DARK).text("Spett.le", LEFT + 255, TOP, { width: CONTENT_WIDTH - 255, align: "right" });
-  doc.font("Helvetica-Bold").text(quote.customerName, { align: "right" });
-  if (quote.customerContact) doc.font("Helvetica").text(quote.customerContact, { align: "right" });
-  if (quote.siteAddress) doc.text(quote.siteAddress, { align: "right" });
-  doc.y = Math.max(doc.y + 16, 198);
+  const customerX = LEFT + 230;
+  const customerWidth = CONTENT_WIDTH - 248;
+  const customerLines: Array<{ text: string; bold?: boolean }> = [
+    { text: "Spett.le" },
+    { text: quote.customerName, bold: true },
+    ...(quote.customerContact ? [{ text: quote.customerContact }] : []),
+    ...(quote.siteAddress ? [{ text: quote.siteAddress }] : []),
+  ];
+  let customerY = TOP;
+  for (const line of customerLines) {
+    doc.font(line.bold ? "Helvetica-Bold" : "Helvetica").fontSize(9).fillColor(DARK);
+    const height = doc.heightOfString(line.text, { width: customerWidth });
+    doc.text(line.text, customerX, customerY, { width: customerWidth, align: "right" });
+    customerY += height + 1;
+  }
+  doc.y = Math.max(customerY + 16, 198);
   doc.font("Helvetica").fontSize(8.5).text(`${date(issueDate)}  |  ${quote.number}`, LEFT, doc.y, { width: CONTENT_WIDTH });
   doc.y += 17;
   doc.font("Helvetica-Bold").fontSize(10.5).fillColor(DARK).text(`OGGETTO: ${quote.title}`, LEFT, doc.y, { width: CONTENT_WIDTH, align: "center", lineGap: 1.5 });
@@ -212,11 +234,24 @@ export async function createQuotePdf(quote: QuotePdfInput) {
   paragraph(quote.description ?? "");
 
   sectionTitle("Dettaglio economico");
-  for (const chapter of quote.chapters) {
+  const macroChapters = quote.chapters.filter((chapter) => !chapter.parentId);
+  const macroLetters = new Map(macroChapters.map((chapter, index) => [chapter.id, alphabeticId(index)]));
+  const subchapterIndexes = new Map<string, number>();
+  const orderedChapters: PdfChapter[] = [];
+  for (const macro of macroChapters) {
+    const children = quote.chapters.filter((chapter) => chapter.parentId === macro.id);
+    const firstChildNumber = macro.lines.length ? 2 : 1;
+    children.forEach((chapter, index) => subchapterIndexes.set(chapter.id, index + firstChildNumber));
+    orderedChapters.push(macro, ...children);
+  }
+  orderedChapters.push(...quote.chapters.filter((chapter) => chapter.parentId && !macroLetters.has(chapter.parentId)));
+  for (const chapter of orderedChapters) {
     chapterHeader(chapter);
     if (chapter.lines.length) {
       tableHeader();
-      chapter.lines.forEach((line, index) => lineRow(line, chapter, index));
+      const macroId = chapter.parentId ?? chapter.id;
+      const prefix = `${macroLetters.get(macroId) ?? "A"}.${chapter.parentId ? subchapterIndexes.get(chapter.id) ?? 1 : 1}`;
+      chapter.lines.forEach((line, index) => lineRow(line, chapter, index, `${prefix}.${index + 1}`));
       doc.y += 7;
     }
   }
