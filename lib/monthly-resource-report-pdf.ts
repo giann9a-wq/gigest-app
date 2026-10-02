@@ -235,11 +235,9 @@ function drawBodyRow(page: PdfPage, report: MonthlyResourceReport, row: PdfRow, 
   return rowY;
 }
 
-function buildRows(resources: MonthlyReportResource[]) {
-  const rows: PdfRow[] = [];
-
-  for (const resource of resources) {
-    rows.push({ type: "resource", resource });
+function buildResourceRowGroups(resources: MonthlyReportResource[]) {
+  return resources.map((resource) => {
+    const rows: PdfRow[] = [{ type: "resource", resource }];
 
     resource.groups.forEach((group, groupIndex) => {
       rows.push({ type: "group", resource, group, groupIndex });
@@ -250,33 +248,45 @@ function buildRows(resources: MonthlyReportResource[]) {
         }
       }
     });
-  }
 
-  return rows;
+    return rows;
+  });
 }
 
 function createStyledPdf(report: MonthlyResourceReport, resources: MonthlyReportResource[]) {
-  const rows = buildRows(resources);
+  const resourceRowGroups = buildResourceRowGroups(resources);
   const pages: PdfPage[] = [];
   let currentPage: PdfPage | null = null;
   let y = 0;
+  let pageBodyStartY = 0;
 
   function startPage() {
     currentPage = { commands: [] };
     pages.push(currentPage);
     y = PAGE_HEIGHT - MARGIN - TITLE_HEIGHT;
     y = drawTableHeader(currentPage, report, y);
+    pageBodyStartY = y;
   }
 
   startPage();
 
-  for (const row of rows) {
-    const rowHeight = getRowHeight(row);
-    if (y - rowHeight < BOTTOM_MARGIN) {
+  for (const rows of resourceRowGroups) {
+    const resourceHeight = rows.reduce((height, row) => height + getRowHeight(row), 0);
+    const remainingHeight = y - BOTTOM_MARGIN;
+    const pageAlreadyHasRows = y < pageBodyStartY;
+
+    if (pageAlreadyHasRows && resourceHeight > remainingHeight) {
       startPage();
     }
 
-    y = drawBodyRow(currentPage!, report, row, y);
+    for (const row of rows) {
+      const rowHeight = getRowHeight(row);
+      if (y - rowHeight < BOTTOM_MARGIN) {
+        startPage();
+      }
+
+      y = drawBodyRow(currentPage!, report, row, y);
+    }
   }
 
   pages.forEach((page, index) => drawPageTitle(page, report, index + 1, pages.length));
