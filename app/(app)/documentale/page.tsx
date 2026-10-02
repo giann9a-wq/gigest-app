@@ -84,6 +84,10 @@ type PdfPreviewState = {
   title: string;
   url: string;
   subtitle?: string;
+  deliveryNote?: {
+    id: string;
+    validationStatus: DeliveryNoteDocumentRow["validationStatus"];
+  };
 };
 
 type DocumentaleTab = "bolle" | "scansioni" | "risorse" | "foto";
@@ -293,6 +297,14 @@ export default function DocumentalePage() {
     try {
       await safeJsonFetch(`/api/documentale/bolle/${id}/valida`, { method: "POST" });
       setMessage("Bolla validata.");
+      setPdfPreview((current) =>
+        current?.deliveryNote?.id === id
+          ? {
+              ...current,
+              deliveryNote: { ...current.deliveryNote, validationStatus: "VALIDATED" },
+            }
+          : current
+      );
       await loadRows();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nella validazione");
@@ -725,6 +737,10 @@ export default function DocumentalePage() {
                                         title: document.fileName,
                                         url: `/api/documentale/bolle/documenti/${document.id}`,
                                         subtitle: `${row.supplier} - ${formatDate(row.usageDate)}`,
+                                        deliveryNote: {
+                                          id: row.id,
+                                          validationStatus: row.validationStatus,
+                                        },
                                       })
                                     }
                                   >
@@ -985,6 +1001,22 @@ export default function DocumentalePage() {
           title={pdfPreview.title}
           subtitle={pdfPreview.subtitle}
           url={pdfPreview.url}
+          actions={
+            pdfPreview.deliveryNote ? (
+              pdfPreview.deliveryNote.validationStatus === "PENDING" ? (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => void validateDeliveryNote(pdfPreview.deliveryNote!.id)}
+                  disabled={savingId === pdfPreview.deliveryNote.id}
+                >
+                  {savingId === pdfPreview.deliveryNote.id ? "Validazione..." : "Valida"}
+                </button>
+              ) : (
+                <span className="delivery-note-status delivery-note-status-validated">Validata</span>
+              )
+            ) : null
+          }
           onClose={() => setPdfPreview(null)}
         />
       ) : null}

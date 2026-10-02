@@ -3792,6 +3792,13 @@ a {
   color: var(--text-muted);
 }
 
+.pdf-viewer-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
 .pdf-viewer-modal-frame {
   width: 100%;
   height: 100%;
@@ -11069,6 +11076,10 @@ a {
   .pdf-viewer-modal-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .pdf-viewer-modal-actions {
+    justify-content: flex-start;
   }
 
   .documentale-scan-modal-body {
