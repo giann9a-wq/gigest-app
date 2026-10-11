@@ -597,6 +597,32 @@ model PriceListItem {
   @@index([versionId, category])
 }
 
+model DiscountSimulation {
+  id            String   @id @default(cuid())
+  name          String
+  reference     String?
+  price         Decimal  @db.Decimal(12, 2)
+  closingDate   DateTime @db.Date
+  euribor       Decimal  @db.Decimal(9, 6)
+  spread        Decimal  @db.Decimal(9, 6)
+  guaranteeRate Decimal  @db.Decimal(9, 6)
+  customerShare Decimal  @db.Decimal(9, 6)
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  advances      DiscountAdvance[]
+  @@index([updatedAt])
+}
+
+model DiscountAdvance {
+  id           String @id @default(cuid())
+  simulationId String
+  date         DateTime @db.Date
+  amount       Decimal @db.Decimal(12, 2)
+  simulation   DiscountSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  @@index([simulationId, date])
+}
+
 model Quote {
   id                     String      @id @default(cuid())
   number                 String      @unique

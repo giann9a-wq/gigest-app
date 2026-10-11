@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PreventiviTabs } from "@/components/layout/preventivi-tabs";
 
 type SourceType = "PERSON_ROLE" | "EQUIPMENT" | "PRICE_LIST" | "FREE";
 type NumericValue = number | string;
@@ -230,6 +231,7 @@ export function PreventiviWorkspace({ mode = "history", quoteId }: PreventiviWor
   return <div className="quotes-page">
     <section className="card quotes-shell">
       <div className="mobile-section-header quotes-page-header"><div><p className="dashboard-kicker">GiGEST</p><h1 className="mobile-section-title">{mode === "form" ? (quoteId ? "Modifica preventivo" : "Nuovo preventivo") : "Preventivi"}</h1><p className="mobile-section-subtitle">{mode === "form" ? "Compila l'offerta, le lavorazioni e le condizioni in una pagina dedicata." : "Consulta lo storico delle offerte e gestisci il passaggio da opportunità a commessa."}</p></div>{mode === "form" ? <Link className="mobile-button-secondary" href="/preventivi">← Torna allo storico</Link> : <Link className="button" href="/preventivi/nuovo">+ Crea nuovo preventivo</Link>}</div>
+      <PreventiviTabs current="quotes" />
       {mode === "history" ? <div className="quotes-tabs"><button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Storico preventivi</button><button className={tab === "opportunities" ? "active" : ""} onClick={() => setTab("opportunities")}>Opportunità</button></div> : null}
       {message && <div className="job-dashboard-success">{message}</div>}{error && <div className="job-dashboard-error">{error}</div>}
 

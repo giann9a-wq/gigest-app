@@ -1,0 +1,54 @@
+# Calcolatore Sconti
+
+Accesso da **Preventivi → Calcolatore Sconti** (`/preventivi/calcolatore-sconti`). Storico, opportunità ed editor dei preventivi conservano le rispettive pagine, API e operazioni.
+
+## Calcoli e validazioni
+
+Le funzioni pure sono in `lib/discount-calculator.ts`, condivise da UI, validazione API ed export. I calcoli monetari usano Decimal già incluso in Prisma. Le date sono date civili ISO, convertite in giorni UTC, senza dipendenza dal fuso orario o dall'ora legale.
+
+- Interessi semplici ACT/365, somma a precisione completa e arrotondamento del totale ai centesimi.
+- Fideiussione unica: totale di tutti gli acconti × tasso × giorni dal primo acconto al rogito / 365, arrotondata ai centesimi. Nessuna capitalizzazione del premio anticipato.
+- Beneficio netto anche negativo, sconto teorico non negativo, quota cliente 0–100%.
+- Lo sconto proposto dalla quota è distinto da quello concedibile. Quest'ultimo viene limitato al saldo disponibile, così il saldo dopo lo sconto non diventa negativo. Il beneficio trattenuto riflette lo sconto effettivamente concedibile.
+- Con dati incompleti o non validi i risultati sono indisponibili e salvataggio/export sono disabilitati. Importi positivi con massimo due decimali, tassi con massimo sei decimali, totale acconti entro il prezzo, date non successive al rogito. Il piano supporta fino a 500 acconti e date dal 1900, compatibili con Excel.
+
+## Persistenza e autorizzazioni
+
+Migrazione `20261011120000_discount_simulations`: tabelle `DiscountSimulation` e `DiscountAdvance`, importi Decimal, date PostgreSQL DATE, indici per aggiornamento/data e cancellazione degli acconti in cascade. Nessuna relazione obbligatoria con preventivi o commesse; riferimento facoltativo testuale. Autorizzazione tramite `getActiveAppUser`, con accesso condiviso agli utenti attivi come nelle API Preventivi. Autore, creazione e aggiornamento sono conservati.
+
+API:
+
+- `GET /api/preventivi/simulazioni`: elenco.
+- `POST /api/preventivi/simulazioni`: creazione, anche per duplicazione.
+- `GET /api/preventivi/simulazioni/[id]`: apertura.
+- `PUT /api/preventivi/simulazioni/[id]`: aggiornamento atomico dei parametri e del piano.
+- `DELETE /api/preventivi/simulazioni/[id]`: eliminazione, con conferma nella UI.
+- `POST /api/preventivi/simulazioni/export/excel`: export anche di una simulazione non salvata.
+
+Per altri ambienti applicare `npm run prisma:deploy`, poi eseguire `npm run build`.
+
+## Excel
+
+`Scarica Excel` esporta i dati correnti e formule modificabili, date numeriche, formati monetari e percentuali, input in blu e risultati evidenziati. Usa XLSX e JSZip già presenti. Le formule coprono tutti gli acconti più almeno cinque righe libere (minimo 15), ricalcolano al caricamento e mostrano “Dati non validi” per le configurazioni incoerenti. Per superare le righe riservate occorre estendere le formule e i rispettivi intervalli, oppure esportare nuovamente dall'app.
+
+Il riferimento allegato usa ACT/360 per gli interessi: l'export applica invece ACT/365, come richiesto nella specifica, dichiarandolo nel foglio. La fideiussione compare come calcolo unico sull'intero totale dalla prima data.
+
+## Verifica
+
+- `npm run test:discounts`: 14 test sui casi finanziari, date, validazioni, arrotondamenti, formule e struttura dell'export, incluse più di 15 righe.
+- `npm run test:discounts:db`: richiede il database configurato e migrato. Crea record temporanei, verifica salvataggio e riapertura, modifica del secondo acconto, aggiornamento atomico, duplicazione, eliminazione/cascade e rimuove i record di test in `finally`.
+- `npm run build`: genera Prisma e verifica compilazione, tipi e build Next.js.
+
+Caso di controllo: 50.000 € il 01/10/2026 e 50.000 € il 01/11/2027, rogito 31/12/2027, tasso 4,582%, fideiussione 1%. Interessi 3.238,78 €, fideiussione 1.249,32 €, beneficio/sconto al 100% 1.989,46 €, saldo finale 198.010,54 €. Cambiare solo la seconda data lascia invariata la fideiussione.
+
+## File interessati
+
+| Area | File |
+| --- | --- |
+| Navigazione e pagina | `components/layout/preventivi-tabs.tsx`, `components/preventivi/preventivi-workspace.tsx`, `app/(app)/preventivi/calcolatore-sconti/page.tsx` |
+| Interfaccia e stili | `components/preventivi/discount-calculator.tsx`, `app/globals.css` |
+| Calcoli, persistenza ed Excel | `lib/discount-calculator.ts`, `lib/discount-simulation-store.ts`, `lib/discount-excel.ts` |
+| API | `app/api/preventivi/simulazioni/route.ts`, `app/api/preventivi/simulazioni/[id]/route.ts`, `app/api/preventivi/simulazioni/export/excel/route.ts` |
+| Database | `prisma/schema.prisma`, `prisma/migrations/20261011120000_discount_simulations/migration.sql` |
+| Test e comandi | `scripts/test-discount-calculator.ts`, `scripts/test-discount-persistence.ts`, `package.json` |
+| Documentazione | `docs/calcolatore-sconti.md` |

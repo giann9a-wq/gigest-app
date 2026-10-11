@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test:discounts": "tsx --test scripts/test-discount-calculator.ts",
+    "test:discounts:db": "tsx scripts/test-discount-persistence.ts",
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
