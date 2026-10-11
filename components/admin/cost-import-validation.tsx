@@ -437,7 +437,7 @@ export function CostImportValidation({ sessionId }: { sessionId: string }) {
   }
 
   if (!session) {
-    return <div className="card">Caricamento validazione costi...</div>;
+    return <div className="card">{error ? <div className="scad-error" role="alert">{error}<button className="mobile-button-secondary" onClick={loadSession}>Riprova</button></div> : "Caricamento validazione costi..."}</div>;
   }
 
   const splitOriginalCents = amountToCents(splitRow?.amount);

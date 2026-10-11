@@ -53,12 +53,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const codesValue = formData.get("sourceAccountCodes");
+    const sourceAccountCodes: unknown = codesValue === null ? undefined : JSON.parse(String(codesValue));
+    if (sourceAccountCodes !== undefined && (!Array.isArray(sourceAccountCodes) || !sourceAccountCodes.length || sourceAccountCodes.some((code) => typeof code !== "string"))) {
+      return NextResponse.json({ error: "Selezione codici non valida" }, { status: 400 });
+    }
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await createCostImportSession({
       jobOrderId,
       fileName: file.name,
       buffer,
       uploadedById: adminUser.id,
+      sourceAccountCodes: sourceAccountCodes as string[] | undefined,
     });
 
     return NextResponse.json({

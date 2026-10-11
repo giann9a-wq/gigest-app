@@ -1331,6 +1331,7 @@ export async function createCostImportSession(input: {
   fileName: string;
   buffer: Buffer;
   uploadedById?: string | null;
+  sourceAccountCodes?: string[];
 }) {
   const jobOrder = await prisma.jobOrder.findUnique({
     where: { id: input.jobOrderId },
@@ -1345,12 +1346,24 @@ export async function createCostImportSession(input: {
   const fileSizeBytes = input.buffer.byteLength;
 
   const parsed = parsePartitarioXls(input.buffer, input.jobOrderId);
+  if (input.sourceAccountCodes !== undefined) {
+    const selected = new Set(input.sourceAccountCodes);
+    const available = new Set(parsed.rows.map((row) => row.sourceAccountCode));
+    if (!selected.size || [...selected].some((code) => !available.has(code))) {
+      throw new Error("Seleziona codici contabili presenti nel file.");
+    }
+    parsed.rows = parsed.rows.filter((row) => row.sourceAccountCode && selected.has(row.sourceAccountCode));
+    parsed.summary.parsedRows = parsed.rows.length;
+    parsed.summary.invalidRows = parsed.rows.filter((row) => row.matchStatus === CostImportMatchStatus.INVALID).length;
+    parsed.summary.newRows = parsed.rows.length - parsed.summary.invalidRows;
+  }
   await applySavedCorrections(input.jobOrderId, parsed.rows);
   const classification = await classifyParsedRows(input.jobOrderId, parsed.rows);
 
   const summary = {
     ...parsed.summary,
     ...classification,
+    ...(input.sourceAccountCodes ? { sourceAccountCodes: input.sourceAccountCodes } : {}),
   };
 
   const session = await prisma.$transaction(async (tx) => {

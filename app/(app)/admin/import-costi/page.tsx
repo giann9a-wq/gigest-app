@@ -60,7 +60,7 @@ export default async function AdminImportCostiPage() {
             <p className="dashboard-kicker">Area Riservata</p>
             <h1 className="mobile-section-title">Importa costi</h1>
             <p className="mobile-section-subtitle">
-              Seleziona la commessa, carica il file partitario `.xls` o `.xlsx` e valida lo staging prima della scrittura nei costi actual.
+              Carica l’export completo, escludi i codici da ignorare e valida i nuovi costi per ciascuna commessa.
             </p>
           </div>
           <div className="admin-request-actions">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { CostImportWizard } from "./cost-import-wizard";
 
 type JobOrderOption = {
   id: string;
@@ -165,6 +166,9 @@ export function CostImportPanel({
 
   return (
     <div className="admin-import-placeholder">
+      <CostImportWizard jobOrders={jobOrders} onSessionChange={() => router.refresh()} />
+      <details className="cost-wizard-legacy">
+        <summary>Altri metodi: file singola commessa o Excel pulito</summary>
       <section className="card">
         <div className="mobile-section-header">
           <div>
@@ -321,6 +325,7 @@ export function CostImportPanel({
         </div>
       ) : null}
 
+      </details>
       <section className="card">
         <div className="mobile-section-header">
           <div>
