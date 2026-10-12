@@ -7,7 +7,7 @@ const db = new PrismaClient();
 const ids: string[] = [];
 async function main() {
   try {
-    const input = simulationSchema.parse({ ...defaultSimulation(), name: `Test temporaneo ${Date.now()}`, advances: [{ date: "2026-10-01", amount: 50000 }, { date: "2027-11-01", amount: 50000 }] });
+    const input = simulationSchema.parse({ ...defaultSimulation(), guaranteeFee: 300.50, name: `Test temporaneo ${Date.now()}`, advances: [{ date: "2026-10-01", amount: 50000 }, { date: "2027-11-01", amount: 50000 }] });
     const created = await db.discountSimulation.create({ data: { ...simulationData(input), createdById: "discount-integration-test" }, include: simulationInclude }); ids.push(created.id);
     const reopened = serializeSimulation(await db.discountSimulation.findUniqueOrThrow({ where: { id: created.id }, include: simulationInclude }));
     assert.deepEqual(simulationSchema.parse(reopened), input);
@@ -20,8 +20,10 @@ async function main() {
     assert.equal(calculateSimulation(updated).guarantee, calculateSimulation(input).guarantee);
     assert.notEqual(calculateSimulation(updated).interest, calculateSimulation(input).interest);
     assert.equal(updated.advances.length, 2);
+    assert.equal(updated.guaranteeFee, 300.50);
     const copy = await db.discountSimulation.create({ data: { ...simulationData({ ...changed, name: `${input.name} (copia)` }), createdById: "discount-integration-test" }, include: simulationInclude }); ids.push(copy.id);
     assert.notEqual(copy.id, created.id); assert.equal(copy.advances.length, 2);
+    assert.equal(Number(copy.guaranteeFee), 300.50);
     await db.discountSimulation.delete({ where: { id: created.id } });
     assert.equal(await db.discountAdvance.count({ where: { simulationId: created.id } }), 0);
     assert.equal(await db.discountSimulation.findUnique({ where: { id: created.id } }), null);

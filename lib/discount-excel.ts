@@ -11,14 +11,14 @@ export function discountWorkbook(input: SimulationInput) {
     ["Prezzo appartamento (€)", value.price], ["Data saldo / rogito", dateDays(value.closingDate) + 25569],
     ["Euribor 3 mesi", value.euribor / 100], ["Spread bancario", value.spread / 100], ["Tasso finanziario complessivo"],
     ["Costo annuo fideiussione", value.guaranteeRate / 100], ["Base interessi (ACT/365)", 365], ["Base fideiussione (ACT/365)", 365],
-    ["Beneficio riconosciuto al cliente", value.customerShare / 100], [],
+    ["Beneficio riconosciuto al cliente", value.customerShare / 100], ["Spesa fissa emissione fideiussione (€)", value.guaranteeFee],
     ["Input in blu. Formule in nero. Inserisci ulteriori acconti nelle righe libere."],
     ["Euribor di simulazione, tasso costante. Il modello usa ACT/365 anche per gli interessi."],
     ["Validità dei dati"], [], ["Totale acconti (€)"], ["Interessi risparmiati (€)"], ["Primo acconto"],
-    ["Giorni fideiussione"], ["Costo fideiussione (€)"], ["Beneficio finanziario netto (€)"], ["Beneficio netto / prezzo"],
+    ["Giorni fideiussione"], ["Costo totale fideiussione (€)"], ["Beneficio finanziario netto (€)"], ["Beneficio netto / prezzo"],
     ["Sconto massimo teorico (€)"], ["Sconto proposto dalla quota (€)"], ["Sconto concedibile (€), limitato al saldo"],
     ["Sconto concedibile / prezzo"], ["Prezzo finale scontato (€)"], ["Saldo al rogito (€)"], ["Beneficio trattenuto (€)"], ["Saldo prima dello sconto (€)"], [],
-    ["Fideiussione pagata integralmente al primo acconto sull’intero piano, inclusi gli acconti futuri."],
+    ["Fideiussione: premio annuo sull’intero piano più spesa fissa, applicata una sola volta al primo acconto."],
     ["Sconto limitato al saldo disponibile. Escluso il costo finanziario dell’anticipo del premio."],
     ["N.", "Data acconto", "Importo (€)", "Giorni al rogito", "Interessi risparmiati (€)"],
   ]);
@@ -27,13 +27,13 @@ export function discountWorkbook(input: SimulationInput) {
   const dates = `B${first}:B${last}`, amounts = `C${first}:C${last}`, interests = `E${first}:E${last}`;
   const put = (address: string, formula: string, cached: number | string, format = '#,##0.00 "€"') => { sheet[address] = { t: typeof cached === "number" ? "n" : "s", f: formula, v: cached, z: format }; };
   put("B8", "B6+B7", result.bankRate / 100, "0.000%");
-  put("B16", `IF(AND(ISNUMBER(B4),B4>0,ISNUMBER(B5),B5=INT(B5),ISNUMBER(B6),B6>=-1,B6<=1,ISNUMBER(B7),B7>=0,B7<=1,ISNUMBER(B9),B9>=0,B9<=1,B10=365,B11=365,ISNUMBER(B12),B12>=0,B12<=1,COUNTA(${dates})=COUNT(${dates}),COUNTA(${amounts})=COUNT(${amounts}),COUNT(${dates})=COUNT(${amounts}),COUNTIFS(${dates},">"&B5)=0,COUNTIFS(${dates},"<="&0,${amounts},">0")=0,COUNTIFS(${amounts},"<=0",${dates},">0")=0,SUM(${amounts})<=B4),"OK","Dati non validi")`, "OK", "General");
+  put("B16", `IF(AND(ISNUMBER(B4),B4>0,ISNUMBER(B5),B5=INT(B5),ISNUMBER(B6),B6>=-1,B6<=1,ISNUMBER(B7),B7>=0,B7<=1,ISNUMBER(B9),B9>=0,B9<=1,B10=365,B11=365,ISNUMBER(B12),B12>=0,B12<=1,ISNUMBER(B13),B13>=0,B13<=9999999999.99,ROUND(B13,2)=B13,COUNTA(${dates})=COUNT(${dates}),COUNTA(${amounts})=COUNT(${amounts}),COUNT(${dates})=COUNT(${amounts}),COUNTIFS(${dates},">"&B5)=0,COUNTIFS(${dates},"<="&0,${amounts},">0")=0,COUNTIFS(${amounts},"<=0",${dates},">0")=0,SUM(${amounts})<=B4),"OK","Dati non validi")`, "OK", "General");
   const guarded = (formula: string) => `IF($B$16="OK",${formula},"Dati non validi")`;
   put("B18", guarded(`SUM(${amounts})`), result.total);
   put("B19", guarded(`ROUND(SUM(${interests}),2)`), result.interest);
   put("B20", `IF($B$16="OK",IF(COUNT(${dates})=0,"",MIN(${dates})),"Dati non validi")`, result.firstDate ? dateDays(result.firstDate) + 25569 : "", "dd/mm/yyyy");
   put("B21", guarded('IF(B20="",0,B5-B20)'), result.guaranteeDays, "0");
-  put("B22", guarded("ROUND(B18*B9*B21/B11,2)"), result.guarantee);
+  put("B22", guarded(`ROUND(B18*B9*B21/B11,2)+IF(COUNT(${dates})>0,B13,0)`), result.guarantee);
   put("B23", guarded("ROUND(B19-B22,2)"), result.benefit);
   put("B24", guarded("B23/B4"), result.benefitPercent / 100, "0.00%");
   put("B25", guarded("MAX(0,B23)"), result.theoretical);
@@ -52,7 +52,7 @@ export function discountWorkbook(input: SimulationInput) {
     put(`D${r}`, `IF(AND(B${r}="",C${r}=""),"",IF(AND(ISNUMBER(B${r}),B${r}>0,B${r}<=$B$5,ISNUMBER(C${r}),C${r}>0),$B$5-B${r},"Dati non validi"))`, row?.days ?? "", "0");
     put(`E${r}`, `IF(AND(B${r}="",C${r}=""),"",IF(ISNUMBER(D${r}),C${r}*$B$8*D${r}/$B$10,"Dati non validi"))`, row ? row.amount * result.bankRate / 100 * row.days / 365 : "");
   }
-  sheet["B4"].z = '#,##0.00 "€"'; sheet["B5"].z = "dd/mm/yyyy";
+  sheet["B4"].z = '#,##0.00 "€"'; sheet["B5"].z = "dd/mm/yyyy"; sheet["B13"].z = '#,##0.00 "€"';
   for (const r of [6, 7, 9, 12]) sheet[`B${r}`].z = "0.000%";
   sheet["!ref"] = `A1:E${last}`;
   sheet["!cols"] = [{ wch: 49 }, { wch: 25 }, { wch: 20 }, { wch: 21 }, { wch: 29 }];
@@ -77,7 +77,7 @@ export async function discountExcelBuffer(input: SimulationInput) {
   let xml = await zip.file("xl/worksheets/sheet1.xml")!.async("string");
   xml = xml.replace(/<c\b([^>]*\br="([A-E])(\d+)"[^>]*)>/g, (match, attrs: string, col: string, row: string) => {
     const r = Number(row); let variant = -1;
-    if ((col === "B" && [2, 3, 4, 5, 6, 7, 9, 12].includes(r)) || (r >= 37 && ["B", "C"].includes(col))) variant = 0;
+    if ((col === "B" && [2, 3, 4, 5, 6, 7, 9, 12, 13].includes(r)) || (r >= 37 && ["B", "C"].includes(col))) variant = 0;
     if (r === 1 || r === 27 || r === 28) variant = 1;
     else if (r === 36 || (col === "A" && r >= 18 && r <= 32)) variant = 2;
     if (variant < 0) return match;

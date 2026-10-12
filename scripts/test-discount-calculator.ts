@@ -80,7 +80,7 @@ test("decimal amounts and rates preserve cents", () => {
 test("Excel uses editable numbers, numeric dates and live formulas matching the application", async () => {
   const input = example(), result = calculateSimulation(input), book = discountWorkbook(input), sheet = book.Sheets.Calcolatore;
   assert.equal(sheet.B10.v, 365); assert.equal(sheet.B11.v, 365);
-  assert.equal(sheet.B22.f, 'IF($B$16="OK",ROUND(B18*B9*B21/B11,2),"Dati non validi")');
+  assert.equal(sheet.B22.f, 'IF($B$16="OK",ROUND(B18*B9*B21/B11,2)+IF(COUNT(B37:B51)>0,B13,0),"Dati non validi")');
   assert.equal(sheet.B22.v, result.guarantee); assert.equal(sheet.B27.v, result.discount); assert.equal(sheet.B30.v, result.balance);
   assert.equal(sheet.B37.t, "n"); assert.equal(sheet.B37.z, "dd/mm/yyyy");
   const buffer = await discountExcelBuffer(input), reopened = XLSX.read(buffer, { type: "buffer", cellNF: true });
@@ -93,4 +93,30 @@ test("Excel exports all advances beyond the reference model's 15 rows", () => {
   const input = example({ advances: Array.from({ length: 25 }, () => ({ date: "2027-11-01", amount: 1000 })) });
   const sheet = discountWorkbook(input).Sheets.Calcolatore;
   assert.equal(sheet.C61.v, 1000); assert.match(sheet.B18.f!, /C37:C66/);
+});
+test("fixed issuance fee is charged once and reduces benefit and discount", () => {
+  const result = calculateSimulation(example({ guaranteeFee: 300 }));
+  assert.equal(result.guaranteeAnnual, 1249.32); assert.equal(result.guaranteeEmission, 300);
+  assert.equal(result.guarantee, 1549.32); assert.equal(result.benefit, 1689.46); assert.equal(result.discount, 1689.46);
+  assert.equal(calculateSimulation(example({ guaranteeFee: 300, customerShare: 50 })).discount, 844.73);
+  const later = calculateSimulation(example({ guaranteeFee: 300, advances: [{ date: "2026-10-01", amount: 50000 }, { date: "2027-06-01", amount: 50000 }] }));
+  assert.equal(later.guarantee, result.guarantee);
+});
+test("no advances means no issuance fee; closing-day advances still incur it", () => {
+  const empty = calculateSimulation(example({ guaranteeFee: 300, advances: [] }));
+  assert.equal(empty.guarantee, 0); assert.equal(empty.guaranteeEmission, 0);
+  const closing = calculateSimulation(example({ guaranteeFee: 300, advances: [{ date: "2027-12-31", amount: 100000 }] }));
+  assert.equal(closing.guarantee, 300); assert.equal(closing.benefit, -300); assert.equal(closing.discount, 0);
+});
+test("issuance fee validates cents and defaults to zero for older payloads", () => {
+  const old = example(); delete old.guaranteeFee;
+  assert.equal(simulationSchema.parse(old).guaranteeFee, 0);
+  assert.equal(calculateSimulation(example({ guaranteeFee: "300,50" })).guarantee, 1549.82);
+  for (const guaranteeFee of [-1, "", "abc", 0.001]) assert.equal(simulationSchema.safeParse(example({ guaranteeFee })).success, false);
+});
+test("Excel includes the editable issuance fee and its formula dependency", () => {
+  const sheet = discountWorkbook(example({ guaranteeFee: 300 })).Sheets.Calcolatore;
+  assert.equal(sheet.B13.v, 300); assert.match(sheet.B22.f!, /B13/);
+  assert.equal(sheet.B22.v, 1549.32); assert.equal(sheet.B27.v, 1689.46);
+  assert.equal(discountWorkbook(example({ guaranteeFee: 300, advances: [] })).Sheets.Calcolatore.B22.v, 0);
 });

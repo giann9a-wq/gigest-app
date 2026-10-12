@@ -10,6 +10,7 @@ Le funzioni pure sono in `lib/discount-calculator.ts`, condivise da UI, validazi
 
 - Interessi semplici ACT/365, somma a precisione completa e arrotondamento del totale ai centesimi.
 - Fideiussione unica: totale di tutti gli acconti × tasso × giorni dal primo acconto al rogito / 365, arrotondata ai centesimi. Nessuna capitalizzazione del premio anticipato.
+- Spesa fissa emissione fideiussione: parametro monetario non negativo, inizialmente 0 €, applicato una sola volta al primo acconto e sommato al premio annuo. Senza acconti non si applica alcun costo. Il costo totale riduce beneficio netto e sconto. Il dettaglio distingue premio annuo e spesa di emissione.
 - Beneficio netto anche negativo, sconto teorico non negativo, quota cliente 0–100%.
 - Lo sconto proposto dalla quota è distinto da quello concedibile. Quest'ultimo viene limitato al saldo disponibile, così il saldo dopo lo sconto non diventa negativo. Il beneficio trattenuto riflette lo sconto effettivamente concedibile.
 - Con dati incompleti o non validi i risultati sono indisponibili e salvataggio/export sono disabilitati. Importi positivi con massimo due decimali, tassi con massimo sei decimali, totale acconti entro il prezzo, date non successive al rogito. Il piano supporta fino a 500 acconti e date dal 1900, compatibili con Excel.
@@ -17,6 +18,8 @@ Le funzioni pure sono in `lib/discount-calculator.ts`, condivise da UI, validazi
 ## Persistenza e autorizzazioni
 
 Migrazione `20261011120000_discount_simulations`: tabelle `DiscountSimulation` e `DiscountAdvance`, importi Decimal, date PostgreSQL DATE, indici per aggiornamento/data e cancellazione degli acconti in cascade. Nessuna relazione obbligatoria con preventivi o commesse; riferimento facoltativo testuale. Autorizzazione tramite `getActiveAppUser`, con accesso condiviso agli utenti attivi come nelle API Preventivi. Autore, creazione e aggiornamento sono conservati.
+
+Migrazione `20261012080000_discount_guarantee_fee`: aggiunge `guaranteeFee` Decimal(12,2), con default 0 e vincolo non negativo. I payload precedenti che non includono il campo continuano a essere accettati con valore 0. Il costo è conservato anche negli aggiornamenti e nelle copie.
 
 API:
 
@@ -33,11 +36,13 @@ Per altri ambienti applicare `npm run prisma:deploy`, poi eseguire `npm run buil
 
 `Scarica Excel` esporta i dati correnti e formule modificabili, date numeriche, formati monetari e percentuali, input in blu e risultati evidenziati. Usa XLSX e JSZip già presenti. Le formule coprono tutti gli acconti più almeno cinque righe libere (minimo 15), ricalcolano al caricamento e mostrano “Dati non validi” per le configurazioni incoerenti. Per superare le righe riservate occorre estendere le formule e i rispettivi intervalli, oppure esportare nuovamente dall'app.
 
+La spesa fissa di emissione è un input in B13; la formula del costo totale in B22 la include una sola volta quando sono presenti acconti.
+
 Il riferimento allegato usa ACT/360 per gli interessi: l'export applica invece ACT/365, come richiesto nella specifica, dichiarandolo nel foglio. La fideiussione compare come calcolo unico sull'intero totale dalla prima data.
 
 ## Verifica
 
-- `npm run test:discounts`: 14 test sui casi finanziari, date, validazioni, arrotondamenti, formule e struttura dell'export, incluse più di 15 righe.
+- `npm run test:discounts`: 18 test sui casi finanziari, date, validazioni, arrotondamenti, formule e struttura dell'export, incluse più di 15 righe e spesa fissa di emissione.
 - `npm run test:discounts:db`: richiede il database configurato e migrato. Crea record temporanei, verifica salvataggio e riapertura, modifica del secondo acconto, aggiornamento atomico, duplicazione, eliminazione/cascade e rimuove i record di test in `finally`.
 - `npm run build`: genera Prisma e verifica compilazione, tipi e build Next.js.
 
@@ -51,6 +56,6 @@ Caso di controllo: 50.000 € il 01/10/2026 e 50.000 € il 01/11/2027, rogito 3
 | Interfaccia e stili | `components/preventivi/discount-calculator.tsx`, `components/preventivi/amount-input.tsx`, `app/globals.css` |
 | Calcoli, persistenza ed Excel | `lib/discount-calculator.ts`, `lib/discount-simulation-store.ts`, `lib/discount-excel.ts` |
 | API | `app/api/preventivi/simulazioni/route.ts`, `app/api/preventivi/simulazioni/[id]/route.ts`, `app/api/preventivi/simulazioni/export/excel/route.ts` |
-| Database | `prisma/schema.prisma`, `prisma/migrations/20261011120000_discount_simulations/migration.sql` |
+| Database | `prisma/schema.prisma`, `prisma/migrations/20261011120000_discount_simulations/migration.sql`, `prisma/migrations/20261012080000_discount_guarantee_fee/migration.sql` |
 | Test e comandi | `scripts/test-discount-calculator.ts`, `scripts/test-discount-persistence.ts`, `package.json` |
 | Documentazione | `docs/calcolatore-sconti.md` |

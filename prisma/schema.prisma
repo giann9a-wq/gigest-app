@@ -606,6 +606,7 @@ model DiscountSimulation {
   euribor       Decimal  @db.Decimal(9, 6)
   spread        Decimal  @db.Decimal(9, 6)
   guaranteeRate Decimal  @db.Decimal(9, 6)
+  guaranteeFee  Decimal  @default(0) @db.Decimal(12, 2)
   customerShare Decimal  @db.Decimal(9, 6)
   createdById   String
   createdAt     DateTime @default(now())
