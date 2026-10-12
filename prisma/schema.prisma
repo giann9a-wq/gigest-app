@@ -607,6 +607,7 @@ model DiscountSimulation {
   spread        Decimal  @db.Decimal(9, 6)
   guaranteeRate Decimal  @db.Decimal(9, 6)
   guaranteeFee  Decimal  @default(0) @db.Decimal(12, 2)
+  guaranteeVariableRate Decimal @default(0.05) @db.Decimal(9, 6)
   customerShare Decimal  @db.Decimal(9, 6)
   createdById   String
   createdAt     DateTime @default(now())

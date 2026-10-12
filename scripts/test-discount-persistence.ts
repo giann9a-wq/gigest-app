@@ -21,9 +21,11 @@ async function main() {
     assert.notEqual(calculateSimulation(updated).interest, calculateSimulation(input).interest);
     assert.equal(updated.advances.length, 2);
     assert.equal(updated.guaranteeFee, 300.50);
+    assert.equal(updated.guaranteeVariableRate, 0.05);
     const copy = await db.discountSimulation.create({ data: { ...simulationData({ ...changed, name: `${input.name} (copia)` }), createdById: "discount-integration-test" }, include: simulationInclude }); ids.push(copy.id);
     assert.notEqual(copy.id, created.id); assert.equal(copy.advances.length, 2);
     assert.equal(Number(copy.guaranteeFee), 300.50);
+    assert.equal(Number(copy.guaranteeVariableRate), 0.05);
     await db.discountSimulation.delete({ where: { id: created.id } });
     assert.equal(await db.discountAdvance.count({ where: { simulationId: created.id } }), 0);
     assert.equal(await db.discountSimulation.findUnique({ where: { id: created.id } }), null);

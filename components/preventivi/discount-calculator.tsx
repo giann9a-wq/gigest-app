@@ -110,11 +110,12 @@ export function DiscountCalculator({ simulationId }: { simulationId?: string }) 
       setMessage("Excel scaricato con dati e formule modificabili.");
     });
   }
-  const fields: Array<{ key: "price" | "euribor" | "spread" | "guaranteeRate"; label: string; min: number; max: number; step: string }> = [
+  const fields: Array<{ key: "price" | "euribor" | "spread" | "guaranteeRate" | "guaranteeVariableRate"; label: string; min: number; max: number; step: string }> = [
     { key: "price", label: "Prezzo appartamento (€)", min: 0.01, max: 9999999999.99, step: "0.01" },
     { key: "euribor", label: "Euribor 3 mesi (%)", min: -100, max: 100, step: "0.001" },
     { key: "spread", label: "Spread bancario (%)", min: 0, max: 100, step: "0.001" },
     { key: "guaranteeRate", label: "Fideiussione annua (%)", min: 0, max: 100, step: "0.001" },
+    { key: "guaranteeVariableRate", label: "Spesa variabile fideiussione (%)", min: 0, max: 100, step: "0.001" },
   ];
   const editorContent = <>
       <div className="discount-toolbar">
@@ -133,7 +134,7 @@ export function DiscountCalculator({ simulationId }: { simulationId?: string }) 
         <label>Nome simulazione<input maxLength={160} value={form.name} onChange={e => update({ name: e.target.value })} /></label>
         <label>Riferimento appartamento / commessa<input maxLength={200} placeholder="Facoltativo" value={form.reference} onChange={e => update({ reference: e.target.value })} /></label>
         <label>Data rogito / saldo<input type="date" value={form.closingDate} onChange={e => update({ closingDate: e.target.value })} /></label>
-        {fields.map(field => <label key={field.key}>{field.label}<input type="number" min={field.min} max={field.max} step={field.step} value={form[field.key]} onChange={e => update({ [field.key]: e.target.value })} /></label>)}
+        {fields.map(field => <label key={field.key}>{field.label}<input type="number" min={field.min} max={field.max} step={field.step} value={form[field.key] ?? 0} onChange={e => update({ [field.key]: e.target.value })} /></label>)}
         <label>Spesa fissa emissione fideiussione (€)<AmountInput aria-invalid={!validation.success && validation.error.issues.some(issue => issue.path[0] === "guaranteeFee")} value={form.guaranteeFee ?? 0} onValueChange={guaranteeFee => update({ guaranteeFee })} /></label>
         <label>Tasso finanziario complessivo<output>{bankRate !== null ? `${new Intl.NumberFormat("it-IT", { maximumFractionDigits: 6 }).format(bankRate)} %` : "—"}</output></label>
       </div>
@@ -148,14 +149,14 @@ export function DiscountCalculator({ simulationId }: { simulationId?: string }) 
         })}
       </tbody></table>{!ordered.length && <p className="quotes-empty">Nessun acconto. Aggiungi un versamento per simulare il beneficio.</p>}</div>
       <div className="discount-totals"><span>Totale acconti <strong>{result ? formatCurrency(result.total) : "—"}</strong></span><span>Saldo prima dello sconto <strong>{result ? formatCurrency(result.initialBalance) : "—"}</strong></span></div>
-      {!validation.success && <div className="discount-errors" role="alert"><strong>Correggi i dati per calcolare e salvare:</strong><ul>{validation.error.issues.map((issue, index) => <li key={index}>{issue.path[0] === "advances" && typeof issue.path[1] === "number" ? `Acconto ${ordered.findIndex(row => row.index === issue.path[1]) + 1}: ` : `${({ price: "Prezzo", closingDate: "Rogito", euribor: "Euribor", spread: "Spread", guaranteeRate: "Fideiussione", guaranteeFee: "Spesa fissa emissione", customerShare: "Quota cliente", name: "Nome", reference: "Riferimento" } as Record<string, string>)[String(issue.path[0])] ?? "Piano acconti"}: `}{issue.message}</li>)}</ul></div>}
+      {!validation.success && <div className="discount-errors" role="alert"><strong>Correggi i dati per calcolare e salvare:</strong><ul>{validation.error.issues.map((issue, index) => <li key={index}>{issue.path[0] === "advances" && typeof issue.path[1] === "number" ? `Acconto ${ordered.findIndex(row => row.index === issue.path[1]) + 1}: ` : `${({ price: "Prezzo", closingDate: "Rogito", euribor: "Euribor", spread: "Spread", guaranteeRate: "Fideiussione", guaranteeFee: "Spesa fissa emissione", guaranteeVariableRate: "Spesa variabile fideiussione", customerShare: "Quota cliente", name: "Nome", reference: "Riferimento" } as Record<string, string>)[String(issue.path[0])] ?? "Piano acconti"}: `}{issue.message}</li>)}</ul></div>}
       <div className="discount-share"><label htmlFor="customer-share">Beneficio riconosciuto all’acquirente (%)</label><input aria-label="Quota beneficio cliente" type="range" min="0" max="100" step="1" value={Number(form.customerShare) || 0} onChange={e => update({ customerShare: e.target.value })} /><input id="customer-share" type="number" min="0" max="100" step="1" value={form.customerShare} onChange={e => update({ customerShare: e.target.value })} /></div>
     </fieldset>
     <div className="discount-kpis" aria-live="polite">
       {[{ label: "Interessi risparmiati", value: result?.interest }, { label: "Costo fideiussione", value: result?.guarantee, detail: result?.firstDate ? `${result.guaranteeDays} giorni dal ${dateLabel(result.firstDate)}` : "Nessun acconto" }, { label: "Beneficio netto", value: result?.benefit, detail: result ? `${formatPercent(result.benefitPercent)} del prezzo` : "", negative: result && result.benefit < 0 }, { label: "Sconto concedibile", value: result?.discount, detail: result ? `${formatPercent(result.discountPercent)} del prezzo` : "", highlight: true }, { label: "Prezzo finale scontato", value: result?.finalPrice }, { label: "Saldo al rogito", value: result?.balance }].map(kpi => <div key={kpi.label} className={`discount-kpi ${kpi.highlight ? "discount-kpi-highlight" : ""} ${kpi.negative ? "discount-kpi-negative" : ""}`}><span>{kpi.label}</span><strong>{kpi.value === undefined ? "—" : formatCurrency(kpi.value)}</strong>{kpi.detail && <small>{kpi.detail}</small>}</div>)}
     </div>
     {result && <div className="discount-totals"><span>Sconto massimo teorico <strong>{formatCurrency(result.theoretical)}</strong></span><span>Sconto proposto dalla quota <strong>{formatCurrency(result.proposed)}</strong></span><span>Beneficio trattenuto <strong>{formatCurrency(result.retained)}</strong></span></div>}
-    {result && <p className="discount-note">Costo fideiussione: premio annuo {formatCurrency(result.guaranteeAnnual)} + emissione {formatCurrency(result.guaranteeEmission)}. La spesa fissa viene applicata una sola volta, se sono previsti acconti.</p>}
+    {result && <p className="discount-note">Costo fideiussione: premio annuo {formatCurrency(result.guaranteeAnnual)} + emissione {formatCurrency(result.guaranteeEmission)} + spesa variabile {formatCurrency(result.guaranteeVariable)}. La spesa variabile è calcolata sul totale acconti e applicata una sola volta, senza proporzionarla ai giorni.</p>}
     {result?.capped && <p className="discount-note">Lo sconto concedibile è limitato al saldo disponibile prima dello sconto per evitare un saldo negativo.</p>}
     {result && result.benefit < 0 && <p className="discount-note">Il costo della fideiussione supera il risparmio: nessuno sconto concedibile.</p>}
     <p className="discount-note">La fideiussione è sostenuta integralmente al primo acconto sull’intero piano, inclusi i versamenti futuri. Il modello non include il costo finanziario dell’anticipo del premio.</p>

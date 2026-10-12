@@ -5,7 +5,7 @@ import JSZip from "jszip";
 import { advanceDays, calculateSimulation, dateDays, defaultSimulation, simulationSchema, type SimulationInput } from "../lib/discount-calculator";
 import { discountExcelBuffer, discountWorkbook } from "../lib/discount-excel";
 
-const example = (patch: Partial<SimulationInput> = {}): SimulationInput => ({ ...defaultSimulation(), advances: [{ date: "2026-10-01", amount: 50000 }, { date: "2027-11-01", amount: 50000 }], ...patch });
+const example = (patch: Partial<SimulationInput> = {}): SimulationInput => ({ ...defaultSimulation(), guaranteeVariableRate: 0, advances: [{ date: "2026-10-01", amount: 50000 }, { date: "2027-11-01", amount: 50000 }], ...patch });
 test("UTC days: leap years, daylight saving and same-day closing", () => {
   assert.equal(advanceDays("2026-10-01", "2027-12-31"), 456);
   assert.equal(advanceDays("2024-02-28", "2024-03-01"), 2);
@@ -80,7 +80,7 @@ test("decimal amounts and rates preserve cents", () => {
 test("Excel uses editable numbers, numeric dates and live formulas matching the application", async () => {
   const input = example(), result = calculateSimulation(input), book = discountWorkbook(input), sheet = book.Sheets.Calcolatore;
   assert.equal(sheet.B10.v, 365); assert.equal(sheet.B11.v, 365);
-  assert.equal(sheet.B22.f, 'IF($B$16="OK",ROUND(B18*B9*B21/B11,2)+IF(COUNT(B37:B51)>0,B13,0),"Dati non validi")');
+  assert.equal(sheet.B22.f, 'IF($B$16="OK",ROUND(B18*B9*B21/B11,2)+IF(COUNT(B37:B51)>0,B13,0)+ROUND(B18*$E$4,2),"Dati non validi")');
   assert.equal(sheet.B22.v, result.guarantee); assert.equal(sheet.B27.v, result.discount); assert.equal(sheet.B30.v, result.balance);
   assert.equal(sheet.B37.t, "n"); assert.equal(sheet.B37.z, "dd/mm/yyyy");
   const buffer = await discountExcelBuffer(input), reopened = XLSX.read(buffer, { type: "buffer", cellNF: true });
@@ -119,4 +119,34 @@ test("Excel includes the editable issuance fee and its formula dependency", () =
   assert.equal(sheet.B13.v, 300); assert.match(sheet.B22.f!, /B13/);
   assert.equal(sheet.B22.v, 1549.32); assert.equal(sheet.B27.v, 1689.46);
   assert.equal(discountWorkbook(example({ guaranteeFee: 300, advances: [] })).Sheets.Calcolatore.B22.v, 0);
+});
+test("0.05 percent variable expense is applied once to the total advances", () => {
+  assert.equal(defaultSimulation().guaranteeVariableRate, 0.05);
+  const result = calculateSimulation(example({ guaranteeFee: 300, guaranteeVariableRate: 0.05 }));
+  assert.equal(result.guaranteeVariable, 50);
+  assert.equal(result.guarantee, 1599.32); assert.equal(result.benefit, 1639.46); assert.equal(result.discount, 1639.46);
+  assert.equal(calculateSimulation(example({ guaranteeVariableRate: "0,05", customerShare: 50 })).discount, 969.73);
+});
+test("variable expense depends on total advances, not advance dates or closing date", () => {
+  const base = calculateSimulation(example({ guaranteeVariableRate: 0.05 }));
+  const changedDate = calculateSimulation(example({ guaranteeVariableRate: 0.05, closingDate: "2028-12-31" }));
+  assert.equal(changedDate.guaranteeVariable, base.guaranteeVariable);
+  const changedAmount = calculateSimulation(example({ guaranteeVariableRate: 0.05, advances: [{ date: "2027-11-01", amount: 150000 }] }));
+  assert.equal(changedAmount.guaranteeVariable, 75);
+  const closing = calculateSimulation(example({ guaranteeVariableRate: 0.05, advances: [{ date: "2027-12-31", amount: 100000 }] }));
+  assert.equal(closing.guarantee, 50); assert.equal(closing.discount, 0);
+  assert.equal(calculateSimulation(example({ guaranteeVariableRate: 0.05, advances: [] })).guaranteeVariable, 0);
+});
+test("variable expense validates rates, rounds cents and preserves old payloads", () => {
+  const old = example(); delete old.guaranteeVariableRate;
+  assert.equal(simulationSchema.parse(old).guaranteeVariableRate, 0);
+  const cents = calculateSimulation(example({ guaranteeVariableRate: 0.05, advances: [{ date: "2027-12-31", amount: 12345.67 }] }));
+  assert.equal(cents.guaranteeVariable, 6.17);
+  for (const rate of [-1, 101, "", "abc", 0.0000001]) assert.equal(simulationSchema.safeParse(example({ guaranteeVariableRate: rate })).success, false);
+});
+test("Excel stores 0.05 percent correctly and links the expense to total advances", () => {
+  const sheet = discountWorkbook(example({ guaranteeVariableRate: 0.05, guaranteeFee: 300 })).Sheets.Calcolatore;
+  assert.equal(sheet.E4.v, 0.0005); assert.equal(sheet.E4.z, "0.000%");
+  assert.match(sheet.B22.f!, /ROUND\(B18\*\$E\$4,2\)/);
+  assert.equal(sheet.B22.v, 1599.32); assert.equal(sheet.B27.v, 1639.46);
 });

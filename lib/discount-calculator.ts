@@ -28,6 +28,7 @@ export const simulationSchema = z.object({
   spread: numeric(0, 100, 6),
   guaranteeRate: numeric(0, 100, 6),
   guaranteeFee: numeric(0, 9999999999.99, 2).default(0),
+  guaranteeVariableRate: numeric(0, 100, 6).default(0),
   customerShare: numeric(0, 100, 6),
   advances: z.array(z.object({ date: dateSchema, amount: numeric(0.01, 9999999999.99, 2) })).max(500),
 }).superRefine((value, ctx) => {
@@ -40,16 +41,17 @@ export const simulationSchema = z.object({
 export type SimulationInput = z.input<typeof simulationSchema>;
 export type Simulation = z.output<typeof simulationSchema>;
 export function financialRate(euribor: number, spread: number) { return new Decimal(euribor).plus(spread).toNumber(); }
-export const defaultSimulation = (): SimulationInput => ({ name: "Nuova simulazione", reference: "", price: 300000, closingDate: "2027-12-31", euribor: 2.632, spread: 1.95, guaranteeRate: 1, guaranteeFee: 0, customerShare: 100, advances: [] });
+export const defaultSimulation = (): SimulationInput => ({ name: "Nuova simulazione", reference: "", price: 300000, closingDate: "2027-12-31", euribor: 2.632, spread: 1.95, guaranteeRate: 1, guaranteeFee: 0, guaranteeVariableRate: 0.05, customerShare: 100, advances: [] });
 const cents = (value: Decimal) => value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 export function interestSaved(amount: number, ratePercent: number, days: number) {
   return new Decimal(amount).times(ratePercent).div(100).times(days).div(365);
 }
-export function guaranteeCost(advances: Simulation["advances"], closingDate: string, ratePercent: number, fixedFee = 0) {
+export function variableGuaranteeCost(total: Decimal, ratePercent: number) { return cents(total.times(ratePercent).div(100)); }
+export function guaranteeCost(advances: Simulation["advances"], closingDate: string, ratePercent: number, fixedFee = 0, variableRate = 0) {
   if (!advances.length) return new Decimal(0);
   const firstDate = advances.reduce((first, row) => row.date < first ? row.date : first, advances[0].date);
   const total = advances.reduce((sum, row) => sum.plus(row.amount), new Decimal(0));
-  return total.times(ratePercent).div(100).times(advanceDays(firstDate, closingDate)).div(365).plus(fixedFee);
+  return total.times(ratePercent).div(100).times(advanceDays(firstDate, closingDate)).div(365).plus(fixedFee).plus(variableGuaranteeCost(total, variableRate));
 }
 export function netBenefit(interest: Decimal, guarantee: Decimal) { return interest.minus(guarantee); }
 export function commercialDiscount(price: number, total: Decimal, benefit: Decimal, share: number) {
@@ -71,7 +73,8 @@ export function calculateSimulation(input: SimulationInput) {
   const interest = cents(value.advances.reduce((sum, row) => sum.plus(interestSaved(row.amount, bankRate, advanceDays(row.date, value.closingDate))), new Decimal(0)));
   const guaranteeAnnual = cents(guaranteeCost(value.advances, value.closingDate, value.guaranteeRate));
   const guaranteeEmission = value.advances.length ? value.guaranteeFee : 0;
-  const guarantee = cents(guaranteeCost(value.advances, value.closingDate, value.guaranteeRate, value.guaranteeFee));
+  const guaranteeVariable = variableGuaranteeCost(total, value.guaranteeVariableRate);
+  const guarantee = cents(guaranteeCost(value.advances, value.closingDate, value.guaranteeRate, value.guaranteeFee, value.guaranteeVariableRate));
   const benefit = netBenefit(interest, guarantee);
-  return { bankRate, rows, total: total.toNumber(), initialBalance: new Decimal(value.price).minus(total).toNumber(), firstDate: rows[0]?.date ?? null, guaranteeDays: rows.length ? rows[0].days : 0, interest: interest.toNumber(), guaranteeAnnual: guaranteeAnnual.toNumber(), guaranteeEmission, guarantee: guarantee.toNumber(), benefit: benefit.toNumber(), benefitPercent: benefit.div(value.price).times(100).toNumber(), ...commercialDiscount(value.price, total, benefit, value.customerShare) };
+  return { bankRate, rows, total: total.toNumber(), initialBalance: new Decimal(value.price).minus(total).toNumber(), firstDate: rows[0]?.date ?? null, guaranteeDays: rows.length ? rows[0].days : 0, interest: interest.toNumber(), guaranteeAnnual: guaranteeAnnual.toNumber(), guaranteeEmission, guaranteeVariable: guaranteeVariable.toNumber(), guarantee: guarantee.toNumber(), benefit: benefit.toNumber(), benefitPercent: benefit.div(value.price).times(100).toNumber(), ...commercialDiscount(value.price, total, benefit, value.customerShare) };
 }
