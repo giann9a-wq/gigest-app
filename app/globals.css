@@ -11670,7 +11670,10 @@ a {
 .discount-history-table th, .discount-history-table td { overflow-wrap: anywhere; padding: .65rem; }
 .discount-history-table th:first-child { width: 25%; }
 .discount-history-table th:last-child { width: 23%; }
-.discount-history-table tr[aria-current="true"] { background: #fff7ed; }
+.discount-history-row { cursor: pointer; }
+.discount-history-row:hover, .discount-history-row:focus-visible { background: #fff7ed; }
+.discount-history-row:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.discount-history-row a:hover { color: var(--brand); }
 .discount-pagination, .discount-pagination > div { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
 .discount-pagination { justify-content: space-between; margin-top: .8rem; font-size: .85rem; }
 .discount-parameters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; }

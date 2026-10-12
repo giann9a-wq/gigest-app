@@ -2,7 +2,7 @@
 
 Accesso da **Preventivi → Calcolatore Sconti** (`/preventivi/calcolatore-sconti`). Storico, opportunità ed editor dei preventivi conservano le rispettive pagine, API e operazioni.
 
-Il form, inclusi piano acconti e risultati, è in un accordion chiuso al primo caricamento. Sotto compare la tabella delle simulazioni, ordinate per ultimo aggiornamento, con 25 risultati al massimo per pagina. La paginazione è lato client e riutilizza l'API elenco esistente. Apri e Duplica aprono automaticamente l'accordion; Salva lo richiude e mostra la prima pagina aggiornata. L'eliminazione richiede conferma e corregge la pagina corrente se l'ultima pagina resta vuota. Le modifiche non salvate sono protette quando si apre un'altra simulazione o se ne crea/duplica una.
+Il form per nuove simulazioni, inclusi piano acconti e risultati, è in un accordion chiuso al primo caricamento. Sotto compare la tabella delle simulazioni, ordinate per ultimo aggiornamento, con 25 risultati al massimo per pagina. La paginazione è lato client e riutilizza l'API elenco esistente. Il click sulla riga (anche Invio/Spazio da tastiera) apre `/preventivi/calcolatore-sconti/[id]`, una pagina dedicata in consultazione con Modifica, Duplica, Scarica Excel e Torna alle simulazioni. Modifica abilita i campi; Salva modifiche torna in consultazione; Annulla ripristina i dati salvati. Duplica dalla tabella o dal dettaglio apre la pagina della copia. Il form dello storico serve solo alla creazione: Salva lo azzera e richiude l'accordion, Annulla lo azzera senza salvare. L'eliminazione richiede conferma e corregge la pagina corrente se l'ultima pagina resta vuota. I pulsanti di azione della tabella non attivano il click sulla riga.
 
 ## Calcoli e validazioni
 
@@ -47,8 +47,8 @@ Caso di controllo: 50.000 € il 01/10/2026 e 50.000 € il 01/11/2027, rogito 3
 
 | Area | File |
 | --- | --- |
-| Navigazione e pagina | `components/layout/preventivi-tabs.tsx`, `components/preventivi/preventivi-workspace.tsx`, `app/(app)/preventivi/calcolatore-sconti/page.tsx` |
-| Interfaccia e stili | `components/preventivi/discount-calculator.tsx`, `app/globals.css` |
+| Navigazione e pagina | `components/layout/preventivi-tabs.tsx`, `components/preventivi/preventivi-workspace.tsx`, `app/(app)/preventivi/calcolatore-sconti/page.tsx`, `app/(app)/preventivi/calcolatore-sconti/[id]/page.tsx` |
+| Interfaccia e stili | `components/preventivi/discount-calculator.tsx`, `components/preventivi/amount-input.tsx`, `app/globals.css` |
 | Calcoli, persistenza ed Excel | `lib/discount-calculator.ts`, `lib/discount-simulation-store.ts`, `lib/discount-excel.ts` |
 | API | `app/api/preventivi/simulazioni/route.ts`, `app/api/preventivi/simulazioni/[id]/route.ts`, `app/api/preventivi/simulazioni/export/excel/route.ts` |
 | Database | `prisma/schema.prisma`, `prisma/migrations/20261011120000_discount_simulations/migration.sql` |
