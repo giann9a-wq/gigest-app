@@ -2,6 +2,8 @@
 
 Accesso da **Preventivi → Calcolatore Sconti** (`/preventivi/calcolatore-sconti`). Storico, opportunità ed editor dei preventivi conservano le rispettive pagine, API e operazioni.
 
+Il form, inclusi piano acconti e risultati, è in un accordion chiuso al primo caricamento. Sotto compare la tabella delle simulazioni, ordinate per ultimo aggiornamento, con 25 risultati al massimo per pagina. La paginazione è lato client e riutilizza l'API elenco esistente. Apri e Duplica aprono automaticamente l'accordion; Salva lo richiude e mostra la prima pagina aggiornata. L'eliminazione richiede conferma e corregge la pagina corrente se l'ultima pagina resta vuota. Le modifiche non salvate sono protette quando si apre un'altra simulazione o se ne crea/duplica una.
+
 ## Calcoli e validazioni
 
 Le funzioni pure sono in `lib/discount-calculator.ts`, condivise da UI, validazione API ed export. I calcoli monetari usano Decimal già incluso in Prisma. Le date sono date civili ISO, convertite in giorni UTC, senza dipendenza dal fuso orario o dall'ora legale.

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PreventiviTabs } from "@/components/layout/preventivi-tabs";
 import { advanceDays, calculateSimulation, defaultSimulation, financialRate, simulationSchema, type SimulationInput } from "@/lib/discount-calculator";
 import { formatCurrency, formatPercent } from "@/lib/number-format";
@@ -19,7 +19,8 @@ export function DiscountCalculator() {
   const [form, setForm] = useState<Draft>({ ...defaultSimulation(), advances: [] });
   const [saved, setSaved] = useState<Saved[]>([]);
   const [current, setCurrent] = useState<Saved | null>(null);
-  const [selected, setSelected] = useState("");
+  const editor = useRef<HTMLDetailsElement>(null);
+  const [page, setPage] = useState(1);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -32,10 +33,50 @@ export function DiscountCalculator() {
   const euribor = Number(String(form.euribor).replace(",", ".")), spread = Number(String(form.spread).replace(",", "."));
   const bankRate = String(form.euribor).trim() && String(form.spread).trim() && Number.isFinite(euribor) && Number.isFinite(spread) && euribor >= -100 && euribor <= 100 && spread >= 0 && spread <= 100 ? financialRate(euribor, spread) : null;
   const ordered = form.advances.map((row, index) => ({ ...row, index })).sort((a, b) => a.date.localeCompare(b.date));
+  const pageSize = 25;
+  const pages = Math.max(1, Math.ceil(saved.length / pageSize));
+  const currentPage = Math.min(page, pages);
+  const visibleSimulations = saved.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   function update(patch: Partial<Draft>) { setForm(value => ({ ...value, ...patch })); setDirty(true); setMessage(""); }
   function updateRow(key: string, patch: Partial<Draft["advances"][number]>) { update({ advances: form.advances.map(row => row.key === key ? { ...row, ...patch } : row) }); }
   function canReplace() { return !dirty || window.confirm("Ci sono modifiche non salvate. Vuoi abbandonarle?"); }
-  function hydrate(row: Saved) { setForm(draft(row)); setCurrent(row); setSelected(row.id); setDirty(false); }
+  function hydrate(row: Saved) { setForm(draft(row)); setCurrent(row); setDirty(false); }
+  function newSimulation() {
+    if (!canReplace()) return;
+    setForm(draft(defaultSimulation())); setCurrent(null); setDirty(false); setError(""); setMessage("");
+    if (editor.current) editor.current.open = true;
+  }
+  function showEditor(row: Saved) {
+    hydrate(row);
+    if (editor.current) { editor.current.open = true; editor.current.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  }
+  async function openSimulation(row: Saved) {
+    if (!canReplace()) return;
+    await run(async () => { const data = await api(`/api/preventivi/simulazioni/${row.id}`); showEditor(data.simulation); });
+  }
+  async function duplicateSimulation(row: Saved) {
+    if (!canReplace()) return;
+    await run(async () => {
+      const original = await api(`/api/preventivi/simulazioni/${row.id}`);
+      const body = { ...original.simulation, name: `${original.simulation.name.slice(0, 152)} (copia)` };
+      const data = await api("/api/preventivi/simulazioni", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      showEditor(data.simulation); await refresh(); setPage(1); setMessage("Simulazione duplicata e salvata.");
+    });
+  }
+  async function removeSimulation(row: Saved) {
+    const warning = current?.id === row.id && dirty ? " Verranno eliminate anche le modifiche non salvate." : "";
+    if (!window.confirm(`Eliminare la simulazione “${row.name}”?${warning}`)) return;
+    await run(async () => {
+      await api(`/api/preventivi/simulazioni/${row.id}`, { method: "DELETE" });
+      if (current?.id === row.id) {
+        setForm(draft(defaultSimulation())); setCurrent(null); setDirty(false);
+        if (editor.current) editor.current.open = false;
+      }
+      const remaining = await api("/api/preventivi/simulazioni"); setSaved(remaining.rows);
+      setPage(Math.min(currentPage, Math.max(1, Math.ceil(remaining.rows.length / pageSize))));
+      setMessage("Simulazione eliminata.");
+    });
+  }
   async function run(action: () => Promise<void>) {
     setBusy(true); setError(""); setMessage("");
     try { await action(); } catch (e) { setError(e instanceof Error ? e.message : "Operazione non riuscita."); } finally { setBusy(false); }
@@ -45,7 +86,8 @@ export function DiscountCalculator() {
     await run(async () => {
       const body = { ...validation.data, name: copy ? `${validation.data.name.slice(0, 152)} (copia)` : validation.data.name };
       const data = await api(current && !copy ? `/api/preventivi/simulazioni/${current.id}` : "/api/preventivi/simulazioni", { method: current && !copy ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      hydrate(data.simulation); setMessage(copy ? "Simulazione duplicata e salvata." : "Simulazione salvata."); await refresh();
+      hydrate(data.simulation); setMessage(copy ? "Simulazione duplicata e salvata." : "Simulazione salvata."); await refresh(); setPage(1);
+      if (editor.current) editor.current.open = false;
     });
   }
   async function download() {
@@ -67,14 +109,15 @@ export function DiscountCalculator() {
   return <div className="quotes-page"><section className="card quotes-shell discount-shell">
     <div className="mobile-section-header quotes-page-header"><div><p className="dashboard-kicker">GiGEST · Preventivi</p><h1 className="mobile-section-title">Calcolatore Sconti</h1><p className="mobile-section-subtitle">Simula il beneficio degli acconti e lo sconto sostenibile sulla vendita.</p></div></div>
     <PreventiviTabs current="calculator" />
+    {error && <p className="discount-errors" role="alert">{error}</p>}{message && <p role="status">{message}</p>}
+    <details ref={editor} className="discount-editor">
+      <summary><strong>{current ? `Modifica simulazione: ${current.name}` : "Nuova simulazione"}</strong><span>Parametri, piano acconti e risultati</span></summary>
+      <div className="discount-editor-body">
     <fieldset disabled={busy} className="discount-fieldset">
       <div className="discount-toolbar">
-        <button type="button" className="mobile-button-secondary" onClick={() => { if (canReplace()) { setForm(draft(defaultSimulation())); setCurrent(null); setSelected(""); setDirty(false); setError(""); setMessage(""); } }}>Nuova simulazione</button>
-        <label className="discount-select">Simulazioni salvate<select value={selected} disabled={loading} onChange={e => setSelected(e.target.value)}><option value="">{loading ? "Caricamento…" : "Seleziona simulazione"}</option>{saved.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
-        <button type="button" className="mobile-button-secondary" disabled={!selected} onClick={() => { if (canReplace()) void run(async () => { const data = await api(`/api/preventivi/simulazioni/${selected}`); hydrate(data.simulation); }); }}>Apri</button>
+        <button type="button" className="mobile-button-secondary" onClick={newSimulation}>Nuova simulazione</button>
         <button type="button" className="button" disabled={!validation.success} onClick={() => void save()}>Salva</button>
         <button type="button" className="mobile-button-secondary" disabled={!validation.success} onClick={() => void save(true)}>Duplica</button>
-        <button type="button" className="mobile-button-secondary" disabled={!current} onClick={() => { if (current && window.confirm(`Eliminare la simulazione “${current.name}”?`)) void run(async () => { await api(`/api/preventivi/simulazioni/${current.id}`, { method: "DELETE" }); setForm(draft(defaultSimulation())); setCurrent(null); setSelected(""); setDirty(false); await refresh(); setMessage("Simulazione eliminata."); }); }}>Elimina</button>
         <button type="button" className="mobile-button-secondary" disabled={!validation.success} onClick={() => void download()}>Scarica Excel</button>
       </div>
       <div className="discount-meta">{current ? `Creata ${timestamp(current.createdAt)} · Aggiornata ${timestamp(current.updatedAt)}` : "Simulazione non ancora salvata"}{dirty ? " · Modifiche non salvate" : ""}{busy ? " · Operazione in corso…" : ""}</div>
@@ -99,7 +142,6 @@ export function DiscountCalculator() {
       {!validation.success && <div className="discount-errors" role="alert"><strong>Correggi i dati per calcolare e salvare:</strong><ul>{validation.error.issues.map((issue, index) => <li key={index}>{issue.path[0] === "advances" && typeof issue.path[1] === "number" ? `Acconto ${ordered.findIndex(row => row.index === issue.path[1]) + 1}: ` : `${({ price: "Prezzo", closingDate: "Rogito", euribor: "Euribor", spread: "Spread", guaranteeRate: "Fideiussione", customerShare: "Quota cliente", name: "Nome", reference: "Riferimento" } as Record<string, string>)[String(issue.path[0])] ?? "Piano acconti"}: `}{issue.message}</li>)}</ul></div>}
       <div className="discount-share"><label htmlFor="customer-share">Beneficio riconosciuto all’acquirente (%)</label><input aria-label="Quota beneficio cliente" type="range" min="0" max="100" step="1" value={Number(form.customerShare) || 0} onChange={e => update({ customerShare: e.target.value })} /><input id="customer-share" type="number" min="0" max="100" step="1" value={form.customerShare} onChange={e => update({ customerShare: e.target.value })} /></div>
     </fieldset>
-    {error && <p className="discount-errors" role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <div className="discount-kpis" aria-live="polite">
       {[{ label: "Interessi risparmiati", value: result?.interest }, { label: "Costo fideiussione", value: result?.guarantee, detail: result?.firstDate ? `${result.guaranteeDays} giorni dal ${dateLabel(result.firstDate)}` : "Nessun acconto" }, { label: "Beneficio netto", value: result?.benefit, detail: result ? `${formatPercent(result.benefitPercent)} del prezzo` : "", negative: result && result.benefit < 0 }, { label: "Sconto concedibile", value: result?.discount, detail: result ? `${formatPercent(result.discountPercent)} del prezzo` : "", highlight: true }, { label: "Prezzo finale scontato", value: result?.finalPrice }, { label: "Saldo al rogito", value: result?.balance }].map(kpi => <div key={kpi.label} className={`discount-kpi ${kpi.highlight ? "discount-kpi-highlight" : ""} ${kpi.negative ? "discount-kpi-negative" : ""}`}><span>{kpi.label}</span><strong>{kpi.value === undefined ? "—" : formatCurrency(kpi.value)}</strong>{kpi.detail && <small>{kpi.detail}</small>}</div>)}
     </div>
@@ -107,5 +149,27 @@ export function DiscountCalculator() {
     {result?.capped && <p className="discount-note">Lo sconto concedibile è limitato al saldo disponibile prima dello sconto per evitare un saldo negativo.</p>}
     {result && result.benefit < 0 && <p className="discount-note">Il costo della fideiussione supera il risparmio: nessuno sconto concedibile.</p>}
     <p className="discount-note">La fideiussione è sostenuta integralmente al primo acconto sull’intero piano, inclusi i versamenti futuri. Il modello non include il costo finanziario dell’anticipo del premio.</p>
+      </div>
+    </details>
+    <section className="discount-history" aria-labelledby="discount-history-title" aria-busy={loading || busy}>
+      <div className="discount-section-heading"><h2 id="discount-history-title">Simulazioni create</h2><button type="button" className="mobile-button-secondary" disabled={busy} onClick={newSimulation}>+ Nuova simulazione</button></div>
+      <div className="quotes-history-table-wrap discount-history-wrap">
+        <table className="quotes-history-table discount-history-table"><thead><tr><th>Simulazione</th><th>Prezzo appartamento</th><th>Rogito</th><th>Creata</th><th>Aggiornata</th><th>Azioni</th></tr></thead><tbody>
+          {visibleSimulations.map(row => <tr key={row.id} aria-current={current?.id === row.id ? "true" : undefined}>
+            <td data-label="Simulazione"><strong>{row.name}</strong>{row.reference && <span>{row.reference}</span>}</td>
+            <td data-label="Prezzo appartamento">{formatCurrency(Number(row.price))}</td>
+            <td data-label="Rogito">{dateLabel(row.closingDate)}</td>
+            <td data-label="Creata">{timestamp(row.createdAt)}</td>
+            <td data-label="Aggiornata">{timestamp(row.updatedAt)}</td>
+            <td data-label="Azioni"><div className="quotes-history-actions"><button type="button" disabled={busy} aria-label={`Apri ${row.name}`} onClick={() => void openSimulation(row)}>Apri</button><button type="button" disabled={busy} aria-label={`Duplica ${row.name}`} onClick={() => void duplicateSimulation(row)}>Duplica</button><button type="button" className="danger" disabled={busy} aria-label={`Elimina ${row.name}`} onClick={() => void removeSimulation(row)}>Elimina</button></div></td>
+          </tr>)}
+        </tbody></table>
+        {loading ? <p className="quotes-empty" role="status">Caricamento simulazioni…</p> : !saved.length && <p className="quotes-empty">Non ci sono ancora simulazioni salvate.</p>}
+      </div>
+      <nav className="discount-pagination" aria-label="Paginazione simulazioni">
+        <span aria-live="polite">{saved.length ? `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, saved.length)} di ${saved.length} simulazioni` : "0 simulazioni"}</span>
+        <div><button type="button" className="mobile-button-secondary" disabled={busy || loading || currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Precedente</button><span>Pagina {currentPage} di {pages}</span><button type="button" className="mobile-button-secondary" disabled={busy || loading || currentPage >= pages} onClick={() => setPage(currentPage + 1)}>Successiva</button></div>
+      </nav>
+    </section>
   </section></div>;
 }
