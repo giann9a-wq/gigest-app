@@ -53,9 +53,10 @@ export function SalesManagementPanel({ initialJobOrderId = "" }: { initialJobOrd
           <label>Data accordo<input type="date" required value={form.saleDate} onChange={e => setForm({ ...form, saleDate: e.target.value })} /></label>
         </div>
         <h3>Scaletta acconti</h3><p className="muted">Ogni rata genera una scadenza. L’approvazione crea l’acconto attivo in Gestione Acconti.</p>
+        {form.installments.some(row => row.advanceId) && <p className="muted">Puoi correggere la data degli acconti approvati: si aggiorna anche l’acconto già generato, mantenendo l’approvazione.</p>}
         {form.installments.map((row, index) => <div key={row.id ?? `new-${index}`} className="sales-installment-row">
           <label>Descrizione<input required disabled={!!row.advanceId} maxLength={200} value={row.description} onChange={e => setForm({ ...form, installments: form.installments.map((item, i) => i === index ? { ...item, description: e.target.value } : item) })} /></label>
-          <label>Scadenza<input type="date" required disabled={!!row.advanceId} value={row.dueDate} onChange={e => setForm({ ...form, installments: form.installments.map((item, i) => i === index ? { ...item, dueDate: e.target.value } : item) })} /></label>
+          <label>Scadenza<input type="date" required value={row.dueDate} onChange={e => setForm({ ...form, installments: form.installments.map((item, i) => i === index ? { ...item, dueDate: e.target.value } : item) })} /></label>
           <label>Importo (€)<input type="number" min="0.01" step="0.01" required disabled={!!row.advanceId} value={row.amount} onChange={e => setForm({ ...form, installments: form.installments.map((item, i) => i === index ? { ...item, amount: e.target.value } : item) })} /></label>
           {row.advanceId ? <span>Approvato</span> : <button type="button" className="mobile-button-secondary" onClick={() => setForm({ ...form, installments: form.installments.filter((_, i) => i !== index) })}>Rimuovi</button>}
         </div>)}

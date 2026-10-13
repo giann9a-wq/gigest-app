@@ -83,8 +83,8 @@ export async function saveSale(input: unknown, userId: string) {
     }
     for (const approved of existing?.installments.filter(row => row.advanceId) ?? []) {
       const row = data.installments.find(row => row.id === approved.id);
-      if (!row || !row.amount.equals(approved.amount) || row.dueDate.getTime() !== approved.dueDate.getTime() || row.description !== approved.description)
-        fail("Gli acconti approvati non possono essere modificati o eliminati");
+      if (!row || !row.amount.equals(approved.amount) || row.description !== approved.description)
+        fail("Per gli acconti approvati puoi modificare la data; importo, descrizione ed eliminazione restano bloccati");
     }
     const sale = existing
       ? await tx.propertySale.update({ where: { id: existing.id }, data: { customerName: data.customerName, agreedPrice: data.agreedPrice, saleDate: data.saleDate, updatedByUserId: userId } })
@@ -98,7 +98,14 @@ export async function saveSale(input: unknown, userId: string) {
     }
     for (const row of data.installments) {
       const old = existing?.installments.find(item => item.id === row.id);
-      if (old?.advanceId) continue;
+      if (old?.advanceId) {
+        if (old.dueDate.getTime() !== row.dueDate.getTime()) {
+          await tx.salesInstallment.update({ where: { id: old.id }, data: { dueDate: row.dueDate } });
+          await tx.jobOrderAdvance.update({ where: { id: old.advanceId }, data: { advanceDate: row.dueDate, updatedByUserId: userId } });
+          await tx.deadline.update({ where: { id: old.deadlineId }, data: { eventDate: row.dueDate, updatedByUserId: userId, lastModifiedAt: new Date(), lastSource: "GIGEST" } });
+        }
+        continue;
+      }
       const deadlineData = { title: `Acconto ${unit.code} · ${data.customerName}`, description: `${unit.jobOrder.name} · ${row.description} · € ${row.amount.toFixed(2)}`, eventDate: row.dueDate, updatedByUserId: userId, lastModifiedAt: new Date(), lastSource: "GIGEST" as const };
       if (old) {
         await tx.salesInstallment.update({ where: { id: old.id }, data: { description: row.description, amount: row.amount, dueDate: row.dueDate } });

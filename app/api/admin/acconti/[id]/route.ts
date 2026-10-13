@@ -73,7 +73,7 @@ export async function PATCH(
 
   const linkedInstallment = await prisma.salesInstallment.findUnique({ where: { advanceId: id } });
   if (linkedInstallment && (jobOrderId !== existing.jobOrderId || !amount.equals(linkedInstallment.amount) || advanceDate.getTime() !== linkedInstallment.dueDate.getTime())) {
-    return NextResponse.json({ error: "Questo acconto deriva da una vendita: importo, data e commessa non possono essere modificati. Puoi accenderlo o spegnerlo." }, { status: 409 });
+    return NextResponse.json({ error: "Questo acconto deriva da una vendita: modifica la data da Admin → Vendite. Importo e commessa non sono modificabili; puoi accenderlo o spegnerlo." }, { status: 409 });
   }
 
   const jobOrder = await prisma.jobOrder.findUnique({
