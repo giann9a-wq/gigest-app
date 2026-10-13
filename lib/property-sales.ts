@@ -36,6 +36,15 @@ export async function getSalesView(jobOrderId: string) {
 }
 export type SalesView = NonNullable<Awaited<ReturnType<typeof getSalesView>>>;
 
+export async function setSalesPriceListEnabled(jobOrderId: string, enabled: boolean) {
+  return salesTransaction(async tx => {
+    if (!await tx.jobOrder.findUnique({ where: { id: jobOrderId }, select: { id: true } })) fail("Commessa non trovata");
+    if (!enabled && await tx.propertySale.count({ where: { unit: { jobOrderId } } }))
+      fail("Il listino contiene vendite: non puoi disabilitarlo finché sono presenti");
+    await tx.jobOrder.update({ where: { id: jobOrderId }, data: { salesPriceListEnabled: enabled } });
+  });
+}
+
 export async function saveUnit(jobOrderId: string, input: unknown) {
   const data = unitSchema.parse(input);
   return salesTransaction(async tx => {

@@ -20,7 +20,9 @@ async function main() {
     const { prisma } = await import("../lib/prisma"); db = prisma;
     const { getScheduleEvents } = await import("../lib/schedule-events");
     const user = await db.user.create({ data: { email: `${schema}@example.invalid`, role: "ADMIN", status: "ACTIVE" } });
-    const job = await db.jobOrder.create({ data: { name: "Test listino", type: "SITE", salesPriceListEnabled: true } });
+    const job = await db.jobOrder.create({ data: { name: "Test listino", type: "SITE", description: "Da preservare" } });
+    await sales.setSalesPriceListEnabled(job.id, true);
+    assert.equal((await db.jobOrder.findUniqueOrThrow({ where: { id: job.id } })).description, "Da preservare");
     const disabledJob = await db.jobOrder.create({ data: { name: "Senza listino", type: "SITE" } });
     await assert.rejects(sales.saveUnit(disabledJob.id, { code: "A1", listPrice: 100 }), /Abilita/);
     const a = await sales.saveUnit(job.id, { code: "A1", listPrice: "300000.00", description: "Trilocale" });
@@ -33,6 +35,7 @@ async function main() {
     const payload = { unitId: a.id, customerName: "Cliente Test", agreedPrice: 280000, saleDate: "2026-10-13",
       installments: Array.from({ length: 4 }, (_, i) => ({ description: `Acconto ${i + 1}`, amount: 50000, dueDate: `2026-${String(9 + i).padStart(2, "0")}-13` })) };
     const sale = await sales.saveSale(payload, user.id);
+    await assert.rejects(sales.setSalesPriceListEnabled(job.id, false), /contiene vendite/);
     await assert.rejects(sales.saveSale(payload, user.id), /già venduto/);
     await assert.rejects(sales.deleteUnit(job.id, a.id), /venduto/);
     let view = (await sales.getSalesView(job.id))!;

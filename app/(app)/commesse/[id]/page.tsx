@@ -206,6 +206,26 @@ export default function SchedaCommessaPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"sheet" | "list">("sheet");
+  const [savingListFlag, setSavingListFlag] = useState(false);
+
+  async function toggleListFlag(enabled: boolean) {
+    if (!jobOrderForm || !dashboard || savingListFlag) return;
+    const previous = dashboard.jobOrder.salesPriceListEnabled;
+    setJobOrderForm(current => current ? { ...current, salesPriceListEnabled: enabled } : current);
+    setSavingListFlag(true);
+    setError("");
+    setMessage("");
+    try {
+      await safeJsonFetch(`/api/commesse/${params.id}/listino`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }),
+      });
+      setDashboard(current => current ? { ...current, jobOrder: { ...current.jobOrder, salesPriceListEnabled: enabled } } : current);
+      if (!enabled) setTab("sheet");
+    } catch (error) {
+      setJobOrderForm(current => current ? { ...current, salesPriceListEnabled: previous } : current);
+      setError(error instanceof Error ? error.message : "Errore nel salvataggio del flag listino");
+    } finally { setSavingListFlag(false); }
+  }
 
   async function loadData() {
     setLoading(true);
@@ -338,14 +358,14 @@ export default function SchedaCommessaPage() {
 
         <div className="job-order-tabs" role="tablist" aria-label="Scheda commessa">
           <button type="button" role="tab" aria-selected={tab === "sheet"} className={`job-order-tab ${tab === "sheet" ? "job-order-tab-active" : ""}`} onClick={() => setTab("sheet")}>Scheda</button>
-          {dashboard.jobOrder.salesPriceListEnabled && <button type="button" role="tab" aria-selected={tab === "list"} className={`job-order-tab ${tab === "list" ? "job-order-tab-active" : ""}`} onClick={() => setTab("list")}>Listino</button>}
+          {jobOrderForm.salesPriceListEnabled && <button type="button" role="tab" disabled={savingListFlag} aria-selected={tab === "list"} className={`job-order-tab ${tab === "list" ? "job-order-tab-active" : ""}`} onClick={() => setTab("list")}>Listino</button>}
         </div>
         {tab === "list" && dashboard.jobOrder.salesPriceListEnabled ? <PriceListPanel jobOrderId={params.id} /> : <>
         <div className="job-sheet-grid">
           <div className="job-sheet-panel">
             <h2 className="job-sheet-panel-title">Dati Commessa</h2>
-            <label className="sales-enable"><input type="checkbox" checked={jobOrderForm.salesPriceListEnabled} onChange={e => setJobOrderForm({ ...jobOrderForm, salesPriceListEnabled: e.target.checked })} />Abilita listino appartamenti e vendite</label>
-            {jobOrderForm.salesPriceListEnabled && !dashboard.jobOrder.salesPriceListEnabled && <p className="muted">Salva la scheda per attivare il tab Listino.</p>}
+            <label className="sales-enable"><input type="checkbox" disabled={saving || savingListFlag} checked={jobOrderForm.salesPriceListEnabled} onChange={e => toggleListFlag(e.target.checked)} />Abilita listino appartamenti e vendite</label>
+            {savingListFlag && <p role="status" className="muted">Salvataggio impostazione listino…</p>}
             <div className="job-sheet-form-grid">
               <label className="job-sheet-field job-sheet-field-wide">
                 <span>Commessa</span>
@@ -475,7 +495,7 @@ export default function SchedaCommessaPage() {
           <button className="button" type="button" onClick={() => router.push("/commesse")}>
             Torna a Commesse
           </button>
-          <button className="button" type="button" onClick={handleSave} disabled={saving}>
+          <button className="button" type="button" onClick={handleSave} disabled={saving || savingListFlag}>
             {saving ? "Salvataggio..." : "Salva Scheda"}
           </button>
         </div>
