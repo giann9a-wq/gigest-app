@@ -12,6 +12,6 @@ export async function GET() {
   });
   return NextResponse.json({ users: users.map((row) => ({
     id: row.id, email: row.email,
-    label: [row.firstName, row.lastName].filter(Boolean).join(" ") || row.email,
+    label: [row.firstName, row.lastName].filter(Boolean).join(" ").trim() || row.email,
   })) });
 }

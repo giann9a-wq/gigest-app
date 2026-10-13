@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
+import { chatMessageParts } from "@/lib/chat-mentions";
 
 type OnlineUser = {
   id: string;
@@ -15,7 +16,7 @@ type ChatMessage = {
   senderLabel: string;
   message: string;
   createdAt: string;
-  mentions: { userId: string; token: string }[];
+  mentions: { userId: string; token: string; label: string }[];
 };
 
 async function jsonRequest<T>(url: string, options?: RequestInit) {
@@ -52,6 +53,7 @@ export function AppChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
   const [draft, setDraft] = useState("");
+  const [selectedMentionIds, setSelectedMentionIds] = useState<string[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -153,10 +155,11 @@ export function AppChat() {
       const data = await jsonRequest<{ message: ChatMessage }>("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, mentionUserIds: selectedMentionIds }),
       });
       setMessages((current) => [...current.filter((item) => item.id !== data.message.id), data.message]);
       setDraft("");
+      setSelectedMentionIds([]);
       setMentionSearch(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nell'invio del messaggio");
@@ -207,11 +210,12 @@ export function AppChat() {
 
   function selectMention(user: MentionUser) {
     if (!mentionSearch) return;
-    const token = `@${user.email} `;
+    const token = `@${user.label} `;
     const next = draft.slice(0, mentionSearch.start) + token + draft.slice(mentionSearch.end);
     if (next.length > 2000) return;
     const caret = mentionSearch.start + token.length;
     setDraft(next);
+    setSelectedMentionIds((ids) => [...new Set([...ids, user.id])]);
     setMentionSearch(null);
     requestAnimationFrame(() => {
       composerRef.current?.focus();
@@ -275,10 +279,9 @@ export function AppChat() {
                     <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
                   </div>
                   {isMentioned ? <small className="app-chat-tag-label">@ Ti ha taggato</small> : null}
-                  <p>{message.message.split(/(@[^\s]+)/g).map((part, index) => {
-                    const mention = message.mentions.find((item) => part.toLowerCase().startsWith(item.token.toLowerCase()));
-                    return mention ? <mark key={index}>{part}</mark> : part;
-                  })}</p>
+                  <p>{chatMessageParts(message.message, message.mentions).map((part, index) =>
+                    part.mentioned ? <mark key={index}>{part.text}</mark> : part.text
+                  )}</p>
                 </article>
               );
             })}
