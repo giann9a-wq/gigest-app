@@ -466,10 +466,11 @@ function JobDashboardHeader({
   );
 }
 
-function JobKpiCards({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
+export function JobKpiCards({ dashboard }: { dashboard: JobOrderDashboardResponse }) {
   const actualCards = [
     { label: "Costi Actual", value: formatCurrency(dashboard.actual.totalCosts) },
     { label: "Fatturato Actual", value: formatCurrency(dashboard.actual.revenue) },
+    { label: "Totale acconti", value: formatCurrency(dashboard.actual.revenueDetails.advances.activeAmount), detail: `${dashboard.actual.revenueDetails.advances.activeCount} acconti attivi conteggiati nei ricavi` },
     { label: "Margine Actual", value: formatCurrency(dashboard.actual.grossMargin) },
     { label: "Margine % Actual", value: formatPercent(dashboard.actual.grossMarginPct) },
   ];
@@ -496,16 +497,17 @@ function JobKpiSection({
 }: {
   title: string;
   tone: "actual" | "budget";
-  cards: Array<{ label: string; value: string }>;
+  cards: Array<{ label: string; value: string; detail?: string }>;
 }) {
   return (
     <div className={`job-premium-kpi-group job-premium-kpi-group-${tone}`}>
       <h2>{title}</h2>
-      <div className="job-premium-kpi-grid">
+      <div className={`job-premium-kpi-grid${cards.length === 5 ? " job-premium-kpi-grid-five" : ""}`}>
         {cards.map((card) => (
           <article key={card.label} className={`job-premium-kpi-card job-premium-kpi-card-${tone}`}>
             <span>{card.label}</span>
             <strong>{card.value}</strong>
+            {card.detail && <small className="job-premium-kpi-detail">{card.detail}</small>}
           </article>
         ))}
       </div>

@@ -36,12 +36,12 @@ export function PriceListPanel({ jobOrderId }: { jobOrderId: string }) {
         <label>Prezzo di listino (€)<input required type="number" min="0.01" step="0.01" value={form.listPrice} onChange={e => setForm({ ...form, listPrice: e.target.value })} /></label>
       </div><div className="sales-actions"><button className="button">{form.id ? "Salva modifiche" : "Aggiungi unità"}</button>{form.id && <button type="button" className="mobile-button-secondary" onClick={() => setForm(empty)}>Annulla modifica</button>}</div>
     </fieldset></form>
-    {view && <div className="job-premium-table-wrap"><table className="job-premium-detail-table"><thead><tr><th>Unità immobiliare</th><th>Descrizione</th><th>Listino</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>
-      {!view.units.length && <tr><td colSpan={5}>Nessuna unità inserita.</td></tr>}
-      {view.units.map(unit => <tr key={unit.id}><td>{unit.code}</td><td>{unit.description}</td><td>{formatCurrency(unit.listPrice)}</td><td>{unit.sale ? `Venduto · ${unit.sale.customerName}` : "Disponibile"}</td><td className="sales-actions">
+    {view && <div className="sales-table-frame"><table className="sales-table" aria-label="Modifica listino unità immobiliari"><thead><tr><th scope="col">Unità immobiliare</th><th scope="col">Descrizione</th><th scope="col" className="sales-table-money">Listino</th><th scope="col">Stato</th><th scope="col">Azioni</th></tr></thead><tbody>
+      {!view.units.length && <tr><td colSpan={5} className="sales-table-empty">Nessuna unità inserita.</td></tr>}
+      {view.units.map(unit => <tr key={unit.id}><td data-label="Unità immobiliare"><strong>{unit.code}</strong></td><td data-label="Descrizione">{unit.description || "—"}</td><td data-label="Listino" className="sales-table-money">{formatCurrency(unit.listPrice)}</td><td data-label="Stato"><div className="sales-table-cell"><span className={`sales-status ${unit.sale ? "sales-status-sold" : "sales-status-available"}`}>{unit.sale ? "Venduto" : "Disponibile"}</span>{unit.sale && <span className="sales-table-customer">{unit.sale.customerName}</span>}</div></td><td data-label="Azioni"><div className="sales-actions">
         <button type="button" disabled={busy} className="mobile-button-secondary" onClick={() => setForm({ id: unit.id, code: unit.code, description: unit.description, listPrice: String(unit.listPrice) })}>Modifica</button>
         {!unit.sale && <button type="button" disabled={busy} className="mobile-button-secondary" onClick={() => remove(unit.id)}>Elimina</button>}
-      </td></tr>)}
+      </div></td></tr>)}
     </tbody></table></div>}
   </div>;
 }

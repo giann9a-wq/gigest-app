@@ -11775,3 +11775,45 @@ a {
 .sales-enable { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .sales-panel button:disabled { opacity: .55; cursor: wait; }
 @media (max-width: 650px) { .sales-installment-row { grid-template-columns: 1fr; } .sales-approval-row button { width: 100%; } .sales-form fieldset { padding: 14px; } }
+
+.sales-table-frame { width: 100%; min-width: 0; overflow-x: auto; border: 1px solid #dce3ec; border-radius: 16px; background: #fff; }
+.sales-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; color: #1f2937; }
+.sales-table th, .sales-table td { padding: 17px 20px; text-align: left; vertical-align: middle; border-bottom: 1px solid #e8edf4; font-size: .9rem; line-height: 1.5; overflow-wrap: anywhere; }
+.sales-table th { background: #f8fafc; color: #64748b; font-size: .73rem; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
+.sales-table th:first-child { width: 23%; }
+.sales-table th:nth-child(2), .sales-table th:nth-child(4) { width: 18%; }
+.sales-table th:nth-child(3) { width: 22%; }
+.sales-table tbody tr:nth-child(even) { background: #fcfcfd; }
+.sales-table tbody tr:hover { background: #fff7ed; }
+.sales-table tbody tr:last-child td { border-bottom: 0; }
+.sales-table .sales-table-money { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sales-table-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.sales-table-cell strong { font-weight: 700; }
+.sales-table-cell small, .sales-table-muted { color: #64748b; font-size: .82rem; }
+.sales-table-customer { display: block; font-size: .86rem; }
+.sales-status { display: inline-flex; align-items: center; width: fit-content; padding: 3px 10px; border: 1px solid; border-radius: 999px; font-size: .73rem; line-height: 1.5; font-weight: 700; white-space: nowrap; }
+.sales-status-available { color: #475569; border-color: #e2e8f0; background: #f1f5f9; }
+.sales-status-sold { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
+.sales-table .sales-table-empty { padding: 32px 20px; color: #64748b; text-align: center; }
+.sales-table .sales-actions { margin: 0; }
+.job-premium-kpi-grid-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.job-premium-kpi-grid-five .job-premium-kpi-card { align-content: start; }
+.job-premium-kpi-detail { color: #64748b; font-size: .75rem; line-height: 1.4; }
+@media (min-width: 761px) and (max-width: 1200px) {
+  .job-premium-kpi-grid-five { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sales-table th, .sales-table td { padding: 14px 12px; }
+  .sales-table { min-width: 720px; }
+}
+@media (max-width: 760px) {
+  .job-premium-kpi-grid-five { grid-template-columns: 1fr; }
+  .sales-table-frame { border: 0; border-radius: 0; overflow: visible; background: transparent; }
+  .sales-table { display: block; table-layout: auto; }
+  .sales-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sales-table tbody { display: grid; gap: 14px; }
+  .sales-table tbody tr, .sales-table tbody tr:nth-child(even) { display: block; padding: 8px 16px; border: 1px solid #dce3ec; border-radius: 14px; background: #fff; }
+  .sales-table td, .sales-table .sales-table-money { display: grid; grid-template-columns: minmax(110px, 38%) minmax(0, 1fr); gap: 12px; padding: 11px 0; text-align: left; white-space: normal; font-size: .85rem; }
+  .sales-table td::before { content: attr(data-label); color: #64748b; font-size: .73rem; font-weight: 600; }
+  .sales-table td:last-child { border-bottom: 0; }
+  .sales-table .sales-table-empty { display: block; }
+  .sales-table .sales-table-empty::before { content: none; }
+}
