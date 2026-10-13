@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getSalesView } from "@/lib/property-sales";
 import { getEffectiveResourceHourlyCost } from "@/lib/resource-economics";
 import { CostActualCategory, Prisma } from "@prisma/client";
 
@@ -715,6 +716,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       name: jobOrder.name,
       type: jobOrder.type,
       isOwnAccountSite: jobOrder.isOwnAccountSite,
+      salesPriceListEnabled: jobOrder.salesPriceListEnabled,
       negativeMarginAlertSnoozedUntil: negativeMarginAlertSnoozedUntil?.toISOString() ?? null,
       startDate: jobOrder.startDate?.toISOString().slice(0, 10) ?? "",
       endDate: jobOrder.endDate?.toISOString().slice(0, 10) ?? "",
@@ -730,6 +732,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       createdAt: jobOrder.createdAt.toISOString(),
       updatedAt: jobOrder.updatedAt.toISOString(),
     },
+    sales: jobOrder.salesPriceListEnabled ? await getSalesView(jobOrder.id) : null,
     budget: {
       ...budget,
       totalCosts: budgetTotalCosts,

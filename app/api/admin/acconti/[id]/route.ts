@@ -71,6 +71,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Importo acconto non valido" }, { status: 400 });
   }
 
+  const linkedInstallment = await prisma.salesInstallment.findUnique({ where: { advanceId: id } });
+  if (linkedInstallment && (jobOrderId !== existing.jobOrderId || !amount.equals(linkedInstallment.amount) || advanceDate.getTime() !== linkedInstallment.dueDate.getTime())) {
+    return NextResponse.json({ error: "Questo acconto deriva da una vendita: importo, data e commessa non possono essere modificati. Puoi accenderlo o spegnerlo." }, { status: 409 });
+  }
+
   const jobOrder = await prisma.jobOrder.findUnique({
     where: { id: jobOrderId },
     select: { id: true },
@@ -123,6 +128,9 @@ export async function DELETE(
     return NextResponse.json({ error: "Acconto non trovato" }, { status: 404 });
   }
 
+  if (await prisma.salesInstallment.findUnique({ where: { advanceId: id } })) {
+    return NextResponse.json({ error: "Acconto collegato a una vendita: puoi spegnerlo senza eliminarlo" }, { status: 409 });
+  }
   await prisma.jobOrderAdvance.delete({
     where: { id },
   });

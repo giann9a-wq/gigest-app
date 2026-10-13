@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Route } from "next";
 import { useParams, useRouter } from "next/navigation";
 import { formatCurrency, formatPercent } from "@/lib/number-format";
+import { PriceListPanel } from "@/components/sales/price-list-panel";
 
 type JobTypeValue =
   | "SITE"
@@ -31,6 +32,7 @@ type JobOrderDashboardResponse = {
     name: string;
     type: JobTypeValue;
     isOwnAccountSite: boolean;
+    salesPriceListEnabled: boolean;
     negativeMarginAlertSnoozedUntil: string | null;
     startDate: string;
     endDate: string;
@@ -87,6 +89,7 @@ type JobOrderForm = {
   customerContact: string;
   siteAddress: string;
   isOwnAccountSite: boolean;
+  salesPriceListEnabled: boolean;
 };
 
 const budgetFields: { key: keyof BudgetForm; label: string }[] = [
@@ -202,6 +205,7 @@ export default function SchedaCommessaPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [tab, setTab] = useState<"sheet" | "list">("sheet");
 
   async function loadData() {
     setLoading(true);
@@ -221,6 +225,7 @@ export default function SchedaCommessaPage() {
         customerContact: data.jobOrder.customerContact,
         siteAddress: data.jobOrder.siteAddress,
         isOwnAccountSite: data.jobOrder.isOwnAccountSite,
+        salesPriceListEnabled: data.jobOrder.salesPriceListEnabled,
       });
       setBudget({
         personnel: formatInputValue(data.budget.personnel),
@@ -266,6 +271,7 @@ export default function SchedaCommessaPage() {
           customerContact: jobOrderForm.customerContact,
           siteAddress: jobOrderForm.siteAddress,
           isOwnAccountSite: jobOrderForm.isOwnAccountSite,
+          salesPriceListEnabled: jobOrderForm.salesPriceListEnabled,
           budget,
         }),
       })) as JobOrderDashboardResponse & { success: boolean };
@@ -330,9 +336,16 @@ export default function SchedaCommessaPage() {
         {message ? <div className="job-dashboard-success">{message}</div> : null}
         {error ? <div className="job-dashboard-error">{error}</div> : null}
 
+        <div className="job-order-tabs" role="tablist" aria-label="Scheda commessa">
+          <button type="button" role="tab" aria-selected={tab === "sheet"} className={`job-order-tab ${tab === "sheet" ? "job-order-tab-active" : ""}`} onClick={() => setTab("sheet")}>Scheda</button>
+          {dashboard.jobOrder.salesPriceListEnabled && <button type="button" role="tab" aria-selected={tab === "list"} className={`job-order-tab ${tab === "list" ? "job-order-tab-active" : ""}`} onClick={() => setTab("list")}>Listino</button>}
+        </div>
+        {tab === "list" && dashboard.jobOrder.salesPriceListEnabled ? <PriceListPanel jobOrderId={params.id} /> : <>
         <div className="job-sheet-grid">
           <div className="job-sheet-panel">
             <h2 className="job-sheet-panel-title">Dati Commessa</h2>
+            <label className="sales-enable"><input type="checkbox" checked={jobOrderForm.salesPriceListEnabled} onChange={e => setJobOrderForm({ ...jobOrderForm, salesPriceListEnabled: e.target.checked })} />Abilita listino appartamenti e vendite</label>
+            {jobOrderForm.salesPriceListEnabled && !dashboard.jobOrder.salesPriceListEnabled && <p className="muted">Salva la scheda per attivare il tab Listino.</p>}
             <div className="job-sheet-form-grid">
               <label className="job-sheet-field job-sheet-field-wide">
                 <span>Commessa</span>
@@ -466,6 +479,7 @@ export default function SchedaCommessaPage() {
             {saving ? "Salvataggio..." : "Salva Scheda"}
           </button>
         </div>
+        </>}
       </section>
     </div>
   );

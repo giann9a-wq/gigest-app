@@ -1,0 +1,73 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { PrismaClient } from "@prisma/client";
+import { saleSchema, unitSchema, date } from "../lib/property-sales-validation";
+
+// Use a disposable PostgreSQL schema, never real job orders or sales.
+async function main() {
+  process.loadEnvFile(".env");
+  const originalUrl = process.env.DATABASE_URL!;
+  const schema = `sales_test_${Date.now()}`;
+  assert.match(schema, /^sales_test_\d+$/);
+  const adminDb = new PrismaClient({ datasourceUrl: originalUrl });
+  const testUrl = new URL(originalUrl); testUrl.searchParams.set("schema", schema);
+  let db: PrismaClient | undefined;
+  try {
+    await adminDb.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
+    process.env.DATABASE_URL = testUrl.toString();
+    execFileSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "deploy"], { env: process.env, stdio: "pipe" });
+    const sales = await import("../lib/property-sales");
+    const { prisma } = await import("../lib/prisma"); db = prisma;
+    const { getScheduleEvents } = await import("../lib/schedule-events");
+    const user = await db.user.create({ data: { email: `${schema}@example.invalid`, role: "ADMIN", status: "ACTIVE" } });
+    const job = await db.jobOrder.create({ data: { name: "Test listino", type: "SITE", salesPriceListEnabled: true } });
+    const disabledJob = await db.jobOrder.create({ data: { name: "Senza listino", type: "SITE" } });
+    await assert.rejects(sales.saveUnit(disabledJob.id, { code: "A1", listPrice: 100 }), /Abilita/);
+    const a = await sales.saveUnit(job.id, { code: "A1", listPrice: "300000.00", description: "Trilocale" });
+    const b = await sales.saveUnit(job.id, { code: "A2", listPrice: "250000,00" });
+    await assert.rejects(sales.saveUnit(job.id, { code: "A1", listPrice: 100 }));
+    assert.equal(unitSchema.safeParse({ code: "", listPrice: 0 }).success, false);
+    assert.equal(unitSchema.safeParse({ code: "A", listPrice: "12.345" }).success, false);
+    assert.equal(date.safeParse("2026-02-30").success, false);
+    assert.equal(saleSchema.safeParse({ unitId: a.id, customerName: "Cliente", agreedPrice: 50, saleDate: "2026-10-13", installments: [{ description: "Rata", amount: 51, dueDate: "2026-10-13" }] }).success, false);
+    const payload = { unitId: a.id, customerName: "Cliente Test", agreedPrice: 280000, saleDate: "2026-10-13",
+      installments: Array.from({ length: 4 }, (_, i) => ({ description: `Acconto ${i + 1}`, amount: 50000, dueDate: `2026-${String(9 + i).padStart(2, "0")}-13` })) };
+    const sale = await sales.saveSale(payload, user.id);
+    await assert.rejects(sales.saveSale(payload, user.id), /già venduto/);
+    await assert.rejects(sales.deleteUnit(job.id, a.id), /venduto/);
+    let view = (await sales.getSalesView(job.id))!;
+    assert.equal(view.listTotal, 550000); assert.equal(view.soldTotal, 280000); assert.equal(view.remainingListTotal, 250000);
+    let saved = view.units.find(row => row.id === a.id)!.sale!;
+    assert.equal(saved.installments.length, 4); assert.equal(await db.deadline.count(), 4);
+    assert.equal(await db.jobOrderAdvance.count(), 0);
+    const events = await getScheduleEvents();
+    assert.equal(events.length, 4); assert.equal(events[0].originLabel, "Acconto vendita");
+    assert.equal(events[0].linkedJobOrder?.id, job.id); assert.equal(events[0].canEdit, false);
+    const firstId = saved.installments[0].id;
+    const approved = await Promise.all([sales.approveInstallment(firstId, user.id), sales.approveInstallment(firstId, user.id)]);
+    assert.equal(approved[0], approved[1]); assert.equal(await db.jobOrderAdvance.count(), 1);
+    assert.equal(Number((await db.jobOrder.findUniqueOrThrow({ where: { id: job.id } })).actualRevenue), 50000);
+    assert.equal((await getScheduleEvents()).length, 3);
+    await assert.rejects(sales.deleteSale(sale.id), /approvati/);
+    await assert.rejects(sales.saveSale({ ...payload, id: sale.id, updatedAt: saved.updatedAt }, user.id), /ricarica/);
+    view = (await sales.getSalesView(job.id))!; saved = view.units.find(row => row.id === a.id)!.sale!;
+    await assert.rejects(sales.saveSale({ ...saved, unitId: a.id, installments: saved.installments.slice(1) }, user.id), /approvati/);
+    const revised = { ...saved, unitId: a.id, installments: saved.installments.map((row, i) => i === 1 ? { ...row, amount: 60000, dueDate: "2027-01-15" } : row) };
+    await sales.saveSale(revised, user.id);
+    const changed = await db.salesInstallment.findUniqueOrThrow({ where: { id: saved.installments[1].id }, include: { deadline: true } });
+    assert.equal(Number(changed.amount), 60000); assert.equal(changed.deadline.eventDate.toISOString().slice(0, 10), "2027-01-15");
+    const noAdvances = await sales.saveSale({ unitId: b.id, customerName: "Senza acconti", agreedPrice: 240000, saleDate: "2026-10-13" }, user.id);
+    assert.equal((await sales.getSalesView(job.id))!.remainingListTotal, 0);
+    await sales.deleteSale(noAdvances.id);
+    const cancellable = await sales.saveSale({ unitId: b.id, customerName: "Da annullare", agreedPrice: 240000, saleDate: "2026-10-13", installments: [{ description: "Rata", amount: 50000, dueDate: "2027-01-01" }] }, user.id);
+    await sales.deleteSale(cancellable.id); assert.equal(await db.deadline.count(), 4);
+    await sales.deleteUnit(job.id, b.id); assert.equal((await sales.getSalesView(job.id))!.units.length, 1);
+    console.log("PASS: migrazioni, listino, vendite, totali, scadenze, modifica rate, annullamento, approvazione simultanea senza doppioni e ricavi.");
+  } finally {
+    await db?.$disconnect();
+    await adminDb.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+    await adminDb.$disconnect();
+    process.env.DATABASE_URL = originalUrl;
+  }
+}
+main().catch(error => { console.error(error instanceof Error ? error.message : "Test fallito"); process.exitCode = 1; });

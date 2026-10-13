@@ -12,7 +12,7 @@ type DeadlineRow = {
   isAllDay: boolean;
   recurrenceSeriesId: string | null;
   recurrenceLabel: string;
-  origin: "MANUAL" | "MAINTENANCE" | "TRAINING";
+  origin: "MANUAL" | "MAINTENANCE" | "TRAINING" | "SALE_INSTALLMENT";
   originLabel: string;
   lastSource: "GIGEST" | "GOOGLE_CALENDAR";
   maintenanceId: string | null;
@@ -87,7 +87,7 @@ type DeadlineTableFilters = {
   title: string;
   description: string;
   eventDate: string;
-  origin: "" | "MANUAL" | "MAINTENANCE" | "TRAINING";
+  origin: "" | "MANUAL" | "MAINTENANCE" | "TRAINING" | "SALE_INSTALLMENT";
   lastSource: "" | "GIGEST" | "GOOGLE_CALENDAR";
   linkedEquipment: string;
 };
@@ -151,7 +151,7 @@ function getReadonlyBadgeLabel(row: DeadlineRow) {
     return "Data corso";
   }
 
-  return row.origin === "TRAINING" ? "Da formazione" : "Da manutenzione";
+  return row.origin === "SALE_INSTALLMENT" ? "Acconto vendita" : row.origin === "TRAINING" ? "Da formazione" : "Da manutenzione";
 }
 
 function compareDeadlineRows(a: DeadlineRow, b: DeadlineRow) {
@@ -1196,6 +1196,7 @@ export default function ScadenziarioPage() {
                         <option value="MANUAL">MANUAL</option>
                         <option value="MAINTENANCE">MAINTENANCE</option>
                         <option value="TRAINING">TRAINING</option>
+                        <option value="SALE_INSTALLMENT">Acconti vendite</option>
                       </select>
                       <select
                         value={tableFilters.lastSource}

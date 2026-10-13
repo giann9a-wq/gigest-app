@@ -46,6 +46,7 @@ function getTodayStart() {
 function toDeadlineOriginLabel(origin: DeadlineOrigin) {
   if (origin === DeadlineOrigin.MAINTENANCE) return "Manutenzione";
   if (origin === DeadlineOrigin.TRAINING) return "Formazione";
+  if (origin === DeadlineOrigin.SALE_INSTALLMENT) return "Acconto vendita";
   return "Manuale";
 }
 
@@ -61,12 +62,14 @@ export async function getScheduleEvents({
   const [deadlines, jobOrders, trainings] = await Promise.all([
     prisma.deadline.findMany({
       where: {
+        salesInstallment: { isNot: { advanceId: { not: null } } },
         eventDate: {
           ...(from ? { gte: from } : {}),
           ...(to ? { lte: getDayEnd(to) } : {}),
         },
       },
       include: {
+        salesInstallment: { include: { sale: { include: { unit: { include: { jobOrder: { select: { id: true, name: true, type: true } } } } } } } },
         maintenance: {
           include: {
             equipment: {
@@ -152,7 +155,7 @@ export async function getScheduleEvents({
           fullName: row.training.person.fullName,
         }
       : null,
-    linkedJobOrder: null,
+    linkedJobOrder: row.salesInstallment?.sale.unit.jobOrder ?? null,
   }));
 
   const jobOrderRows: ScheduleEventRow[] = jobOrders

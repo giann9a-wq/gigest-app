@@ -91,6 +91,7 @@ enum DeadlineOrigin {
   MANUAL
   MAINTENANCE
   TRAINING
+  SALE_INSTALLMENT
 }
 
 enum SyncSource {
@@ -290,7 +291,7 @@ model AppChatMessage {
   message   String   @db.Text
   createdAt DateTime @default(now())
 
-  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sender   User             @relation(fields: [senderId], references: [id], onDelete: Cascade)
   mentions AppChatMention[]
 
   @@index([createdAt])
@@ -550,6 +551,7 @@ model JobOrder {
   actualMiscCost                  Decimal?       @db.Decimal(12, 2)
   actualRevenue                   Decimal?       @db.Decimal(12, 2)
   isOwnAccountSite                Boolean        @default(false)
+  salesPriceListEnabled           Boolean        @default(false)
   negativeMarginAlertSnoozedUntil DateTime?
   createdAt                       DateTime       @default(now())
   updatedAt                       DateTime       @updatedAt
@@ -567,6 +569,7 @@ model JobOrder {
   invoiceImportRows          InvoiceImportRowStaging[]
   issuedInvoiceActuals       IssuedInvoiceActual[]
   advances                   JobOrderAdvance[]
+  salesUnits                 SalesUnit[]
   suggestedInvoiceImportRows InvoiceImportRowStaging[]  @relation("InvoiceImportRowSuggestedJobOrder")
   photoPhases                PhotoPhase[]
   photoUploads               PhotoUpload[]
@@ -613,30 +616,32 @@ model PriceListItem {
 }
 
 model DiscountSimulation {
-  id            String   @id @default(cuid())
-  name          String
-  reference     String?
-  price         Decimal  @db.Decimal(12, 2)
-  closingDate   DateTime @db.Date
-  euribor       Decimal  @db.Decimal(9, 6)
-  spread        Decimal  @db.Decimal(9, 6)
-  guaranteeRate Decimal  @db.Decimal(9, 6)
-  guaranteeFee  Decimal  @default(0) @db.Decimal(12, 2)
-  guaranteeVariableRate Decimal @default(0.05) @db.Decimal(9, 6)
-  customerShare Decimal  @db.Decimal(9, 6)
-  createdById   String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  advances      DiscountAdvance[]
+  id                    String            @id @default(cuid())
+  name                  String
+  reference             String?
+  price                 Decimal           @db.Decimal(12, 2)
+  closingDate           DateTime          @db.Date
+  euribor               Decimal           @db.Decimal(9, 6)
+  spread                Decimal           @db.Decimal(9, 6)
+  guaranteeRate         Decimal           @db.Decimal(9, 6)
+  guaranteeFee          Decimal           @default(0) @db.Decimal(12, 2)
+  guaranteeVariableRate Decimal           @default(0.05) @db.Decimal(9, 6)
+  customerShare         Decimal           @db.Decimal(9, 6)
+  createdById           String
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  advances              DiscountAdvance[]
+
   @@index([updatedAt])
 }
 
 model DiscountAdvance {
-  id           String @id @default(cuid())
+  id           String             @id @default(cuid())
   simulationId String
-  date         DateTime @db.Date
-  amount       Decimal @db.Decimal(12, 2)
+  date         DateTime           @db.Date
+  amount       Decimal            @db.Decimal(12, 2)
   simulation   DiscountSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+
   @@index([simulationId, date])
 }
 
@@ -885,12 +890,61 @@ model JobOrderAdvance {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  jobOrder  JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
-  createdBy User?    @relation("JobOrderAdvanceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  updatedBy User?    @relation("JobOrderAdvanceUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  jobOrder         JobOrder          @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+  salesInstallment SalesInstallment?
+  createdBy        User?             @relation("JobOrderAdvanceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy        User?             @relation("JobOrderAdvanceUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
 
   @@index([jobOrderId, isActive])
   @@index([advanceDate])
+}
+
+model SalesUnit {
+  id          String        @id @default(cuid())
+  jobOrderId  String
+  code        String
+  description String?
+  listPrice   Decimal       @db.Decimal(12, 2)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  jobOrder    JobOrder      @relation(fields: [jobOrderId], references: [id], onDelete: Restrict)
+  sale        PropertySale?
+
+  @@unique([jobOrderId, code])
+}
+
+model PropertySale {
+  id              String             @id @default(cuid())
+  unitId          String             @unique
+  customerName    String
+  agreedPrice     Decimal            @db.Decimal(12, 2)
+  saleDate        DateTime           @db.Date
+  createdByUserId String
+  updatedByUserId String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  unit            SalesUnit          @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  installments    SalesInstallment[]
+}
+
+model SalesInstallment {
+  id               String           @id @default(cuid())
+  saleId           String
+  description      String
+  dueDate          DateTime         @db.Date
+  amount           Decimal          @db.Decimal(12, 2)
+  deadlineId       String           @unique
+  advanceId        String?          @unique
+  approvedAt       DateTime?
+  approvedByUserId String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  sale             PropertySale     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  deadline         Deadline         @relation(fields: [deadlineId], references: [id], onDelete: Restrict)
+  advance          JobOrderAdvance? @relation(fields: [advanceId], references: [id], onDelete: Restrict)
+
+  @@index([advanceId, dueDate])
+  @@index([saleId])
 }
 
 model AutoDiaryEntryProposal {
@@ -1356,11 +1410,12 @@ model Deadline {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  maintenance Maintenance?           @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
-  training    Training?              @relation(fields: [trainingId], references: [id], onDelete: Cascade)
-  createdBy   User?                  @relation("DeadlineCreatedBy", fields: [createdByUserId], references: [id])
-  updatedBy   User?                  @relation("DeadlineUpdatedBy", fields: [updatedByUserId], references: [id])
-  mappings    CalendarEventMapping[]
+  maintenance      Maintenance?           @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+  training         Training?              @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  createdBy        User?                  @relation("DeadlineCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy        User?                  @relation("DeadlineUpdatedBy", fields: [updatedByUserId], references: [id])
+  mappings         CalendarEventMapping[]
+  salesInstallment SalesInstallment?
 
   @@index([eventDate, startTime])
 }

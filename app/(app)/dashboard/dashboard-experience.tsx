@@ -14,6 +14,8 @@ import {
 import { runGmailScansSync } from "@/lib/gmail-scans-sync-runner";
 import { getLoadingVerificationStatus, shouldShowLoadingVerificationAlert } from "@/lib/loading-verification";
 import { getNegativeMarginSiteAlerts } from "@/lib/job-order-alerts";
+import { SalesApproveButton } from "@/components/dashboard/sales-approve-button";
+import { formatCurrency } from "@/lib/number-format";
 import {
   DeliveryNoteValidationStatus,
   ScannedDeliveryNoteStatus,
@@ -568,6 +570,12 @@ export async function DashboardExperience({
   const appUser = await getActiveAppUser();
   const canSeeAutoDiaryAlert = appUser?.role === UserRole.ADMIN && shouldShowAutoDiaryAlert();
   const canSeeLoadingVerificationAlert = appUser?.role === UserRole.ADMIN && shouldShowLoadingVerificationAlert();
+  const salesAlertDate = new Date(`${new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date())}T23:59:59.999Z`);
+  salesAlertDate.setUTCDate(salesAlertDate.getUTCDate() + 5);
+  const salesAlerts = appUser?.role === UserRole.ADMIN ? await prisma.salesInstallment.findMany({
+    where: { advanceId: null, dueDate: { lte: salesAlertDate } }, orderBy: { dueDate: "asc" },
+    include: { sale: { include: { unit: { include: { jobOrder: { select: { name: true } } } } } } },
+  }) : [];
 
   if (appUser?.role === UserRole.ADMIN) {
     await runGmailScansSync().catch((error) => {
@@ -662,6 +670,7 @@ export async function DashboardExperience({
   ).length;
 
   const hasDashboardAlerts =
+    salesAlerts.length > 0 ||
     newScansCount > 0 ||
     oldPendingDeliveryNotesCount > 0 ||
     (autoDiaryStatus?.pendingCount ?? 0) > 0 ||
@@ -675,6 +684,13 @@ export async function DashboardExperience({
       className={isWideDashboard ? "dashboard-alert-stack dashboard2-alerts" : "dashboard-alert-stack"}
       aria-label="Attivita da lavorare"
     >
+      {salesAlerts.length > 0 && <div className="dashboard-work-alert dashboard-work-alert-maintenance">
+        <span className="dashboard-work-alert-main"><span className="dashboard-work-alert-count">{salesAlerts.length}</span><span><strong>Acconti vendite da approvare</strong><span className="dashboard-work-alert-copy">Acconti scaduti o in scadenza nei prossimi 5 giorni.</span></span></span>
+        <div className="dashboard-maintenance-alert-list">{salesAlerts.map(row => <div key={row.id} className="dashboard-maintenance-alert-row">
+          <span><strong>{row.sale.unit.jobOrder.name} · {row.sale.unit.code} · {row.sale.customerName}</strong><br />{row.description} · {row.dueDate.toLocaleDateString("it-IT", { timeZone: "UTC" })} · {formatCurrency(Number(row.amount))}</span>
+          <SalesApproveButton id={row.id} />
+        </div>)}</div><a href="/admin/vendite">Gestisci vendite per commessa</a>
+      </div>}
       {recurringMaintenanceAlerts.length > 0 ? (
         <div
           className={`dashboard-work-alert dashboard-work-alert-maintenance${

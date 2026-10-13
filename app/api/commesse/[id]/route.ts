@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getJobOrderDashboard } from "@/lib/job-order-dashboard";
 import { prisma } from "@/lib/prisma";
+import { salesTransaction, SalesError } from "@/lib/property-sales";
+import { salesApiError } from "@/lib/property-sales-api";
 import { JobType, Prisma, ResourceStatus, UserStatus } from "@prisma/client";
 
 const allowedTypes: JobType[] = [
@@ -157,7 +159,11 @@ export async function POST(
     return NextResponse.json({ error: "Commessa non trovata" }, { status: 404 });
   }
 
-  await prisma.jobOrder.update({
+  try { await salesTransaction(async tx => {
+    if (body.salesPriceListEnabled === false && await tx.propertySale.count({ where: { unit: { jobOrderId: id } } })) {
+      throw new SalesError("Il listino contiene vendite: non puoi disabilitarlo finché sono presenti");
+    }
+    await tx.jobOrder.update({
     where: { id },
     data: {
       name,
@@ -170,6 +176,7 @@ export async function POST(
       customerContact: customerContact || null,
       siteAddress: siteAddress || null,
       isOwnAccountSite,
+      ...(typeof body.salesPriceListEnabled === "boolean" ? { salesPriceListEnabled: body.salesPriceListEnabled } : {}),
       budgetPersonnelCost: parseOptionalDecimal(budget.personnel),
       budgetEquipmentCost: parseOptionalDecimal(budget.equipment),
       budgetMaterialsCost: parseOptionalDecimal(budget.materials),
@@ -178,7 +185,8 @@ export async function POST(
       budgetMiscCost: parseOptionalDecimal(budget.misc),
       budgetExpectedRevenue: parseOptionalDecimal(budget.revenue),
     },
-  });
+    });
+  }); } catch (error) { return salesApiError(error); }
 
   const dashboard = await getJobOrderDashboard(id);
 

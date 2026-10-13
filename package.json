@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test:sales": "tsx scripts/test-property-sales.ts",
     "test:discounts": "tsx --test scripts/test-discount-calculator.ts",
     "test:discounts:db": "tsx scripts/test-discount-persistence.ts",
     "dev": "next dev",

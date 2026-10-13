@@ -7,6 +7,7 @@ type AdminSection =
   | "import-costi"
   | "import-fatture"
   | "acconti"
+  | "vendite"
   | "controlli"
   | "news"
   | "prezzario"
@@ -52,6 +53,7 @@ const ADMIN_FUNCTIONS: Array<{
     href: "/admin/news" as Route,
     title: "News",
   },
+  { key: "vendite", href: "/admin/vendite" as Route, title: "Vendite" },
   {
     key: "prezzario",
     href: "/admin/prezzario" as Route,
