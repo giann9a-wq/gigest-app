@@ -1170,7 +1170,7 @@ export function JobDashboardView(props: JobDashboardViewProps) {
       </div>
       <JobRevenueSummary dashboard={props.dashboard} />
       {props.dashboard.sales?.enabled && <section className="job-premium-card"><details className="job-premium-diary-accordion job-revenue-accordion">
-        <summary><span className="job-premium-expand">+</span><div><span>Listino appartamenti</span><h2>Vendite</h2></div><strong>{formatCurrency(props.dashboard.sales.soldTotal)}</strong></summary>
+        <summary><span className="job-premium-expand">+</span><div><span>Listino appartamenti e box</span><h2>Vendite</h2></div><strong>{formatCurrency(props.dashboard.sales.soldTotal)}</strong></summary>
         <div className="job-premium-diary-accordion-content"><SalesSummary view={props.dashboard.sales} /><SalesTable view={props.dashboard.sales} /></div>
       </details></section>}
       <JobCostBreakdownAccordion categories={categories} />

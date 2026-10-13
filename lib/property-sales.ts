@@ -21,6 +21,7 @@ export async function getSalesView(jobOrderId: string) {
   if (!job) return null;
   const units = await prisma.salesUnit.findMany({ where: { jobOrderId }, orderBy: { code: "asc" },
     include: { sale: { include: { installments: { orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }], include: { advance: { select: { isActive: true } } } } } } } });
+  units.sort((a, b) => a.code.localeCompare(b.code, "it", { numeric: true }));
   const listTotal = units.reduce((sum, unit) => sum.plus(unit.listPrice), new Prisma.Decimal(0));
   const soldTotal = units.reduce((sum, unit) => sum.plus(unit.sale?.agreedPrice ?? 0), new Prisma.Decimal(0));
   const remainingListTotal = units.filter(unit => !unit.sale).reduce((sum, unit) => sum.plus(unit.listPrice), new Prisma.Decimal(0));

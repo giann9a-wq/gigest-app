@@ -364,7 +364,7 @@ export default function SchedaCommessaPage() {
         <div className="job-sheet-grid">
           <div className="job-sheet-panel">
             <h2 className="job-sheet-panel-title">Dati Commessa</h2>
-            <label className="sales-enable"><input type="checkbox" disabled={saving || savingListFlag} checked={jobOrderForm.salesPriceListEnabled} onChange={e => toggleListFlag(e.target.checked)} />Abilita listino appartamenti e vendite</label>
+            <label className="sales-enable"><input type="checkbox" disabled={saving || savingListFlag} checked={jobOrderForm.salesPriceListEnabled} onChange={e => toggleListFlag(e.target.checked)} />Abilita listino appartamenti, box e vendite</label>
             {savingListFlag && <p role="status" className="muted">Salvataggio impostazione listino…</p>}
             <div className="job-sheet-form-grid">
               <label className="job-sheet-field job-sheet-field-wide">
