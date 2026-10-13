@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveAppUser } from "@/lib/app-user";
 import { prisma } from "@/lib/prisma";
+import { hasChatMention } from "@/lib/chat-mentions";
 
 function senderLabel(sender: { firstName: string | null; lastName: string | null; email: string }) {
   return [sender.firstName, sender.lastName].filter(Boolean).join(" ").trim() || sender.email;
@@ -12,6 +13,7 @@ function serializeMessage(row: {
   message: string;
   createdAt: Date;
   sender: { firstName: string | null; lastName: string | null; email: string };
+  mentions: { userId: string; token: string }[];
 }) {
   return {
     id: row.id,
@@ -19,6 +21,7 @@ function serializeMessage(row: {
     senderLabel: senderLabel(row.sender),
     message: row.message,
     createdAt: row.createdAt.toISOString(),
+    mentions: row.mentions,
   };
 }
 
@@ -36,20 +39,23 @@ export async function GET() {
   }
 
   const readAt = new Date();
-  const rows = await prisma.appChatMessage.findMany({
+  const recentRows = await prisma.appChatMessage.findMany({
     orderBy: { createdAt: "desc" },
     take: 100,
-    include: { sender: { select: senderSelect } },
+    include: { sender: { select: senderSelect }, mentions: { select: { userId: true, token: true } } },
   });
-
-  await prisma.user.update({
-    where: { id: appUser.id },
-    data: { chatLastReadAt: readAt },
+  // Include older unread mentions too, so opening the notification always shows them.
+  const mentionedRows = await prisma.appChatMessage.findMany({
+    where: { mentions: { some: { userId: appUser.id, readAt: null } } },
+    include: { sender: { select: senderSelect }, mentions: { select: { userId: true, token: true } } },
   });
+  const rows = [...new Map([...recentRows, ...mentionedRows].map((row) => [row.id, row])).values()]
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   return NextResponse.json({
     currentUserId: appUser.id,
-    messages: rows.reverse().map(serializeMessage),
+    messages: rows.map(serializeMessage),
+    readAt: readAt.toISOString(),
   });
 }
 
@@ -71,14 +77,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Il messaggio non può superare 2000 caratteri" }, { status: 400 });
   }
 
-  const created = await prisma.appChatMessage.create({
-    data: { senderId: appUser.id, message },
-    include: { sender: { select: senderSelect } },
+  const users = await prisma.user.findMany({
+    where: { status: "ACTIVE", id: { not: appUser.id } },
+    select: { id: true, email: true },
   });
-
-  await prisma.user.update({
-    where: { id: appUser.id },
-    data: { chatLastReadAt: created.createdAt },
+  const created = await prisma.appChatMessage.create({
+    data: {
+      senderId: appUser.id, message,
+      mentions: { create: users.filter((user) => hasChatMention(message, user.email))
+        .map((user) => ({ userId: user.id, token: `@${user.email}` })) },
+    },
+    include: { sender: { select: senderSelect }, mentions: { select: { userId: true, token: true } } },
   });
 
   return NextResponse.json({ message: serializeMessage(created) });

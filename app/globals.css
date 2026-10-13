@@ -604,6 +604,41 @@ a {
   pointer-events: none;
 }
 
+.app-chat-trigger { flex: 0 0 auto; }
+.app-chat-mention-announcement {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+}
+.app-chat-open-button.app-chat-open-button-mentioned {
+  background: #b91c1c; color: #fff; border: 2px solid #fff;
+  box-shadow: 0 0 0 3px #ef4444, 0 4px 18px #dc262660;
+  animation: chat-mention-pulse 1.8s ease-in-out infinite;
+}
+.app-chat-open-button-mentioned b { background: #fff; color: #b91c1c; }
+@keyframes chat-mention-pulse {
+  50% { box-shadow: 0 0 0 5px #ef444460, 0 4px 22px #dc262680; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-chat-open-button.app-chat-open-button-mentioned { animation: none; }
+}
+.app-chat-message.app-chat-message-mentioned {
+  border: 2px solid #dc2626; background: #fff1f2;
+}
+.app-chat-tag-label { display: block; color: #b91c1c; font-weight: 800; margin-bottom: .3rem; }
+.app-chat-message mark { background: #fee2e2; color: #991b1b; border-radius: 3px; font-weight: 700; }
+.app-chat-composer .app-chat-suggestions {
+  list-style: none; padding: .3rem; margin: 0; max-height: 220px; overflow-y: auto;
+  background: #fff; border: 1px solid #f0b089; border-radius: 10px;
+}
+.app-chat-suggestions li { padding: .15rem; font-size: .8rem; }
+.app-chat-composer .app-chat-suggestions button {
+  display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+  width: 100%; min-height: 40px; padding: .45rem .6rem; background: #fff; color: #7c2d12;
+  overflow-wrap: anywhere;
+}
+.app-chat-composer .app-chat-suggestions button.is-selected,
+.app-chat-composer .app-chat-suggestions button:hover { background: #fff1e8; }
+.app-chat-suggestions small { font-weight: 400; }
+
 .app-chat-shell-open {
   visibility: visible;
   pointer-events: auto;

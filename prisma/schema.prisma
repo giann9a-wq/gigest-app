@@ -273,6 +273,7 @@ model User {
   assignedDashboardTasks        DashboardTask[]         @relation("DashboardTaskAssignee")
   createdDashboardTasks         DashboardTask[]         @relation("DashboardTaskCreatedBy")
   appChatMessages               AppChatMessage[]
+  appChatMentions               AppChatMention[]
   createdPhotoPhases            PhotoPhase[]            @relation("PhotoPhaseCreatedBy")
   photoUploads                  PhotoUpload[]           @relation("PhotoUploadAuthor")
   deletedPhotos                 Photo[]                 @relation("PhotoDeletedBy")
@@ -290,9 +291,23 @@ model AppChatMessage {
   createdAt DateTime @default(now())
 
   sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  mentions AppChatMention[]
 
   @@index([createdAt])
   @@index([senderId, createdAt])
+}
+
+model AppChatMention {
+  messageId String
+  userId    String
+  token     String
+  readAt    DateTime?
+
+  message AppChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId, readAt])
 }
 
 model DashboardTask {

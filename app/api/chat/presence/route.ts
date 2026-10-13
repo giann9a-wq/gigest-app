@@ -35,15 +35,16 @@ export async function POST() {
     }),
   ]);
 
-  const unreadCount = await prisma.appChatMessage.count({
+  const [unreadCount, mentionCount] = await Promise.all([prisma.appChatMessage.count({
     where: {
       senderId: { not: appUser.id },
       ...(currentUser.chatLastReadAt ? { createdAt: { gt: currentUser.chatLastReadAt } } : {}),
     },
-  });
+  }), prisma.appChatMention.count({ where: { userId: appUser.id, readAt: null } })]);
 
   return NextResponse.json({
     users: onlineUsers.map((user) => ({ id: user.id, label: userLabel(user) })),
     unreadCount,
+    mentionCount,
   });
 }

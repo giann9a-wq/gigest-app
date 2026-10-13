@@ -7,6 +7,7 @@ type OnlineUser = {
   id: string;
   label: string;
 };
+type MentionUser = OnlineUser & { email: string };
 
 type ChatMessage = {
   id: string;
@@ -14,6 +15,7 @@ type ChatMessage = {
   senderLabel: string;
   message: string;
   createdAt: string;
+  mentions: { userId: string; token: string }[];
 };
 
 async function jsonRequest<T>(url: string, options?: RequestInit) {
@@ -42,6 +44,10 @@ function formatMessageTime(value: string) {
 export function AppChat() {
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [mentionCount, setMentionCount] = useState(0);
+  const [mentionUsers, setMentionUsers] = useState<MentionUser[]>([]);
+  const [mentionSearch, setMentionSearch] = useState<{ start: number; end: number; query: string } | null>(null);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
@@ -51,6 +57,12 @@ export function AppChat() {
   const [error, setError] = useState("");
   const [portalReady, setPortalReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const openRef = useRef(false);
+  const firstLoadRef = useRef(false);
+  const mentionMessageRef = useRef<HTMLElement | null>(null);
+  const suggestions = mentionSearch ? mentionUsers.filter((user) =>
+    `${user.label} ${user.email}`.toLowerCase().includes(mentionSearch.query.toLowerCase())).slice(0, 8) : [];
   const lastMessageId = messages.at(-1)?.id;
 
   useEffect(() => {
@@ -59,11 +71,12 @@ export function AppChat() {
 
   const refreshPresence = useCallback(async () => {
     try {
-      const data = await jsonRequest<{ users: OnlineUser[]; unreadCount: number }>("/api/chat/presence", {
+      const data = await jsonRequest<{ users: OnlineUser[]; unreadCount: number; mentionCount: number }>("/api/chat/presence", {
         method: "POST",
       });
       setOnlineUsers(data.users);
-      if (!isOpen) setUnreadCount(data.unreadCount);
+      setUnreadCount(data.unreadCount);
+      setMentionCount(data.mentionCount);
     } catch {
       // La presenza è accessoria: un errore temporaneo non deve disturbare la navigazione.
     }
@@ -73,10 +86,17 @@ export function AppChat() {
     if (showLoader) setLoadingMessages(true);
 
     try {
-      const data = await jsonRequest<{ currentUserId: string; messages: ChatMessage[] }>("/api/chat");
+      if (document.visibilityState !== "visible" || !openRef.current) return;
+      const data = await jsonRequest<{ currentUserId: string; messages: ChatMessage[]; readAt: string }>("/api/chat");
+      if (!openRef.current || document.visibilityState !== "visible") return;
       setCurrentUserId(data.currentUserId);
       setMessages(data.messages);
+      await jsonRequest("/api/chat/read", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageIds: data.messages.map((message) => message.id), readAt: data.readAt }),
+      });
       setUnreadCount(0);
+      setMentionCount(0);
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nel caricamento della chat");
@@ -103,13 +123,21 @@ export function AppChat() {
     if (!isOpen) return;
 
     refreshMessages(true);
+    jsonRequest<{ users: MentionUser[] }>("/api/chat/users")
+      .then((data) => setMentionUsers(data.users))
+      .catch(() => setError("Impossibile caricare gli utenti da taggare. Riapri la chat per riprovare."));
     const intervalId = window.setInterval(() => refreshMessages(false), 3_000);
     return () => window.clearInterval(intervalId);
   }, [isOpen, refreshMessages]);
 
   useEffect(() => {
     if (isOpen && lastMessageId) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      if (firstLoadRef.current && mentionMessageRef.current) {
+        mentionMessageRef.current.scrollIntoView({ block: "center" });
+      } else {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+      firstLoadRef.current = false;
     }
   }, [isOpen, lastMessageId]);
 
@@ -129,6 +157,7 @@ export function AppChat() {
       });
       setMessages((current) => [...current.filter((item) => item.id !== data.message.id), data.message]);
       setDraft("");
+      setMentionSearch(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore nell'invio del messaggio");
     } finally {
@@ -137,6 +166,19 @@ export function AppChat() {
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (mentionSearch && suggestions.length) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        setSuggestionIndex((index) => (index + (event.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        selectMention(suggestions[Math.min(suggestionIndex, suggestions.length - 1)]);
+        return;
+      }
+    }
+    if (event.key === "Escape") { setMentionSearch(null); return; }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void sendMessage();
@@ -144,8 +186,37 @@ export function AppChat() {
   }
 
   function openChat() {
+    if (openRef.current) return;
+    openRef.current = true;
+    firstLoadRef.current = true;
+    mentionMessageRef.current = null;
+    setMessages([]);
     setIsOpen(true);
-    setUnreadCount(0);
+  }
+
+  function closeChat() {
+    openRef.current = false;
+    setIsOpen(false);
+  }
+
+  function updateMentionSearch(value: string, caret: number) {
+    const match = /(?:^|\s)@(\S*)$/.exec(value.slice(0, caret));
+    setMentionSearch(match ? { start: caret - match[1].length - 1, end: caret, query: match[1] } : null);
+    setSuggestionIndex(0);
+  }
+
+  function selectMention(user: MentionUser) {
+    if (!mentionSearch) return;
+    const token = `@${user.email} `;
+    const next = draft.slice(0, mentionSearch.start) + token + draft.slice(mentionSearch.end);
+    if (next.length > 2000) return;
+    const caret = mentionSearch.start + token.length;
+    setDraft(next);
+    setMentionSearch(null);
+    requestAnimationFrame(() => {
+      composerRef.current?.focus();
+      composerRef.current?.setSelectionRange(caret, caret);
+    });
   }
 
   return (
@@ -159,17 +230,23 @@ export function AppChat() {
             </button>
           ))}
         </div>
-        <button type="button" className="app-chat-open-button" onClick={openChat} aria-label="Apri chat applicativo">
-          <span>Chat</span>
-          {unreadCount > 0 ? <b>{unreadCount > 99 ? "99+" : unreadCount}</b> : null}
+        <div className="app-chat-trigger">
+        <span className="app-chat-mention-announcement" role="status" aria-live="polite">
+          {mentionCount > 0 ? `Ti hanno taggato in chat: ${mentionCount} menzioni da leggere` : ""}
+        </span>
+        <button type="button" className={`app-chat-open-button ${mentionCount > 0 ? "app-chat-open-button-mentioned" : ""}`} onClick={openChat} aria-label={mentionCount > 0 ? `Apri chat: ${mentionCount} menzioni da leggere` : "Apri chat applicativo"}>
+          <span>{mentionCount > 0 ? "@ Ti hanno taggato" : "Chat"}</span>
+          {mentionCount > 0 ? <b>{mentionCount > 99 ? "99+" : mentionCount}</b> : null}
+          {!mentionCount && unreadCount > 0 ? <b>{unreadCount > 99 ? "99+" : unreadCount}</b> : null}
         </button>
+        </div>
       </div>
 
       {portalReady ? createPortal(<div className={`app-chat-shell ${isOpen ? "app-chat-shell-open" : ""}`} aria-hidden={!isOpen}>
         <button
           type="button"
           className="app-chat-backdrop"
-          onClick={() => setIsOpen(false)}
+          onClick={closeChat}
           aria-label="Chiudi chat"
           tabIndex={isOpen ? 0 : -1}
         />
@@ -180,7 +257,7 @@ export function AppChat() {
               <strong>Conversazione generale</strong>
               <small>{onlineUsers.length + 1} online</small>
             </div>
-            <button type="button" onClick={() => setIsOpen(false)} aria-label="Chiudi chat">×</button>
+            <button type="button" onClick={closeChat} aria-label="Chiudi chat">×</button>
           </header>
 
           <div className="app-chat-messages" aria-live="polite">
@@ -190,13 +267,18 @@ export function AppChat() {
             ) : null}
             {messages.map((message) => {
               const isMine = message.senderId === currentUserId;
+              const isMentioned = message.mentions.some((mention) => mention.userId === currentUserId);
               return (
-                <article key={message.id} className={`app-chat-message ${isMine ? "app-chat-message-mine" : ""}`}>
+                <article key={message.id} ref={isMentioned ? (element) => { mentionMessageRef.current = element; } : undefined} className={`app-chat-message ${isMine ? "app-chat-message-mine" : ""} ${isMentioned ? "app-chat-message-mentioned" : ""}`}>
                   <div>
                     <strong>{isMine ? "Tu" : message.senderLabel}</strong>
                     <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
                   </div>
-                  <p>{message.message}</p>
+                  {isMentioned ? <small className="app-chat-tag-label">@ Ti ha taggato</small> : null}
+                  <p>{message.message.split(/(@[^\s]+)/g).map((part, index) => {
+                    const mention = message.mentions.find((item) => part.toLowerCase().startsWith(item.token.toLowerCase()));
+                    return mention ? <mark key={index}>{part}</mark> : part;
+                  })}</p>
                 </article>
               );
             })}
@@ -205,12 +287,24 @@ export function AppChat() {
 
           <form className="app-chat-composer" onSubmit={sendMessage}>
             {error ? <p>{error}</p> : null}
+            {mentionSearch ? <ul className="app-chat-suggestions" id="chat-mention-suggestions" aria-label="Utenti da taggare">
+              {suggestions.map((user, index) => <li key={user.id}>
+                <button type="button" className={index === suggestionIndex ? "is-selected" : ""}
+                  onMouseDown={(event) => event.preventDefault()} onClick={() => selectMention(user)}>
+                  <strong>{user.label}</strong><small>{user.email}</small>
+                </button>
+              </li>)}
+              {!suggestions.length ? <li>Nessun utente trovato</li> : null}
+            </ul> : null}
             <div>
               <textarea
+                ref={composerRef}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => { setDraft(event.target.value); updateMentionSearch(event.target.value, event.target.selectionStart); }}
+                onClick={(event) => updateMentionSearch(event.currentTarget.value, event.currentTarget.selectionStart)}
                 onKeyDown={handleComposerKeyDown}
-                placeholder="Scrivi un messaggio..."
+                placeholder="Scrivi un messaggio... usa @ per taggare"
+                aria-label="Messaggio chat"
                 maxLength={2000}
                 rows={2}
               />
@@ -218,7 +312,7 @@ export function AppChat() {
                 {sending ? "Invio..." : "Invia"}
               </button>
             </div>
-            <small>Invio con Enter · nuova riga con Shift+Enter</small>
+            <small>@ per taggare · Invio con Enter · nuova riga con Shift+Enter</small>
           </form>
         </aside>
       </div>, document.body) : null}
