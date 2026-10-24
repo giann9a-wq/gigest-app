@@ -11820,3 +11820,13 @@ a {
   .sales-table .sales-table-empty { display: block; }
   .sales-table .sales-table-empty::before { content: none; }
 }
+/* Suggestions remain local until the operator explicitly confirms insertion. */
+.documentale-scan-form .scan-suggested-field {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  color: #0c4a6e;
+}
+.scan-suggestion-hint { color: #075985; line-height: 1.4; }
+.documentale-scan-form .scan-review-confirmation { display: flex; align-items: flex-start; gap: 10px; }
+.documentale-scan-form .scan-review-confirmation input { width: auto; min-height: auto; margin-top: 4px; }
+.scan-recognized-text pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; font-size: 12px; }

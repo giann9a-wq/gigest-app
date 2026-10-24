@@ -3,6 +3,7 @@ node_modules
 .env
 .env.local
 .env.vercel
+.env.production.local
 coverage
 .vercel
 prisma/dev.db*

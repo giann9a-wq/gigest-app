@@ -23,6 +23,9 @@ export async function POST(
 
   const { id } = await context.params;
   const body = await request.json();
+  if (body.humanConfirmed !== true) {
+    return NextResponse.json({ error: "Conferma di aver verificato i campi sul PDF prima di inserire la bolla" }, { status: 400 });
+  }
   const jobOrderId = String(body.jobOrderId ?? "").trim();
   const usageDateRaw = String(body.usageDate ?? "").trim();
   const supplier = String(body.supplier ?? "").trim();
@@ -33,7 +36,7 @@ export async function POST(
   }
 
   const usageDate = parseDate(usageDateRaw);
-  if (!usageDate) {
+  if (!usageDate || !/^\d{4}-\d{2}-\d{2}$/.test(usageDateRaw) || usageDate.toISOString().slice(0, 10) !== usageDateRaw) {
     return NextResponse.json({ error: "Data non valida" }, { status: 400 });
   }
 
