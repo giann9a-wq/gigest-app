@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getActiveAppUser } from "@/lib/app-user";
 import { runGmailScansSync } from "@/lib/gmail-scans-sync-runner";
+export const maxDuration = 300;
 
 function getBearerToken(request: Request) {
   const header = request.headers.get("authorization") || "";

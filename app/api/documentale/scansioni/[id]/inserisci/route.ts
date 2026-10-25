@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  Prisma,
   DeliveryNoteValidationStatus,
   ScannedDeliveryNoteStatus,
 } from "@prisma/client";
@@ -66,6 +67,9 @@ export async function POST(
       data: {
         status: ScannedDeliveryNoteStatus.INSERTED,
         insertedAt: new Date(),
+        ocrStatus: "STOPPED",
+        ocrData: Prisma.DbNull,
+        ocrError: null,
       },
     });
 

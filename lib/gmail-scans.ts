@@ -7,6 +7,8 @@ import {
   uploadDocumentBufferToDrive,
 } from "@/lib/google-drive-document-storage";
 import { prisma } from "@/lib/prisma";
+import { after } from "next/server";
+import { prepareScanSuggestions } from "@/lib/scan-suggestions-service";
 
 const GMAIL_API_URL = "https://gmail.googleapis.com/gmail/v1";
 const ALLOWED_SCAN_SENDERS = new Set([
@@ -212,8 +214,9 @@ export async function syncGmailScannedDeliveryNotes() {
           folderId,
         });
 
+        let newScanId: string;
         try {
-          await prisma.scannedDeliveryNote.create({
+          const created = await prisma.scannedDeliveryNote.create({
             data: {
               gmailMessageId: message.id,
               gmailAttachmentId: attachmentId,
@@ -230,6 +233,7 @@ export async function syncGmailScannedDeliveryNotes() {
               receivedAt,
             },
           });
+          newScanId = created.id;
         } catch (error) {
           await deleteDriveFile(uploaded.driveFileId).catch((cleanupError) => {
             console.error("Pulizia allegato Drive duplicato fallita", {
@@ -246,6 +250,7 @@ export async function syncGmailScannedDeliveryNotes() {
           throw error;
         }
         imported += 1;
+        after(() => prepareScanSuggestions(newScanId));
       }
     } catch (error) {
       errors += 1;

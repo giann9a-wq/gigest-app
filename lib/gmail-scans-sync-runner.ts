@@ -1,5 +1,7 @@
 import { syncGmailScannedDeliveryNotes } from "@/lib/gmail-scans";
 import { prisma } from "@/lib/prisma";
+import { after } from "next/server";
+import { preparePendingScanSuggestions } from "@/lib/scan-suggestions-service";
 
 const GMAIL_SCANS_SYNC_SETTING_KEY = "gmailScansSync";
 const AUTO_SYNC_MIN_INTERVAL_MS = 5 * 60 * 1000;
@@ -75,6 +77,7 @@ async function saveSyncState(state: GmailScansSyncState) {
 }
 
 export async function runGmailScansSync(input: { force?: boolean } = {}): Promise<GmailScansSyncResult> {
+  after(() => preparePendingScanSuggestions());
   const now = new Date();
   const state = await getSyncState();
 

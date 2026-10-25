@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { ScannedDeliveryNoteStatus } from "@prisma/client";
 import { getActiveAppUser } from "@/lib/app-user";
 import { prisma } from "@/lib/prisma";
+import { preparedScanData, preparePendingScanSuggestions } from "@/lib/scan-suggestions-service";
+export const maxDuration = 300;
 
 export async function GET() {
   const appUser = await getActiveAppUser();
@@ -46,6 +48,8 @@ export async function GET() {
     ),
   ].sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" }));
 
+  if (rows.some(row => row.ocrStatus !== "READY")) after(() => preparePendingScanSuggestions());
+
   return NextResponse.json({
     rows: rows.map((row) => ({
       id: row.id,
@@ -58,6 +62,8 @@ export async function GET() {
       statusLabel: "Nuova",
       receivedAt: row.receivedAt.toISOString(),
       importedAt: row.importedAt.toISOString(),
+      ocrStatus: row.ocrStatus,
+      suggestions: row.ocrStatus === "READY" ? preparedScanData(row.ocrData)?.suggestions ?? {} : {},
     })),
     jobOrders,
     suppliers: supplierSuggestions,

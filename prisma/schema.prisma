@@ -1360,6 +1360,10 @@ model ScannedDeliveryNote {
   sizeBytes         Int?
   status            ScannedDeliveryNoteStatus @default(NEW)
   errorMessage      String?
+  ocrStatus         String                    @default("PENDING")
+  ocrData           Json?
+  ocrAttemptedAt    DateTime?
+  ocrError          String?
   deliveryNoteId    String?                   @unique
   receivedAt        DateTime                  @default(now())
   importedAt        DateTime                  @default(now())
@@ -1373,6 +1377,7 @@ model ScannedDeliveryNote {
   @@index([status, receivedAt])
   @@index([fromEmail, fileHash])
   @@index([fromEmail])
+  @@index([status, ocrStatus, receivedAt])
 }
 
 model DeliveryNoteDocument {

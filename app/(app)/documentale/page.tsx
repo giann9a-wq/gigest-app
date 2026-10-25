@@ -45,6 +45,8 @@ type ScannedDeliveryNoteRow = {
   statusLabel: string;
   receivedAt: string;
   importedAt: string;
+  ocrStatus: string;
+  suggestions: ScanSuggestions;
 };
 
 type ResourceAttachmentItem = {
@@ -174,32 +176,55 @@ export default function DocumentalePage() {
   const [scanSuggestions, setScanSuggestions] = useState<ScanSuggestions>({});
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsWarning, setSuggestionsWarning] = useState("");
-  const [scanRecognizedText, setScanRecognizedText] = useState("");
   const [scanReviewed, setScanReviewed] = useState(false);
   const scanEdited = useRef(new Set<ScanField>());
 
   useEffect(() => {
-    if (!selectedScan) return;
+    if (!scanRows.some(row => row.ocrStatus === "PENDING" || row.ocrStatus === "PROCESSING")) return;
     const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void safeJsonFetch("/api/documentale/scansioni", { signal: controller.signal })
+        .then(data => { if (!controller.signal.aborted) setScanRows(data.rows ?? []); })
+        .catch(() => {});
+    }, 2500);
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [scanRows]);
+
+  useEffect(() => {
+    if (!selectedScan || selectedScan.ocrStatus === "READY") return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const started = Date.now();
     setSuggestionsLoading(true);
-    void safeJsonFetch(`/api/documentale/scansioni/${selectedScan.id}/suggerimenti`, { signal: controller.signal })
-      .then((data: { suggestions: ScanSuggestions; warning?: string; recognizedText?: string }) => {
+    const poll = async () => {
+      try {
+        const data = await safeJsonFetch(`/api/documentale/scansioni/${selectedScan.id}/suggerimenti`, { signal: controller.signal }) as { suggestions: ScanSuggestions; ocrStatus: string };
         if (controller.signal.aborted) return;
-        setScanSuggestions(data.suggestions);
-        setSuggestionsWarning(data.warning ?? "");
-        setScanRecognizedText(data.recognizedText ?? "");
-        setScanReviewed(false);
-        setScanForm(current => {
-          const next = { ...current };
-          for (const key of Object.keys(data.suggestions) as ScanField[]) {
-            if (!scanEdited.current.has(key)) next[key] = data.suggestions[key]!.value;
-          }
-          return next;
-        });
-      })
-      .catch(() => { if (!controller.signal.aborted) setSuggestionsWarning("Suggerimenti non disponibili. Compila i campi manualmente."); })
-      .finally(() => { if (!controller.signal.aborted) setSuggestionsLoading(false); });
-    return () => controller.abort();
+        if (data.ocrStatus === "READY") {
+          setScanSuggestions(data.suggestions);
+          setScanReviewed(false);
+          setScanForm(current => {
+            const next = { ...current };
+            for (const key of Object.keys(data.suggestions) as ScanField[]) {
+              if (!scanEdited.current.has(key)) next[key] = data.suggestions[key]!.value;
+            }
+            return next;
+          });
+          setScanRows(current => current.map(row => row.id === selectedScan.id ? { ...row, ocrStatus: "READY", suggestions: data.suggestions } : row));
+          setSuggestionsLoading(false);
+        } else if (data.ocrStatus === "ERROR" || Date.now() - started > 90000) {
+          setSuggestionsWarning("Compilazione manuale");
+          setSuggestionsLoading(false);
+        } else timer = setTimeout(() => void poll(), 1500);
+      } catch {
+        if (!controller.signal.aborted) {
+          setSuggestionsWarning("Compilazione manuale");
+          setSuggestionsLoading(false);
+        }
+      }
+    };
+    void poll();
+    return () => { controller.abort(); clearTimeout(timer); };
   }, [selectedScan]);
 
   function editScanField(field: ScanField, value: string) {
@@ -213,7 +238,7 @@ export default function DocumentalePage() {
   function scanFieldHint(field: ScanField) {
     const suggestion = scanSuggestions[field];
     return suggestion && !scanEdited.current.has(field)
-      ? <small className="scan-suggestion-hint">Suggerito · affidabilità {suggestion.confidence}. {suggestion.reason}</small>
+      ? <small className="scan-suggestion-hint">Affidabilità {suggestion.confidence}</small>
       : null;
   }
   const [editingDeliveryNoteId, setEditingDeliveryNoteId] = useState("");
@@ -490,12 +515,13 @@ export default function DocumentalePage() {
 
   function openScan(scan: ScannedDeliveryNoteRow) {
     scanEdited.current = new Set();
-    setScanSuggestions({});
+    const suggestions = scan.ocrStatus === "READY" ? scan.suggestions : {};
+    setScanSuggestions(suggestions);
+    setSuggestionsLoading(scan.ocrStatus !== "READY");
     setSuggestionsWarning("");
-    setScanRecognizedText("");
     setScanReviewed(false);
     setSelectedScan(scan);
-    setScanForm({ jobOrderId: "", usageDate: "", supplier: "", description: "" });
+    setScanForm({ jobOrderId: suggestions.jobOrderId?.value ?? "", usageDate: suggestions.usageDate?.value ?? "", supplier: suggestions.supplier?.value ?? "", description: suggestions.description?.value ?? "" });
     setError("");
     setMessage("");
   }
@@ -1006,16 +1032,15 @@ export default function DocumentalePage() {
                 title={`Scansione ${selectedScan.fileName}`}
               />
               <aside className="documentale-scan-form">
-                <p role="status">{suggestionsLoading ? "Lettura del documento e confronto con lo storico in corso…" : "I campi azzurri sono suggerimenti modificabili. Controlla tutti i valori sul PDF prima di confermare."}</p>
+                {suggestionsLoading ? <small role="status">Preparazione…</small> : null}
                 {suggestionsWarning ? <p role="status">{suggestionsWarning}</p> : null}
-                {scanRecognizedText ? <details className="scan-recognized-text"><summary>Testo riconosciuto nel PDF</summary><pre>{scanRecognizedText}</pre></details> : null}
                 <datalist id="documentale-suppliers">
                   {suppliers.map((item) => (
                     <option key={item} value={item} />
                   ))}
                 </datalist>
                 <label>
-                  <span>Commessa</span>
+                  <span className="scan-field-heading">Commessa{scanFieldHint("jobOrderId")}</span>
                   <select className={scanFieldClass("jobOrderId")} value={scanForm.jobOrderId} onChange={(event) => editScanField("jobOrderId", event.target.value)}>
                     <option value="">Seleziona commessa</option>
                     {jobOrders.map((jobOrder) => (
@@ -1024,31 +1049,27 @@ export default function DocumentalePage() {
                       </option>
                     ))}
                   </select>
-                  {scanFieldHint("jobOrderId")}
                 </label>
                 <label>
-                  <span>Data</span>
+                  <span className="scan-field-heading">Data{scanFieldHint("usageDate")}</span>
                   <input className={scanFieldClass("usageDate")} type="date" value={scanForm.usageDate} onChange={(event) => editScanField("usageDate", event.target.value)} />
-                  {scanFieldHint("usageDate")}
                 </label>
                 <label>
-                  <span>Fornitore</span>
+                  <span className="scan-field-heading">Fornitore{scanFieldHint("supplier")}</span>
                   <input
                     list="documentale-suppliers"
                     className={scanFieldClass("supplier")}
                     value={scanForm.supplier}
                     onChange={(event) => editScanField("supplier", event.target.value)}
                   />
-                  {scanFieldHint("supplier")}
                 </label>
                 <label>
-                  <span>Descrizione</span>
+                  <span className="scan-field-heading">Descrizione{scanFieldHint("description")}</span>
                   <textarea className={scanFieldClass("description")} value={scanForm.description} onChange={(event) => editScanField("description", event.target.value)} />
-                  {scanFieldHint("description")}
                 </label>
                 <label className="scan-review-confirmation">
                   <input type="checkbox" checked={scanReviewed} disabled={suggestionsLoading || savingId === selectedScan.id} onChange={event => setScanReviewed(event.target.checked)} />
-                  <span>Ho verificato sul PDF data, fornitore, descrizione e commessa e confermo l’inserimento.</span>
+                  <span>Confermo i dati della bolla</span>
                 </label>
                 <button type="button" className="button" onClick={() => void insertScan()} disabled={!scanFormComplete || !scanReviewed || suggestionsLoading || savingId === selectedScan.id}>
                   {savingId === selectedScan.id ? "Inserimento..." : "Conferma e inserisci"}

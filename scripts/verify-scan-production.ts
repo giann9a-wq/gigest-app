@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client';
 import { encode } from 'next-auth/jwt';
-import { mkdir, writeFile } from 'node:fs/promises';
 const db = new PrismaClient();
 async function main() {
   const user = await db.user.findFirstOrThrow({ where: { role: 'ADMIN', status: 'ACTIVE' } });
@@ -9,27 +8,45 @@ async function main() {
   const headers = { Cookie:`${cookieName}=${token}` };
   const base = process.env.SCAN_TEST_URL || 'https://gigest.vercel.app';
   const countBefore = await db.deliveryNoteUsage.count();
-  for (const supplier of ['EDILMELZI SRL', 'UNICAL S.p.A.', 'CAL FER S R L', 'EDILMELZI GORGONZOLA srl']) {
-    const scan = await db.scannedDeliveryNote.findFirst({ where: { deliveryNote: { supplier } }, orderBy: { insertedAt:'desc' }, include: { deliveryNote:true } });
-    if (!scan) continue;
-    const response = await fetch(`${base}/api/documentale/scansioni/${scan.id}/suggerimenti`, { headers });
-    const result = await response.json();
-    await mkdir('tmp/scan-ocr', { recursive:true });
-    if (result.recognizedText) await writeFile(`tmp/scan-ocr/${scan.id}.txt`, result.recognizedText);
-    delete result.recognizedText;
-    console.log(JSON.stringify({ supplier, status:response.status, expected:{ supplier, usageDate:scan.deliveryNote!.usageDate.toISOString().slice(0,10), description:scan.deliveryNote!.description, jobOrderId:scan.deliveryNote!.jobOrderId }, result }));
-    if (!response.ok || result.warning) throw new Error('Verifica OCR produzione fallita');
-    for (const field of ['supplier', 'usageDate', 'description', 'jobOrderId']) {
-      if (!result.suggestions?.[field]?.value) throw new Error(`Suggerimento ${field} mancante nel campione ${supplier}`);
+  const saved = await db.scannedDeliveryNote.findFirstOrThrow({where:{status:'INSERTED',deliveryNoteId:{not:null}},include:{deliveryNote:true}});
+  const originalNote=JSON.stringify(saved.deliveryNote);
+  const blocked=await fetch(`${base}/api/documentale/scansioni/${saved.id}/suggerimenti`,{headers});
+  if(blocked.status!==409)throw new Error('Le bolle salvate non devono ricevere suggerimenti');
+  if(JSON.stringify(await db.deliveryNoteUsage.findUnique({where:{id:saved.deliveryNoteId!}}))!==originalNote)throw new Error('Bolla salvata modificata');
+  const unauthenticated=await fetch(`${base}/api/documentale/scansioni/${saved.id}/suggerimenti`);
+  if(unauthenticated.status!==401)throw new Error('API accessibile senza autenticazione');
+
+  // Listing the inbox prepares NEW scans in the response background, without
+  // opening any document or inserting a delivery note.
+  const list=await fetch(`${base}/api/documentale/scansioni`,{headers});
+  if(!list.ok)throw new Error('Elenco scansioni non disponibile');
+  const inbox=await list.json();
+  for(const row of inbox.rows){
+    const deadline=Date.now()+100000;
+    let scan=await db.scannedDeliveryNote.findUniqueOrThrow({where:{id:row.id}});
+    while(scan.status==='NEW'&&scan.ocrStatus!=='READY'&&Date.now()<deadline){
+      await new Promise(resolve=>setTimeout(resolve,1500));
+      scan=await db.scannedDeliveryNote.findUniqueOrThrow({where:{id:row.id}});
     }
-    if (result.suggestions.usageDate.value !== scan.deliveryNote!.usageDate.toISOString().slice(0,10)) throw new Error('Data riconosciuta diversa dal campione verificato');
-    if (result.suggestions.jobOrderId.value !== scan.deliveryNote!.jobOrderId) throw new Error('Commessa riconosciuta diversa dal campione verificato');
-    const unauthenticated = await fetch(`${base}/api/documentale/scansioni/${scan.id}/suggerimenti`);
-    if (unauthenticated.status !== 401) throw new Error('Suggerimenti accessibili senza autenticazione');
-    const refused = await fetch(`${base}/api/documentale/scansioni/${scan.id}/inserisci`, { method:'POST', headers:{...headers, 'Content-Type':'application/json'}, body:JSON.stringify({}) });
-    if (refused.status !== 400) throw new Error('Conferma umana non obbligatoria');
+    if(scan.status!=='NEW')continue; // The user may independently save a document.
+    if(scan.ocrStatus!=='READY')throw new Error(`OCR non pronto: ${scan.ocrStatus}`);
+    const attempt=scan.ocrAttemptedAt?.toISOString();
+    const persisted=JSON.stringify(scan.ocrData);
+    const started=Date.now();
+    for(let i=0;i<2;i++){
+      const response=await fetch(`${base}/api/documentale/scansioni/${scan.id}/suggerimenti`,{headers});
+      const data=await response.json();
+      if(!response.ok||data.ocrStatus!=='READY')throw new Error('Suggerimenti persistenti non disponibili');
+    }
+    const after=await db.scannedDeliveryNote.findUniqueOrThrow({where:{id:scan.id}});
+    if(after.ocrAttemptedAt?.toISOString()!==attempt||JSON.stringify(after.ocrData)!==persisted)throw new Error('Apertura ha ricalcolato OCR');
+    const refreshed=await (await fetch(`${base}/api/documentale/scansioni`,{headers})).json();
+    if(!refreshed.rows.find((x:any)=>x.id===scan.id)?.suggestions)throw new Error('Suggerimenti assenti dall’elenco');
+    const refused=await fetch(`${base}/api/documentale/scansioni/${scan.id}/inserisci`,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:'{}'});
+    if(refused.status!==400)throw new Error('Conferma umana non obbligatoria');
+    console.log(JSON.stringify({scan:scan.id,ocrStatus:after.ocrStatus,cachedRequests:2,totalMs:Date.now()-started,attemptUnchanged:true}));
   }
-  if (countBefore !== await db.deliveryNoteUsage.count()) throw new Error('Numero bolle modificato durante verifica');
-  console.log('Verificato: OCR autenticato, conferma umana obbligatoria, nessuna bolla inserita.');
+  if(countBefore!==await db.deliveryNoteUsage.count())throw new Error('Numero bolle cambiato durante verifica');
+  console.log('Verificato: OCR preparato prima dell’apertura, risultati persistenti, archivio bloccato, nessun inserimento automatico.');
 }
 main().finally(() => db.$disconnect());

@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/scansioni-ocr",
+      "schedule": "15 4 * * *"
+    },
+    {
       "path": "/api/cron/diary-reminder-summer",
       "schedule": "0 7 * * *"
     },

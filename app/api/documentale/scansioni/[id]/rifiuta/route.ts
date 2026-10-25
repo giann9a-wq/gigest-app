@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ScannedDeliveryNoteStatus } from "@prisma/client";
+import { Prisma, ScannedDeliveryNoteStatus } from "@prisma/client";
 import { getActiveAppUser } from "@/lib/app-user";
 import { prisma } from "@/lib/prisma";
 
@@ -35,6 +35,9 @@ export async function POST(
     data: {
       status: ScannedDeliveryNoteStatus.REJECTED,
       errorMessage: "Rifiutata manualmente",
+      ocrStatus: "STOPPED",
+      ocrData: Prisma.DbNull,
+      ocrError: null,
     },
   });
 

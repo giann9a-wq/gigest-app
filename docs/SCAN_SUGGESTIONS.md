@@ -4,11 +4,11 @@ Analisi del 25 ottobre 2026: 217 bolle, 216 scansioni inserite e 19 rifiutate; n
 
 ## Flusso
 
-Aprendo una scansione, il client richiede `GET /api/documentale/scansioni/[id]/suggerimenti`. L'API richiede un utente attivo, legge lo storico e usa l'OCR italiano di Drive su una copia temporanea convertita in Google Docs. La copia viene eliminata dopo l'esportazione del testo. Il PDF originale non viene modificato. Non servono nuovi servizi, chiavi AI o migrazioni del database.
+La ricezione di una scansione da Gmail avvia la preparazione OCR tramite `after()` di Next.js. Il risultato (testo e suggerimenti) viene conservato nel record della scansione, con stato `PENDING`, `PROCESSING`, `READY`, `ERROR` o `STOPPED`. La migrazione `20261025090000_scan_ocr_preparation` aggiunge i campi necessari. L'OCR italiano di Drive lavora su una copia temporanea convertita in Google Docs, eliminata dopo l'esportazione del testo. Il PDF originale non viene modificato.
 
 L'OCR usa le credenziali Drive già configurate in produzione, inclusa `GOOGLE_DRIVE_REFRESH_TOKEN`. Le variabili sensibili esportate da Vercel possono essere solo segnaposto e non consentire prove OCR locali. Gli errori OCR lasciano disponibile la compilazione manuale e vengono segnalati nell'interfaccia.
 
-Il testo è conservato solo in memoria per 15 minuti, massimo 50 documenti per istanza. Le richieste simultanee sullo stesso documento condividono l'elaborazione. Lo storico viene riletto a ogni richiesta, così gli inserimenti e le correzioni umane influenzano le proposte successive. L'analisi considera le ultime 5.000 bolle e i fornitori del registro costi.
+L'elenco delle nuove scansioni restituisce i suggerimenti già pronti: il popup li applica immediatamente senza una nuova richiesta OCR. Per una scansione ancora in elaborazione il client consulta lo stato ogni 1,5 secondi, senza sovrascrivere modifiche manuali. La preparazione dispone di un lease nel database, condiviso tra istanze: evita doppie elaborazioni e recupera tentativi interrotti dopo cinque minuti. Ogni sincronizzazione Gmail e l'apertura dell'elenco recuperano anche l'eventuale arretrato, in lotti di sei con due worker. Il cron `/api/cron/scansioni-ocr` costituisce un ulteriore recupero giornaliero, compatibile con il piano Vercel Hobby; l'avvio immediato delle nuove scansioni è legato all'importazione e non dipende dal cron. Lo storico viene letto una sola volta per la preparazione di ciascuna nuova scansione: gli inserimenti umani influenzano le scansioni successive.
 
 ## Regole
 
@@ -19,14 +19,16 @@ Il testo è conservato solo in memoria per 15 minuti, massimo 50 documenti per i
 
 ## Conferma umana
 
-I campi suggeriti sono azzurri e mostrano motivo e affidabilità. Tutti sono modificabili. Il testo riconosciuto è consultabile in un pannello espandibile accanto al PDF e viene restituito solo dall'API autenticata. Una modifica elimina l'evidenziazione e annulla la conferma precedente. L'arrivo dei suggerimenti non sovrascrive i campi già modificati; chiudendo o cambiando scansione, la risposta precedente viene ignorata.
+I campi suggeriti sono azzurri e mostrano solo il grado di affidabilità accanto all'etichetta. Il popup non mostra spiegazioni estese o il testo OCR. Tutti i campi sono modificabili. Una modifica elimina l'evidenziazione e annulla la conferma precedente. L'arrivo dei suggerimenti non sovrascrive i campi già modificati; chiudendo o cambiando scansione, la risposta precedente viene ignorata.
 
 L'utente deve spuntare la verifica dei quattro campi e premere **Conferma e inserisci**. Il server rifiuta richieste prive di `humanConfirmed: true`. Nessuna richiesta di suggerimenti crea bolle o modifica i loro stati. L'inserimento confermato mantiene il consueto stato `PENDING` / **Da validare**.
 
+Al salvataggio o rifiuto la preparazione passa a `STOPPED` e i suggerimenti temporanei vengono eliminati dal record della scansione. Il worker aggiorna i risultati solo se la scansione è ancora `NEW`: una risposta OCR tardiva non può modificare una bolla salvata. L'API suggerimenti restituisce HTTP 409 per le scansioni già inserite o rifiutate. La modifica di una bolla archiviata usa esclusivamente i valori salvati e non richiede suggerimenti.
+
 ## Verifiche
 
-`npm run test:scans` esegue 16 test su date, riferimenti normativi, omonimie, mittenti condivisi, commesse ambigue o concluse e descrizioni.
+`npm run test:scans` esegue 23 test su riconoscimento, persistenza, concorrenza, recupero errori e salvataggio durante l'OCR. I test di preparazione usano un database simulato e non scrivono bolle reali.
 
-`node --env-file=.env.production.local --import tsx scripts/verify-scan-production.ts` controlla l'OCR su quattro scansioni storiche in produzione, il rifiuto degli inserimenti senza conferma e l'assenza di nuove bolle durante il test. Richiede le credenziali applicative locali di produzione; il token di sessione di prova dura cinque minuti e non viene stampato o salvato.
+`node --env-file=.env.production.local --import tsx scripts/verify-scan-production.ts` controlla il blocco delle scansioni già salvate, la preparazione delle scansioni nuove prima dell'apertura, la stabilità dei risultati tra richieste successive e il rifiuto degli inserimenti senza conferma. Non inserisce bolle. Richiede le credenziali applicative locali di produzione; il token di sessione di prova dura cinque minuti e non viene stampato o salvato.
 
 Sui quattro testi OCR reali esaminati (due Edilmelzi, uno Unical e uno Cal Fer), le regole finali propongono tutti e quattro i campi. Date e commesse coincidono con gli inserimenti storici; le descrizioni riguardano i materiali, anziché annotazioni manuali di cantiere. Una scansione registrata come EDILMELZI SRL riporta nel documento **EDILMELZI Gorgonzola srl**: il suggerimento segue il PDF, senza correggere lo storico automaticamente. Quattro documenti non costituiscono una misura di accuratezza generale.
