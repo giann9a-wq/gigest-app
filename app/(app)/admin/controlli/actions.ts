@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Route } from "next";
 import { hasElevatedAdminPanelAccess, requireAdminUser } from "@/lib/admin-panel";
-import { linkExternalResourceToSupplier } from "@/lib/admin-supplier-links";
+import { linkExternalResourceToSupplier, rejectSupplierLinkSuggestion } from "@/lib/admin-supplier-links";
 import { updateAutoDiaryProposal, validateAutoDiaryProposals } from "@/lib/auto-diary-proposals";
 import { saveMonthlyResourceReportSettings } from "@/lib/monthly-automation-settings";
 import { prisma } from "@/lib/prisma";
@@ -42,6 +42,26 @@ export async function linkExternalSupplierAction(formData: FormData) {
   revalidatePath("/admin/controlli");
   revalidatePath("/diario");
   redirect(buildRedirect("Anagrafica collegata e storico aggiornato."));
+}
+
+export async function rejectExternalSupplierSuggestionAction(formData: FormData) {
+  const adminUser = await requireAdminUser();
+  if (!adminUser) redirect("/dashboard");
+  if (!await hasElevatedAdminPanelAccess(adminUser.id)) {
+    redirect(buildRedirect("Sblocca prima l'area admin con la password aggiuntiva.", "error"));
+  }
+  const rejectAll = formData.get("rejectAll") === "1";
+  try {
+    await rejectSupplierLinkSuggestion({
+      externalResourceId: String(formData.get("externalResourceId") ?? "").trim(),
+      supplierName: rejectAll ? undefined : String(formData.get("supplierName") ?? "").trim(),
+      rejectedByUserId: adminUser.id,
+    });
+  } catch (error) {
+    redirect(buildRedirect(error instanceof Error ? error.message : "Rifiuto del suggerimento non riuscito.", "error"));
+  }
+  revalidatePath("/admin/controlli");
+  redirect(buildRedirect(rejectAll ? "Suggerimenti rigettati: non verranno più proposti per questa voce." : "Suggerimento rigettato: non verrà più proposto."));
 }
 
 export async function saveMonthlyResourceReportRecipientsAction(formData: FormData) {

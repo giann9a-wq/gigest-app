@@ -1,4 +1,39 @@
 import { prisma } from "@/lib/prisma";
+import { createHash } from "crypto";
+
+const REJECTION_PREFIX = "supplierLinkRejection:v1:";
+
+function rejectionName(value: string) {
+  return normalizeSupplierName(value)
+    .replace(/\b(?:s r l|s p a|s n c|s a s)\b/g, " ")
+    .replace(/\s+/g, " ").trim();
+}
+
+function rejectionKey(resource: { id: string; name: string }, supplierName?: string) {
+  const scope = [resource.id, rejectionName(resource.name), supplierName === undefined ? null : rejectionName(supplierName)];
+  return REJECTION_PREFIX + createHash("sha256").update(JSON.stringify(scope)).digest("hex");
+}
+
+export async function rejectSupplierLinkSuggestion(
+  input: { externalResourceId: string; supplierName?: string; rejectedByUserId: string },
+  database = prisma
+) {
+  const resource = await database.externalResource.findUnique({
+    where: { id: input.externalResourceId }, select: { id: true, name: true },
+  });
+  if (!resource) throw new Error("Voce del diario non trovata.");
+  const supplierName = input.supplierName?.trim();
+  if (input.supplierName !== undefined && !supplierName) throw new Error("Fornitore non valido.");
+  const value = {
+    externalResourceId: resource.id, externalResourceName: resource.name,
+    supplierName: supplierName ?? null, rejectedByUserId: input.rejectedByUserId,
+    rejectedAt: new Date().toISOString(),
+  };
+  await database.appSetting.upsert({
+    where: { key: rejectionKey(resource, supplierName) },
+    create: { key: rejectionKey(resource, supplierName), value }, update: { value },
+  });
+}
 
 const LEGAL_SUFFIXES = new Set([
   "srl",
@@ -158,10 +193,10 @@ async function resolveSupplierDisplayName(input: string) {
   return actualEntry?.supplierName ?? stagingRow?.supplierName ?? correctionRule?.supplierName ?? clean;
 }
 
-export async function findSupplierLinkSuggestions(limit = 20): Promise<SupplierLinkSuggestion[]> {
-  const [externalResources, costActualSuppliers, costStagingSuppliers, costCorrectionSuppliers] =
+export async function findSupplierLinkSuggestions(limit = 20, database = prisma): Promise<SupplierLinkSuggestion[]> {
+  const [externalResources, costActualSuppliers, costStagingSuppliers, costCorrectionSuppliers, rejections] =
     await Promise.all([
-      prisma.externalResource.findMany({
+      database.externalResource.findMany({
         orderBy: { name: "asc" },
         select: {
           id: true,
@@ -173,19 +208,22 @@ export async function findSupplierLinkSuggestions(limit = 20): Promise<SupplierL
           },
         },
       }),
-      prisma.costActualEntry.findMany({
+      database.costActualEntry.findMany({
         where: { supplierName: { not: null } },
         select: { supplierName: true },
       }),
-      prisma.costImportRowStaging.findMany({
+      database.costImportRowStaging.findMany({
         where: { supplierName: { not: null } },
         select: { supplierName: true },
       }),
-      prisma.costImportCorrectionRule.findMany({
+      database.costImportCorrectionRule.findMany({
         where: { supplierName: { not: null } },
         select: { supplierName: true },
       }),
+      database.appSetting.findMany({ where: { key: { startsWith: REJECTION_PREFIX } }, select: { key: true } }),
     ]);
+
+  const rejectedKeys = new Set(rejections.map(item => item.key));
 
   const supplierStats = buildSupplierStats([
     ...costActualSuppliers.map((item) => item.supplierName),
@@ -195,9 +233,11 @@ export async function findSupplierLinkSuggestions(limit = 20): Promise<SupplierL
 
   return externalResources
     .filter((resource) => !looksLikeTechnicalId(resource.name))
+    .filter((resource) => !rejectedKeys.has(rejectionKey(resource)))
     .map((resource) => {
       const candidates = supplierStats
         .filter((supplier) => isSimilarSupplier(resource.name, supplier.supplierName))
+        .filter((supplier) => !rejectedKeys.has(rejectionKey(resource, supplier.supplierName)))
         .map((supplier) => ({
           supplierName: supplier.supplierName,
           sourceCount: supplier.sourceCount,

@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import {
   createNationalHolidayEntriesAction,
   linkExternalSupplierAction,
+  rejectExternalSupplierSuggestionAction,
   saveMonthlyResourceReportRecipientsAction,
   updateAutoDiaryProposalAction,
   validateAutoDiaryProposalsAction,
@@ -482,9 +483,17 @@ export default async function AdminControlliPage({
                                   <button type="submit" className="mobile-button-secondary">
                                     Collega e sostituisci
                                   </button>
+                                  <button type="submit" className="mobile-button-secondary" formAction={rejectExternalSupplierSuggestionAction}>
+                                    Rigetta
+                                  </button>
                                 </form>
                               ))}
                             </div>
+                            <form action={rejectExternalSupplierSuggestionAction} className="admin-supplier-reject-all">
+                              <input type="hidden" name="externalResourceId" value={suggestion.externalResourceId} />
+                              <input type="hidden" name="rejectAll" value="1" />
+                              <button type="submit" className="mobile-button-secondary">Rigetta tutti i suggerimenti per questa voce</button>
+                            </form>
                           </div>
                         </details>
                       ))}

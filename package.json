@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test:supplier-links": "tsx --test scripts/test-supplier-link-rejections.ts",
     "test:scans": "tsx --test scripts/test-scan-suggestions.ts scripts/test-scan-preparation.ts",
     "test:sales": "tsx scripts/test-property-sales.ts",
     "test:discounts": "tsx --test scripts/test-discount-calculator.ts",

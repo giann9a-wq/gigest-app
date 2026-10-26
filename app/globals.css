@@ -9071,7 +9071,7 @@ a {
 
 .admin-supplier-link-candidates form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 0.6rem;
   align-items: center;
   padding: 0.55rem;
@@ -9091,6 +9091,14 @@ a {
 .admin-supplier-link-candidates small {
   color: #7c6f68;
   font-weight: 700;
+}
+
+.admin-supplier-reject-all { margin-top: 0.75rem; }
+@media (max-width: 700px) {
+  .admin-supplier-link-candidates form { grid-template-columns: 1fr 1fr; }
+  .admin-supplier-link-candidates form > span { grid-column: 1 / -1; }
+  .admin-supplier-link-candidates button,
+  .admin-supplier-reject-all button { white-space: normal; }
 }
 
 .admin-db-grid {
