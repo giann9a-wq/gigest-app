@@ -176,7 +176,6 @@ export default function DocumentalePage() {
   const [scanSuggestions, setScanSuggestions] = useState<ScanSuggestions>({});
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsWarning, setSuggestionsWarning] = useState("");
-  const [scanReviewed, setScanReviewed] = useState(false);
   const scanEdited = useRef(new Set<ScanField>());
 
   useEffect(() => {
@@ -202,7 +201,6 @@ export default function DocumentalePage() {
         if (controller.signal.aborted) return;
         if (data.ocrStatus === "READY") {
           setScanSuggestions(data.suggestions);
-          setScanReviewed(false);
           setScanForm(current => {
             const next = { ...current };
             for (const key of Object.keys(data.suggestions) as ScanField[]) {
@@ -229,7 +227,6 @@ export default function DocumentalePage() {
 
   function editScanField(field: ScanField, value: string) {
     scanEdited.current.add(field);
-    setScanReviewed(false);
     setScanForm(current => ({ ...current, [field]: value }));
   }
   function scanFieldClass(field: ScanField) {
@@ -519,7 +516,6 @@ export default function DocumentalePage() {
     setScanSuggestions(suggestions);
     setSuggestionsLoading(scan.ocrStatus !== "READY");
     setSuggestionsWarning("");
-    setScanReviewed(false);
     setSelectedScan(scan);
     setScanForm({ jobOrderId: suggestions.jobOrderId?.value ?? "", usageDate: suggestions.usageDate?.value ?? "", supplier: suggestions.supplier?.value ?? "", description: suggestions.description?.value ?? "" });
     setError("");
@@ -527,8 +523,8 @@ export default function DocumentalePage() {
   }
 
   async function insertScan() {
-    if (!selectedScan || !scanFormComplete || !scanReviewed || suggestionsLoading) {
-      setError("Compila i campi obbligatori e conferma di averli verificati sul PDF");
+    if (!selectedScan || !scanFormComplete || suggestionsLoading) {
+      setError("Compila tutti i campi obbligatori");
       return;
     }
 
@@ -1067,11 +1063,7 @@ export default function DocumentalePage() {
                   <span className="scan-field-heading">Descrizione{scanFieldHint("description")}</span>
                   <textarea className={scanFieldClass("description")} value={scanForm.description} onChange={(event) => editScanField("description", event.target.value)} />
                 </label>
-                <label className="scan-review-confirmation">
-                  <input type="checkbox" checked={scanReviewed} disabled={suggestionsLoading || savingId === selectedScan.id} onChange={event => setScanReviewed(event.target.checked)} />
-                  <span>Confermo i dati della bolla</span>
-                </label>
-                <button type="button" className="button" onClick={() => void insertScan()} disabled={!scanFormComplete || !scanReviewed || suggestionsLoading || savingId === selectedScan.id}>
+                <button type="button" className="button" onClick={() => void insertScan()} disabled={!scanFormComplete || suggestionsLoading || savingId === selectedScan.id}>
                   {savingId === selectedScan.id ? "Inserimento..." : "Conferma e inserisci"}
                 </button>
               </aside>

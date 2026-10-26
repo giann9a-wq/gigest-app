@@ -11829,6 +11829,3 @@ a {
 .documentale-scan-form { min-height: 0; max-height: 100%; overflow-y: auto; }
 .documentale-scan-form .scan-field-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; }
 .scan-suggestion-hint { color: #075985; line-height: 1.4; font-weight: 500; text-transform: none; letter-spacing: normal; white-space: nowrap; }
-.documentale-scan-form .scan-review-confirmation { display: flex; align-items: flex-start; gap: 10px; }
-.documentale-scan-form .scan-review-confirmation input { width: auto; min-height: auto; margin-top: 4px; }
-.documentale-scan-form .scan-review-confirmation span { text-transform: none; letter-spacing: normal; font-weight: 500; }

@@ -19,9 +19,9 @@ L'elenco delle nuove scansioni restituisce i suggerimenti già pronti: il popup 
 
 ## Conferma umana
 
-I campi suggeriti sono azzurri e mostrano solo il grado di affidabilità accanto all'etichetta. Il popup non mostra spiegazioni estese o il testo OCR. Tutti i campi sono modificabili. Una modifica elimina l'evidenziazione e annulla la conferma precedente. L'arrivo dei suggerimenti non sovrascrive i campi già modificati; chiudendo o cambiando scansione, la risposta precedente viene ignorata.
+I campi suggeriti sono azzurri e mostrano solo il grado di affidabilità accanto all'etichetta. Il popup non mostra spiegazioni estese o il testo OCR. Tutti i campi sono modificabili. Una modifica elimina l'evidenziazione. L'arrivo dei suggerimenti non sovrascrive i campi già modificati; chiudendo o cambiando scansione, la risposta precedente viene ignorata.
 
-L'utente deve spuntare la verifica dei quattro campi e premere **Conferma e inserisci**. Il server rifiuta richieste prive di `humanConfirmed: true`. Nessuna richiesta di suggerimenti crea bolle o modifica i loro stati. L'inserimento confermato mantiene il consueto stato `PENDING` / **Da validare**.
+L'utente controlla i quattro campi e preme **Conferma e inserisci**: il clic costituisce la conferma umana, senza una casella aggiuntiva. Solo questa azione invia `humanConfirmed: true`; il server rifiuta richieste prive della conferma. Nessuna richiesta di suggerimenti crea bolle o modifica i loro stati. L'inserimento confermato mantiene il consueto stato `PENDING` / **Da validare**.
 
 Al salvataggio o rifiuto la preparazione passa a `STOPPED` e i suggerimenti temporanei vengono eliminati dal record della scansione. Il worker aggiorna i risultati solo se la scansione è ancora `NEW`: una risposta OCR tardiva non può modificare una bolla salvata. L'API suggerimenti restituisce HTTP 409 per le scansioni già inserite o rifiutate. La modifica di una bolla archiviata usa esclusivamente i valori salvati e non richiede suggerimenti.
 
