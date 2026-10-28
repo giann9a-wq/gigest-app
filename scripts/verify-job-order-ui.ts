@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { createRequire } from "node:module";
 
@@ -32,9 +32,15 @@ export async function verifyWorkspaceUI({ databaseUrl, actor, userId, jobOrderId
     const page = await context.newPage(); page.setDefaultTimeout(60000);
     const errors: string[] = []; page.on("pageerror", (e: Error) => errors.push(e.message));
     await page.goto("http://localhost:3107/commesse2");
-    await page.getByRole("heading", { name: "Overview commesse", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "Gestione Commesse", exact: true }).waitFor();
+    assert.equal(await page.locator(".jobs2-totals").count(), 0);
+    assert.equal(await page.locator("#commesse-filters").count(), 0);
+    await page.getByRole("button", { name: "Filtra per", exact: true }).click();
+    await page.getByPlaceholder("Nome commessa", { exact: true }).fill("Nuovo nome");
+    await page.getByRole("button", { name: /^Filtra per/ }).click();
     const card = page.locator(".jobs2-card").filter({ has: page.getByRole("heading", { name: "Nuovo nome", exact: true }) });
     await card.waitFor(); assert.equal(await card.locator(".jobs2-metrics strong").count(), 4);
+    const box = await card.boundingBox(); assert.ok(box.height < 200, "Card commessa compatta su desktop");
     await page.screenshot({ path: "tmp/commesse2-desktop.png", fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
@@ -42,6 +48,9 @@ export async function verifyWorkspaceUI({ databaseUrl, actor, userId, jobOrderId
     await page.setViewportSize({ width: 1440, height: 1000 });
     await card.getByRole("link", { name: "Apri scheda", exact: true }).click();
     await page.getByRole("heading", { name: "Dati Commessa", exact: true }).waitFor();
+    const nameInput = page.getByLabel("Commessa", { exact: true });
+    const font = await nameInput.evaluate((e: HTMLElement) => getComputedStyle(e).fontFamily);
+    assert.match(font, /Segoe UI/);
     await page.getByRole("tab", { name: "Budget", exact: true }).click();
     await page.getByLabel("Budget Materie prime", { exact: true }).fill("200100");
     await page.getByRole("button", { name: "Salva budget", exact: true }).click();
@@ -65,10 +74,42 @@ export async function verifyWorkspaceUI({ databaseUrl, actor, userId, jobOrderId
     assert.equal(await db.jobOrderRecord.count({ where: { jobOrderId, title: "Richiesta dal browser", status: "PENDING" } }), 1);
     console.log("UI: pratica cliente e personalizzazione salvate.");
     await page.getByRole("tab", { name: "Libretto immobile", exact: true }).click();
+    assert.equal(await page.getByRole("link", { name: "Repository foto", exact: true }).count(), 0);
     await page.getByRole("button", { name: "+ Scheda tecnica", exact: true }).click();
     await page.getByLabel("Titolo", { exact: true }).fill("Scheda verifica browser");
     await page.getByRole("button", { name: "Salva scheda", exact: true }).click();
     await page.getByText("Scheda salvata e storicizzata.", { exact: true }).waitFor();
+    // Exercise the actual elevated sales form: create a buyer once, reuse for a box.
+    assert.equal((await context.request.get(`http://localhost:3107/api/admin/vendite?jobOrderId=${jobOrderId}`)).status(), 403);
+    const adminToken = randomBytes(32).toString("hex");
+    await db.adminPanelSession.create({ data: { tokenHash: createHash("sha256").update(adminToken).digest("hex"), userId, expiresAt: new Date(Date.now() + 3600000) } });
+    await context.addCookies([{ name: "gigest-admin-panel", value: adminToken, domain: "localhost", path: "/", httpOnly: true, sameSite: "Lax" }]);
+    const unitA = await db.salesUnit.create({ data: { jobOrderId, code: "Appartamento UI", listPrice: 300000 } });
+    const unitB = await db.salesUnit.create({ data: { jobOrderId, code: "Box UI", listPrice: 30000 } });
+    await page.goto(`http://localhost:3107/admin/vendite?jobOrderId=${jobOrderId}`);
+    await page.getByLabel("Cliente della vendita", { exact: true }).waitFor();
+    await page.locator(".sales-form select").first().selectOption(unitA.id);
+    await page.getByLabel("Cliente della vendita", { exact: true }).selectOption("new");
+    await page.getByLabel("Nome nuovo cliente / intestatari", { exact: true }).fill("Cliente prova vendite");
+    await page.getByLabel("Referenti e contatti cliente", { exact: true }).fill("Referente prova vendite");
+    await page.getByRole("button", { name: "Salva vendita", exact: true }).click();
+    await page.getByText("Vendita, cliente e scadenze salvati. Il fascicolo cliente è disponibile nella scheda commessa.", { exact: true }).waitFor();
+    const firstSale = await db.propertySale.findUniqueOrThrow({ where: { unitId: unitA.id } });
+    assert.ok(firstSale.customerRecordId);
+    await page.locator(".sales-form select").first().selectOption(unitB.id);
+    await page.getByLabel("Cliente della vendita", { exact: true }).selectOption(firstSale.customerRecordId);
+    assert.equal(await page.getByLabel("Nome nuovo cliente / intestatari", { exact: true }).count(), 0);
+    await page.getByRole("button", { name: "Salva vendita", exact: true }).click();
+    await page.getByText("Vendita, cliente e scadenze salvati. Il fascicolo cliente è disponibile nella scheda commessa.", { exact: true }).waitFor();
+    const boxSale = await db.propertySale.findUniqueOrThrow({ where: { unitId: unitB.id } });
+    assert.equal(boxSale.customerRecordId, firstSale.customerRecordId);
+    assert.equal(await db.jobOrderRecord.count({ where: { jobOrderId, kind: "CLIENT", title: "Cliente prova vendite" } }), 1);
+    await page.screenshot({ path: "tmp/commesse-vendite-clienti-desktop.png", fullPage: true });
+    await page.locator(".sales-sale").filter({ hasText: "Box UI" }).getByRole("link", { name: "Apri fascicolo cliente →", exact: true }).click();
+    await page.locator(".dossier-content").getByRole("heading", { name: "Cliente prova vendite", exact: true }).waitFor();
+    const linkedUnits = page.getByText(/^Vendite collegate:/); await linkedUnits.waitFor(); assert.match(await linkedUnits.innerText(), /Appartamento UI/); assert.match(await linkedUnits.innerText(), /Box UI/);
+    console.log("UI: nuovo cliente dalla vendita, recupero cliente per box, apertura fascicolo corretto e protezione admin verificati.");
+    await page.getByRole("tab", { name: "Libretto immobile", exact: true }).click();
     if (!process.env.GOOGLE_DRIVE_REFRESH_TOKEN || process.env.GOOGLE_DRIVE_REFRESH_TOKEN.includes("SENSITIVE")) {
       await page.screenshot({ path: "tmp/commesse2-libretto-desktop.png", fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });

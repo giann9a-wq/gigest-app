@@ -30,12 +30,13 @@ export async function getDossier(jobOrderId: string) {
       units: { select: { unitId: true } },
       revisions: { orderBy: { createdAt: "desc" }, select: { id: true, snapshot: true, actor: true, createdAt: true } },
       documents: { select: { documentId: true } },
+      sales: { select: { id: true, unitId: true, unit: { select: { code: true } } } },
     } }),
     prisma.jobOrderDocument.findMany({ where: { jobOrderId }, orderBy: { createdAt: "desc" }, include: {
       links: { select: { recordId: true } },
       revisions: { orderBy: { revision: "desc" }, select: { id: true, revision: true, fileName: true, mimeType: true, sizeBytes: true, actor: true, note: true, createdAt: true } },
     } }),
-    prisma.salesUnit.findMany({ where: { jobOrderId }, select: { id: true, code: true, description: true, sale: { select: { customerName: true } } }, orderBy: { code: "asc" } }),
+    prisma.salesUnit.findMany({ where: { jobOrderId }, select: { id: true, code: true, description: true, sale: { select: { customerName: true, customerRecordId: true } } }, orderBy: { code: "asc" } }),
     prisma.jobOrder.findUnique({ where: { id: jobOrderId }, select: { clientDossierEnabled: true, technicalBookEnabled: true } }),
   ]);
   if (!job) throw new SalesError("Commessa non trovata");
@@ -57,11 +58,18 @@ export async function saveDossierRecord(jobOrderId: string, input: unknown, acto
       if (parent.status === "CLOSED") throw new SalesError("La pratica cliente è chiusa: riaprila per aggiornare richieste o scelte");
     }
     const unitIds = [...new Set(data.unitIds)];
+    if (old?.kind === "CLIENT") {
+      const sales = await tx.propertySale.findMany({ where: { customerRecordId: old.id }, select: { unitId: true } });
+      if (sales.some(sale => !unitIds.includes(sale.unitId))) throw new SalesError("Non puoi rimuovere un'unità collegata a una vendita: modifica prima il cliente nella vendita");
+    }
     if (await tx.salesUnit.count({ where: { id: { in: unitIds }, jobOrderId } }) !== unitIds.length) throw new SalesError("Unità non appartenente alla commessa");
     const { id: _id, updatedAt: _version, unitIds: _units, ...fields } = data;
     const record = old
       ? await tx.jobOrderRecord.update({ where: { id: old.id }, data: fields })
       : await tx.jobOrderRecord.create({ data: { ...fields, jobOrderId } });
+    if (old?.kind === "CLIENT" && old.title !== record.title) {
+      await tx.propertySale.updateMany({ where: { customerRecordId: old.id }, data: { customerName: record.title } });
+    }
     await tx.jobOrderRecordUnit.deleteMany({ where: { recordId: record.id } });
     if (unitIds.length) await tx.jobOrderRecordUnit.createMany({ data: unitIds.map(unitId => ({ unitId, recordId: record.id })) });
     const snapshot = JSON.parse(JSON.stringify({ ...fields, unitIds })) as Prisma.InputJsonValue;

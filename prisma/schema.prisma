@@ -605,6 +605,7 @@ model JobOrderRecord {
   units       JobOrderRecordUnit[]
   revisions   JobOrderRecordRevision[]
   documents   JobOrderDocumentLink[]
+  sales       PropertySale[]
   @@index([jobOrderId, kind])
   @@index([parentId])
 }
@@ -1001,6 +1002,7 @@ model PropertySale {
   id              String             @id @default(cuid())
   unitId          String             @unique
   customerName    String
+  customerRecordId String?
   agreedPrice     Decimal            @db.Decimal(12, 2)
   saleDate        DateTime           @db.Date
   createdByUserId String
@@ -1008,7 +1010,9 @@ model PropertySale {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   unit            SalesUnit          @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  customerRecord  JobOrderRecord?    @relation(fields: [customerRecordId], references: [id], onDelete: Restrict)
   installments    SalesInstallment[]
+  @@index([customerRecordId])
 }
 
 model SalesInstallment {

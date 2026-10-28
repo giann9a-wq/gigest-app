@@ -11904,3 +11904,73 @@ a {
 .documentale-scan-form { min-height: 0; max-height: 100%; overflow-y: auto; }
 .documentale-scan-form .scan-field-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; }
 .scan-suggestion-hint { color: #075985; line-height: 1.4; font-weight: 500; text-transform: none; letter-spacing: normal; white-space: nowrap; }
+
+/* Compact commesse workspace and consistent operational form controls. */
+.jobs2-page .job-premium-shell { gap: 14px; }
+.jobs2-page .job-order-tabs { display: flex; flex-wrap: wrap; align-items: center; margin: 0 0 8px; gap: 8px; }
+.job-sheet-shell .job-order-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.jobs2-page .job-order-tabs .job-order-tab, .job-sheet-shell .job-order-tabs .job-order-tab { flex: 0 1 auto; width: auto; min-height: 36px; padding: 8px 13px; font-size: 14px; font-weight: 600; }
+.jobs2-page .jobs2-heading { gap: 12px; }
+.jobs2-page .jobs2-heading h1 { font-size: 26px; margin: 0; }
+.jobs2-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
+.jobs2-page .jobs2-dashboard-picker { display: flex; flex-wrap: nowrap; gap: 8px; padding: 0; margin: 0; border-radius: 0; background: transparent; width: min(470px, 100%); align-items: center; }
+.jobs2-page .jobs2-dashboard-picker label { flex: 1; min-width: 0; }
+.jobs2-page .jobs2-dashboard-picker select { padding: 8px 10px; height: 38px; font-size: 14px; }
+.jobs2-page .jobs2-dashboard-picker button { flex-shrink: 0; }
+.jobs2-page button.button, .jobs2-page button.mobile-button-secondary, .jobs2-page .jobs2-actions a { width: auto; min-height: 36px; padding: 8px 12px; font-size: 13px; font-weight: 600; }
+.jobs2-page #commesse-filters { padding: 14px; background: var(--surface-strong); border: 1px solid var(--border-soft); border-radius: 10px; }
+.jobs2-page .jobs2-filters { margin: 0 0 12px; }
+.jobs2-page .jobs2-meta { margin: 0; font-size: 13px; }
+.jobs2-page .jobs2-list { gap: 10px; }
+.jobs2-page .jobs2-card { padding: 14px 16px 10px; border-radius: 12px; }
+.jobs2-card-main { display: grid; grid-template-columns: minmax(190px, 1.25fr) minmax(350px, 1.9fr) auto; gap: 16px; align-items: center; }
+.jobs2-page .jobs2-card-top h2 { font-size: 16px; font-weight: 650; margin: 0 0 5px; }
+.jobs2-page .jobs2-card-top small { font-size: 12px; margin: 0; }
+.jobs2-page .jobs2-metrics { margin: 0; padding: 0; gap: 12px; border: 0; }
+.jobs2-page .jobs2-metrics span { font-size: 12px; }
+.jobs2-page .jobs2-metrics strong { font-size: 16px; margin-top: 3px; }
+.jobs2-page .jobs2-actions { gap: 10px; justify-content: flex-end; }
+.jobs2-page .jobs2-actions a { padding: 0; min-height: auto; }
+.jobs2-page .jobs2-card details { margin-top: 10px; padding: 8px 0 0; }
+.jobs2-page .jobs2-card summary { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.jobs2-page .jobs2-alert { justify-content: flex-end; padding: 0; margin: 7px 0 0; background: transparent; font-size: 12px; color: #a31f13; }
+.jobs2-page .jobs2-alert button { min-height: auto; padding: 2px 0; background: transparent; border: 0; font-size: 12px; color: var(--brand-dark); box-shadow: none; }
+.job-sheet-shell { font-family: "Segoe UI", Arial, sans-serif; }
+.job-sheet-shell .job-sheet-topbar { align-items: center; flex-wrap: wrap; }
+.job-sheet-shell .job-dashboard-title { font-size: 26px; font-weight: 650; }
+.job-sheet-shell .job-sheet-topbar p { margin: 6px 0 0; font-size: 14px; }
+.job-sheet-shell .job-sheet-panel { gap: 16px; padding: 20px; border-radius: 12px; }
+.job-sheet-shell .job-sheet-panel h2, .job-sheet-shell .dossier-panel h2 { font-size: 19px; font-weight: 600; margin: 0 0 10px; }
+.job-sheet-shell .job-sheet-form-grid { gap: 16px 22px; }
+.job-sheet-shell .job-sheet-field > span { font-size: 14px; font-weight: 500; color: var(--text-muted); letter-spacing: normal; text-transform: none; }
+.job-sheet-shell input:not([type=checkbox]):not([type=radio]), .job-sheet-shell select, .job-sheet-shell textarea { width: 100%; min-width: 0; min-height: 40px; padding: 9px 12px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface-strong); color: var(--text-main); font-family: inherit; font-size: 14px; line-height: 1.45; box-shadow: none; }
+.job-sheet-shell textarea { min-height: 88px; resize: vertical; }
+.job-sheet-shell input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--brand); flex-shrink: 0; }
+.job-sheet-shell input:focus-visible, .job-sheet-shell select:focus-visible, .job-sheet-shell textarea:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.job-sheet-shell .sheet-budget-table input[type=number] { width: 190px; max-width: 100%; text-align: right; font-variant-numeric: tabular-nums; }
+.job-sheet-shell .job-premium-summary-table th { font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: normal; }
+.job-sheet-shell .job-premium-summary-table td { font-size: 14px; padding: 10px 14px; }
+.sales-form textarea { width: 100%; min-height: 80px; resize: vertical; padding: 9px 12px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface-strong); color: var(--text-main); font: inherit; }
+.job-sheet-shell .job-sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.job-sheet-shell .button, .job-sheet-shell .mobile-button-secondary { justify-self: start; width: auto; min-height: 38px; padding: 9px 14px; font-size: 14px; font-weight: 600; }
+.job-sheet-shell .job-dashboard-actions { flex-wrap: wrap; margin-top: 14px; }
+.job-sheet-shell fieldset legend { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
+.job-sheet-shell .sheet-revenue-source { gap: 16px; margin-top: 18px; }
+.job-sheet-shell .sheet-revenue-source p, .job-sheet-shell .sheet-source-note { font-size: 13px; line-height: 1.5; }
+@media (max-width: 1100px) {
+  .jobs2-card-main { grid-template-columns: minmax(180px, 1fr) minmax(330px, 1.6fr); gap: 12px 16px; }
+  .jobs2-page .jobs2-actions { grid-column: 1 / -1; justify-content: flex-end; }
+}
+@media (max-width: 760px) {
+  .jobs2-card-main { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .jobs2-page .jobs2-actions { grid-column: auto; justify-content: flex-start; }
+  .jobs2-page .jobs2-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+  .jobs2-page .jobs2-alert { justify-content: flex-start; }
+  .jobs2-page .jobs2-dashboard-picker { width: min(470px, 100%); }
+  .jobs2-page .jobs2-dashboard-picker select { font-size: 16px; }
+  .jobs2-page .jobs2-heading h1 { font-size: 23px; }
+  .job-sheet-shell .job-sheet-panel { padding: 15px; }
+  .job-sheet-shell .job-sheet-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .job-sheet-shell .job-sheet-field-wide { grid-column: auto; }
+  .job-sheet-shell input:not([type=checkbox]):not([type=radio]), .job-sheet-shell select, .job-sheet-shell textarea { font-size: 16px; }
+}

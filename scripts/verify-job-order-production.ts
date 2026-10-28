@@ -27,6 +27,18 @@ async function main() {
       assert.equal(first.budget.revenue, data.budget.revenue);
     }
     console.log(`PASS produzione: overview autenticata (${overview.rows.length} commesse), coerenza dashboard e protezione accessi.`);
+    const rainaldo = await db.jobOrder.findFirst({ where: { name: { contains: "Rainaldo", mode: "insensitive" } }, select: {
+      id: true, salesUnits: { where: { sale: { isNot: null } }, select: { id: true, sale: { select: { customerRecordId: true } } } },
+    } });
+    if (rainaldo?.salesUnits.length) {
+      assert.ok(rainaldo.salesUnits.every(unit => unit.sale?.customerRecordId));
+      const ids = new Set(rainaldo.salesUnits.map(unit => unit.sale!.customerRecordId));
+      assert.equal(ids.size, 4, "San Rainaldo: quattro clienti per appartamenti e box");
+      const dossiers = await fetch(`${base}/api/commesse/${rainaldo.id}/fascicoli`, { headers }); assert.equal(dossiers.status, 200);
+      const data = await dossiers.json();
+      assert.equal(data.records.filter((r: { kind: string }) => r.kind === "CLIENT").length, 4);
+      console.log(`PASS produzione: San Rainaldo, ${rainaldo.salesUnits.length} unità vendute collegate a 4 pratiche cliente.`);
+    }
     const stored = await db.deliveryNoteDocument.findFirst({ where: { sizeBytes: { lte: 4 * 1024 * 1024 } }, select: { driveFileId: true, fileName: true, mimeType: true, sizeBytes: true } })
       ?? await db.trainingDocument.findFirst({ where: { sizeBytes: { lte: 4 * 1024 * 1024 } }, select: { driveFileId: true, fileName: true, mimeType: true, sizeBytes: true } });
     if (!stored) { console.log("Nessun documento Drive esistente adatto alla verifica download."); return; }

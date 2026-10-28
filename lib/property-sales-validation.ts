@@ -27,13 +27,18 @@ export const unitSchema = z.object({
 export const saleSchema = z.object({
   id: z.string().optional(), unitId: z.string().min(1),
   updatedAt: z.string().optional(),
-  customerName: z.string().trim().min(1, "Cliente obbligatorio").max(200),
+  customerRecordId: z.string().trim().min(1).nullable().optional(),
+  createCustomer: z.boolean().default(false),
+  customerName: z.string().trim().max(300).default(""),
+  customerContact: z.string().trim().max(2000).default(""),
   agreedPrice: money, saleDate: date,
   installments: z.array(z.object({
     id: z.string().optional(), description: z.string().trim().min(1, "Descrizione acconto obbligatoria").max(200),
     dueDate: date, amount: money,
   })).max(100).default([]),
 }).superRefine((sale, ctx) => {
+  if (!sale.customerRecordId && !sale.customerName) ctx.addIssue({ code: "custom", message: "Seleziona un cliente esistente o inserisci il nuovo cliente" });
+  if (sale.customerRecordId && sale.createCustomer) ctx.addIssue({ code: "custom", message: "Scegli se collegare un cliente esistente o crearne uno nuovo" });
   const sum = sale.installments.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
   if (sum.gt(sale.agreedPrice)) ctx.addIssue({ code: "custom", message: "La somma degli acconti supera il prezzo di vendita" });
   const ids = sale.installments.flatMap(row => row.id ? [row.id] : []);

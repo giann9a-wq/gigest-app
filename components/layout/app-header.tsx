@@ -41,8 +41,7 @@ export function AppHeader({ userLabel, showAdminLink, logoutAction, chatEnabled 
   const navItems: NavItem[] = [
     { href: "/dashboard" as Route, label: "Dashboard" },
     { href: "/diario" as Route, label: "Diario di cantiere" },
-    { href: "/dashboard-commessa" as Route, label: "Gestione Commesse" },
-    { href: "/commesse2" as Route, label: "Gestione Commesse2" },
+    { href: "/commesse" as Route, label: "Gestione Commesse" },
     { href: "/preventivi" as Route, label: "Preventivi" },
     { href: "/risorse" as Route, label: "Gestione Risorse" },
     { href: "/documentale" as Route, label: "Documentale" },

@@ -16,6 +16,7 @@ async function main() {
     await adminDb.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
     process.env.DATABASE_URL = testUrl.toString();
     execFileSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "deploy"], { env: process.env, stdio: "pipe" });
+    console.log("Migrazioni verificate; test vendite, acconti e collegamento clienti…");
     const sales = await import("../lib/property-sales");
     const { prisma } = await import("../lib/prisma"); db = prisma;
     const { getScheduleEvents } = await import("../lib/schedule-events");
@@ -35,6 +36,9 @@ async function main() {
     const payload = { unitId: a.id, customerName: "Cliente Test", agreedPrice: 280000, saleDate: "2026-10-13",
       installments: Array.from({ length: 4 }, (_, i) => ({ description: `Acconto ${i + 1}`, amount: 50000, dueDate: `2026-${String(9 + i).padStart(2, "0")}-13` })) };
     const sale = await sales.saveSale(payload, user.id);
+    assert.ok(sale.customerRecordId);
+    assert.equal((await db.jobOrder.findUniqueOrThrow({ where: { id: job.id } })).clientDossierEnabled, true);
+    assert.equal((await db.jobOrderRecord.findUniqueOrThrow({ where: { id: sale.customerRecordId! } })).title, "Cliente Test");
     await assert.rejects(sales.setSalesPriceListEnabled(job.id, false), /contiene vendite/);
     await assert.rejects(sales.saveSale(payload, user.id), /già venduto/);
     await assert.rejects(sales.deleteUnit(job.id, a.id), /venduto/);
@@ -93,8 +97,41 @@ async function main() {
     await sales.deleteSale(noAdvances.id);
     const cancellable = await sales.saveSale({ unitId: b.id, customerName: "Da annullare", agreedPrice: 240000, saleDate: "2026-10-13", installments: [{ description: "Rata", amount: 50000, dueDate: "2027-01-01" }] }, user.id);
     await sales.deleteSale(cancellable.id); assert.equal(await db.deadline.count(), 4);
-    await sales.deleteUnit(job.id, b.id); assert.equal((await sales.getSalesView(job.id))!.units.length, 1);
-    console.log("PASS: listino, vendite, scadenze, date acconti approvati sincronizzate senza duplicati, stato attivo/spento preservato, approvazioni simultanee e ricavi.");
+    await assert.rejects(sales.deleteUnit(job.id, b.id), /fascicolo/);
+    // Recover the same customer for a second unit rather than asking for the name again.
+    const beforeCustomers = await db.jobOrderRecord.count({ where: { kind: "CLIENT" } });
+    let boxSale = await sales.saveSale({ unitId: b.id, customerRecordId: sale.customerRecordId, agreedPrice: 240000, saleDate: "2026-10-28" }, user.id);
+    assert.equal(boxSale.customerRecordId, sale.customerRecordId);
+    assert.equal(boxSale.customerName, "Cliente Test");
+    assert.equal(await db.jobOrderRecord.count({ where: { kind: "CLIENT" } }), beforeCustomers);
+    assert.equal(await db.jobOrderRecordUnit.count({ where: { recordId: sale.customerRecordId! } }), 2);
+    const { saveDossierRecord } = await import("../lib/job-order-dossiers");
+    const customer = await db.jobOrderRecord.findUniqueOrThrow({ where: { id: sale.customerRecordId! } });
+    await assert.rejects(saveDossierRecord(job.id, { ...customer, updatedAt: customer.updatedAt.toISOString(), dueDate: "", unitIds: [a.id] }, user.email), /vendita/);
+    const request = await saveDossierRecord(job.id, { kind: "REQUEST", parentId: customer.id, title: "Richiesta da conservare", status: "OPEN" }, user.email);
+    await saveDossierRecord(job.id, { ...customer, updatedAt: customer.updatedAt.toISOString(), title: "Cliente Test corretto", dueDate: "", unitIds: [a.id, b.id] }, user.email);
+    boxSale = await db.propertySale.findUniqueOrThrow({ where: { id: boxSale.id } });
+    assert.equal(boxSale.customerName, "Cliente Test corretto");
+    // Reassigning a sale creates a new dossier; documents and requests stay with the old buyer.
+    const changedBuyer = await sales.saveSale({ id: boxSale.id, updatedAt: boxSale.updatedAt.toISOString(), unitId: b.id,
+      createCustomer: true, customerName: "Nuovo acquirente", customerContact: "Contatto", agreedPrice: 240000, saleDate: "2026-10-28" }, user.id);
+    assert.notEqual(changedBuyer.customerRecordId, customer.id);
+    assert.equal((await db.jobOrderRecord.findUniqueOrThrow({ where: { id: changedBuyer.customerRecordId! } })).contact, "Contatto");
+    assert.equal((await db.jobOrderRecord.findUniqueOrThrow({ where: { id: request.id } })).parentId, customer.id);
+    const outside = await db.jobOrderRecord.create({ data: { jobOrderId: disabledJob.id, kind: "CLIENT", title: "Cliente altra commessa" } });
+    await assert.rejects(sales.saveSale({ id: changedBuyer.id, updatedAt: changedBuyer.updatedAt.toISOString(), unitId: b.id,
+      customerRecordId: outside.id, agreedPrice: 240000, saleDate: "2026-10-28" }, user.id), /non appartiene/);
+    await sales.deleteSale(changedBuyer.id);
+    assert.ok(await db.jobOrderRecord.findUnique({ where: { id: changedBuyer.customerRecordId! } }));
+    // Simulate old rows and reconstruct an apartment/box group, idempotently.
+    const c = await sales.saveUnit(job.id, { code: "Box Legacy", listPrice: 10000 });
+    await db.propertySale.create({ data: { unitId: b.id, customerName: "Legacy Buyer", agreedPrice: 200000, saleDate: new Date("2026-10-28"), createdByUserId: user.id, updatedByUserId: user.id } });
+    await db.propertySale.create({ data: { unitId: c.id, customerName: "Legacy Buyer", agreedPrice: 10000, saleDate: new Date("2026-10-28"), createdByUserId: user.id, updatedByUserId: user.id } });
+    assert.equal(await sales.linkExistingSaleCustomers(), 2); assert.equal(await sales.linkExistingSaleCustomers(), 0);
+    const legacy = await db.propertySale.findMany({ where: { customerName: "Legacy Buyer" } });
+    assert.equal(legacy[0].customerRecordId, legacy[1].customerRecordId);
+    assert.ok(legacy[0].customerRecordId);
+    console.log("PASS: vendite e acconti; cliente creato/recuperato alla vendita, più unità sulla stessa pratica, cambio acquirente senza perdita storico, vincoli e recupero idempotente vendite pregresse.");
   } finally {
     await db?.$disconnect();
     await adminDb.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);

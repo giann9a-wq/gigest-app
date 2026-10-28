@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
 import {
@@ -31,8 +31,11 @@ async function safeJsonFetch(url: string, options?: RequestInit) {
 
 export default function DashboardCommessaPage() {
   const searchParams = useSearchParams();
-  const from2 = searchParams.get("from") === "commesse2";
+  const router = useRouter();
+  const requestedReturn = searchParams.get("returnTo");
+  const back = requestedReturn === "/commesse" || requestedReturn?.startsWith("/commesse?") ? requestedReturn : "/commesse";
   const initialJobOrderId = searchParams.get("jobOrderId") ?? "";
+  useEffect(() => { if (!initialJobOrderId) router.replace("/commesse"); }, [initialJobOrderId, router]);
   const [jobOrders, setJobOrders] = useState<JobOrderOption[]>([]);
   const [selectedJobOrderId, setSelectedJobOrderId] = useState(initialJobOrderId);
   const [dashboard, setDashboard] = useState<JobOrderDashboardResponse | null>(null);
@@ -46,9 +49,9 @@ export default function DashboardCommessaPage() {
       setError("");
 
       try {
-        const data = await safeJsonFetch(from2 ? "/api/commesse" : "/api/commesse?dashboardOnly=true");
+        const data = await safeJsonFetch("/api/commesse");
         const rows = (Array.isArray(data.rows) ? data.rows : []) as JobOrderOption[];
-        setJobOrders(from2 ? rows.filter(row => row.type === "SITE" || row.type === "OTHER") : rows);
+        setJobOrders(rows.filter(row => row.type === "SITE" || row.type === "OTHER"));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Errore nel caricamento commesse");
       } finally {
@@ -57,7 +60,7 @@ export default function DashboardCommessaPage() {
     }
 
     loadOptions();
-  }, [from2]);
+  }, []);
 
   useEffect(() => {
     if (!selectedJobOrderId) {
@@ -82,11 +85,13 @@ export default function DashboardCommessaPage() {
     loadDashboard();
   }, [selectedJobOrderId]);
 
+  if (!initialJobOrderId) return null;
+
   return (
     <div className="job-dashboard-page job-premium-page">
       <section className="job-premium-shell">
         <JobOrderTabs current="dashboard" />
-        {from2 && <nav className="sheet-context-nav" aria-label="Navigazione commessa"><Link className="text-link" href={"/commesse2" as Route}>← Gestione Commesse2</Link>{selectedJobOrderId && <Link className="text-link" href={`/commesse/${selectedJobOrderId}?from=commesse2` as Route}>Apri scheda commessa →</Link>}</nav>}
+        <nav className="sheet-context-nav" aria-label="Navigazione commessa"><Link className="text-link" href={back as Route}>← Gestione Commesse</Link>{selectedJobOrderId && <Link className="text-link" href={`/commesse/${selectedJobOrderId}?from=commesse&returnTo=${encodeURIComponent(back)}` as Route}>Apri scheda commessa →</Link>}</nav>
 
         {error ? <div className="job-dashboard-error">{error}</div> : null}
 

@@ -1,13 +1,15 @@
-# Gestione Commesse2
+# Gestione Commesse
 
-La nuova sezione `/commesse2` affianca Gestione Commesse nel menu desktop e mobile. Usa gli stessi dati reali: è uno spazio di familiarizzazione con la nuova navigazione, non una copia del database.
+La sezione `/commesse` è l'unico ingresso Gestione Commesse nel menu desktop e mobile. Gli accessi precedenti `/commesse2` e `/commesse/overview` rimandano a questa vista; la dashboard senza una commessa selezionata torna all'elenco.
 
-- Overview immediata con ricavi, costi, margine e percentuale per commessa, totali sui filtri, alert e silenziamento.
+- Overview compatta con ricavi, costi, margine e percentuale per commessa, alert e silenziamento. Nessun totale aggregato tra periodi diversi.
 - Selettore rapido e pulsante Apri dashboard per ogni cantiere. La dashboard esistente mantiene i contenuti.
-- Filtri per nome, tipo, stato e date; categorie budget/actual e conteggi attività espandibili.
+- Filtri per nome, tipo, stato, date e ordinamento raccolti sotto Filtra per; categorie budget/actual e conteggi attività espandibili.
 - Una sola scheda `/commesse/[id]`, aggiornata anche per gli accessi dalla sezione originale: Dati Commessa, Budget, Listino.
 - Listino sempre raggiungibile, anche quando disattivato. Il budget conserva la fonte manuale sulle commesse esistenti; il passaggio al totale dei prezzi di listino è esplicito e reversibile senza perdere l'importo manuale.
 - Moduli facoltativi Clienti e Libretto immobile attivabili da Moduli commessa. Disattivare un modulo non cancella i dati.
+- In Vendite si sceglie un cliente già presente nella commessa oppure si inseriscono nome e contatti di un nuovo cliente. Salvare la vendita crea/collega la pratica e l'unità in un'unica transazione e abilita il modulo Clienti.
+- Appartamento e box possono condividere lo stesso cliente. Cambiare acquirente collega una pratica diversa; richieste, documenti e storico restano al cliente originario. Il nome della pratica è riutilizzato nelle vendite collegate.
 - Pratiche con più intestatari/referenti testuali e più unità; richieste, scelte capitolato, stati, ambiti, responsabili e data obiettivo. Le date non generano automaticamente nuove scadenze Calendar.
 - Libretto con schede tecniche per ambito/edificio/unità. Categoria e ambito sono compilabili; non impongono una tassonomia normativa.
 - Ogni salvataggio di scheda conserva una revisione con autore e data. Nessuna eliminazione delle schede; chiusura/superamento tramite stato.
@@ -16,7 +18,9 @@ La nuova sezione `/commesse2` affianca Gestione Commesse nel menu desktop e mobi
 
 ## Persistenza e compatibilità
 
-Migrazione additiva `20261028120000_job_order_dossiers`: tre impostazioni sulla commessa e tabelle fascicoli/documenti. Nessuna trasformazione o cancellazione dei dati preesistenti. Le unità commerciali vengono riutilizzate, le pratiche sopravvivono all'annullamento di una vendita, i documenti possono essere collegati senza duplicare i file.
+Migrazioni additive `20261028120000_job_order_dossiers` e `20261028150000_sale_customer_link`: impostazioni, tabelle fascicoli/documenti e collegamento esplicito della vendita alla pratica cliente. Le unità commerciali vengono riutilizzate, le pratiche sopravvivono all'annullamento di una vendita e i documenti non vengono duplicati.
+
+`scripts/link-existing-sale-customers.ts` recupera in modo idempotente le vendite precedenti, ricostruendo per commessa i gruppi appartamento/box registrati con lo stesso nominativo. Non unisce pratiche che risultano già esplicitamente distinte. Per San Rainaldo sono presenti 9 unità vendute in 4 gruppi cliente.
 
 I salvataggi di Dati, Budget e Moduli aggiornano soltanto i propri campi, con controllo di versione per rifiutare una modifica concorrente. La nuova overview carica le sintesi in blocco e riusa le regole economiche della dashboard; non scarica una dashboard completa per ogni riga.
 

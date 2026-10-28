@@ -61,7 +61,7 @@ async function main() {
     assert.equal(await db.jobOrderDocument.count(), 1); assert.equal(await db.jobOrderDocumentLink.count(), 2);
     await assert.rejects(db.salesUnit.delete({ where: { id: a.id } }));
     await sales.setSalesPriceListEnabled(job.id, true);
-    const sale = await sales.saveSale({ unitId: a.id, customerName: "Rossi", agreedPrice: 300000, saleDate: "2026-10-28" }, user.id);
+    const sale = await sales.saveSale({ unitId: a.id, customerRecordId: client.id, customerName: "Rossi e Bianchi", agreedPrice: 300000, saleDate: "2026-10-28" }, user.id);
     await sales.deleteSale(sale.id);
     assert.equal((await getDossier(job.id)).records.find(r => r.id === client.id)!.units.length, 2);
     const changed = await db.jobOrderRecord.findUniqueOrThrow({ where: { id: client.id } });

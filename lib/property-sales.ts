@@ -20,15 +20,18 @@ export async function getSalesView(jobOrderId: string) {
   const job = await prisma.jobOrder.findUnique({ where: { id: jobOrderId }, select: { salesPriceListEnabled: true } });
   if (!job) return null;
   const units = await prisma.salesUnit.findMany({ where: { jobOrderId }, orderBy: { code: "asc" },
-    include: { sale: { include: { installments: { orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }], include: { advance: { select: { isActive: true } } } } } } } });
+    include: { sale: { include: { customerRecord: { select: { title: true } }, installments: { orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }], include: { advance: { select: { isActive: true } } } } } } } });
+  const customers = await prisma.jobOrderRecord.findMany({ where: { jobOrderId, kind: "CLIENT" }, orderBy: { title: "asc" },
+    select: { id: true, title: true, contact: true, status: true, units: { select: { unit: { select: { code: true } } } } } });
   units.sort((a, b) => a.code.localeCompare(b.code, "it", { numeric: true }));
   const listTotal = units.reduce((sum, unit) => sum.plus(unit.listPrice), new Prisma.Decimal(0));
   const soldTotal = units.reduce((sum, unit) => sum.plus(unit.sale?.agreedPrice ?? 0), new Prisma.Decimal(0));
   const remainingListTotal = units.filter(unit => !unit.sale).reduce((sum, unit) => sum.plus(unit.listPrice), new Prisma.Decimal(0));
   return { enabled: job.salesPriceListEnabled, listTotal: Number(listTotal), soldTotal: Number(soldTotal),
+    customers: customers.map(row => ({ id: row.id, name: row.title, contact: row.contact, status: row.status, unitCodes: row.units.map(link => link.unit.code) })),
     remainingListTotal: Number(remainingListTotal),
     units: units.map(unit => ({ id: unit.id, code: unit.code, description: unit.description ?? "", listPrice: Number(unit.listPrice),
-      sale: unit.sale ? { id: unit.sale.id, customerName: unit.sale.customerName, agreedPrice: Number(unit.sale.agreedPrice),
+      sale: unit.sale ? { id: unit.sale.id, customerRecordId: unit.sale.customerRecordId, customerName: unit.sale.customerRecord?.title ?? unit.sale.customerName, agreedPrice: Number(unit.sale.agreedPrice),
         saleDate: unit.sale.saleDate.toISOString().slice(0, 10), updatedAt: unit.sale.updatedAt.toISOString(),
         installments: unit.sale.installments.map(row => ({ id: row.id, description: row.description,
           dueDate: row.dueDate.toISOString().slice(0, 10), amount: Number(row.amount), advanceId: row.advanceId,
@@ -36,6 +39,79 @@ export async function getSalesView(jobOrderId: string) {
     })) };
 }
 export type SalesView = NonNullable<Awaited<ReturnType<typeof getSalesView>>>;
+
+async function resolveSaleCustomer(tx: Prisma.TransactionClient, input: {
+  jobOrderId: string; unitId: string; name: string; contact: string; recordId?: string | null;
+  existingRecordId?: string | null; create: boolean; actor: string;
+}) {
+  let record = input.recordId ? await tx.jobOrderRecord.findFirst({ where: { id: input.recordId, jobOrderId: input.jobOrderId, kind: "CLIENT" } }) : null;
+  if (input.recordId && !record) fail("Il cliente selezionato non appartiene a questa commessa");
+  if (!record && !input.create && input.existingRecordId) {
+    const previous = await tx.jobOrderRecord.findFirst({ where: { id: input.existingRecordId, jobOrderId: input.jobOrderId, kind: "CLIENT" } });
+    if (previous?.title.trim().toLocaleLowerCase("it") === input.name.trim().toLocaleLowerCase("it")) record = previous;
+  }
+  if (!record && !input.create) {
+    // Recover a manually opened dossier only when both buyer name and unit match.
+    // A name alone cannot identify a person, especially when backfilling old sales.
+    const candidates = await tx.jobOrderRecord.findMany({ where: { jobOrderId: input.jobOrderId, kind: "CLIENT", status: "OPEN",
+      title: { equals: input.name, mode: "insensitive" }, units: { some: { unitId: input.unitId } } } });
+    if (candidates.length === 1) record = candidates[0];
+  }
+  if (record?.status === "CLOSED" && record.id !== input.existingRecordId) fail("La pratica cliente selezionata è chiusa: riaprila prima di collegare una vendita");
+  let changed = false;
+  if (!record) {
+    if (!input.name) fail("Inserisci il nome del nuovo cliente");
+    record = await tx.jobOrderRecord.create({ data: { jobOrderId: input.jobOrderId, kind: "CLIENT", title: input.name, contact: input.contact } });
+    changed = true;
+  }
+  const recordId = record.id;
+  const link = await tx.jobOrderRecordUnit.findUnique({ where: { recordId_unitId: { recordId, unitId: input.unitId } } });
+  if (!link) { await tx.jobOrderRecordUnit.create({ data: { recordId, unitId: input.unitId } }); changed = true; }
+  if (changed) {
+    record = await tx.jobOrderRecord.update({ where: { id: recordId }, data: { updatedAt: new Date() } });
+    const units = await tx.jobOrderRecordUnit.findMany({ where: { recordId }, select: { unitId: true } });
+    await tx.jobOrderRecordRevision.create({ data: { recordId, actor: input.actor, snapshot: {
+      kind: record.kind, parentId: record.parentId, title: record.title, description: record.description, contact: record.contact,
+      category: record.category, scope: record.scope, status: record.status, responsible: record.responsible,
+      dueDate: record.dueDate?.toISOString() ?? null, unitIds: units.map(u => u.unitId),
+    } } });
+  }
+  await tx.jobOrder.updateMany({ where: { id: input.jobOrderId, clientDossierEnabled: false }, data: { clientDossierEnabled: true } });
+  return record;
+}
+
+export async function linkExistingSaleCustomers() {
+  const sales = await prisma.propertySale.findMany({ select: { id: true, unitId: true, customerRecordId: true, customerName: true, unit: { select: { jobOrderId: true } } } });
+  const groups = new Map<string, typeof sales>();
+  for (const sale of sales) {
+    const key = `${sale.unit.jobOrderId}:${sale.customerName.trim().toLocaleLowerCase("it")}`;
+    const group = groups.get(key) ?? []; group.push(sale); groups.set(key, group);
+  }
+  let linked = 0;
+  for (const group of groups.values()) {
+    if (group.every(s => s.customerRecordId)) continue;
+    const preexisting = await prisma.jobOrderRecord.findMany({ where: { jobOrderId: group[0].unit.jobOrderId, kind: "CLIENT",
+      title: { equals: group[0].customerName, mode: "insensitive" }, units: { some: { unitId: { in: group.map(s => s.unitId) } } } }, select: { id: true } });
+    const knownIds = [...new Set([...group.flatMap(s => s.customerRecordId ? [s.customerRecordId] : []), ...preexisting.map(r => r.id)])];
+    // Reconstruct the old apartment/box group from its recorded buyer and job order.
+    // Never merge client records which are already explicitly distinct.
+    let groupRecordId = knownIds.length === 1 ? knownIds[0] : null;
+    for (const row of group.filter(s => !s.customerRecordId)) {
+      const result = await salesTransaction(async tx => {
+      const sale = await tx.propertySale.findUnique({ where: { id: row.id }, include: { unit: true } });
+      if (!sale || sale.customerRecordId) return { linked: 0, recordId: sale?.customerRecordId ?? null };
+      const customer = await resolveSaleCustomer(tx, { jobOrderId: sale.unit.jobOrderId, unitId: sale.unitId,
+        name: sale.customerName, contact: "", create: false, recordId: groupRecordId, existingRecordId: groupRecordId,
+        actor: "Collegamento vendite esistenti" });
+      await tx.propertySale.update({ where: { id: sale.id }, data: { customerRecordId: customer.id } });
+      return { linked: 1, recordId: customer.id };
+      });
+      linked += result.linked;
+      if (knownIds.length <= 1) groupRecordId = result.recordId;
+    }
+  }
+  return linked;
+}
 
 export async function setSalesPriceListEnabled(jobOrderId: string, enabled: boolean) {
   return salesTransaction(async tx => {
@@ -87,9 +163,14 @@ export async function saveSale(input: unknown, userId: string) {
       if (!row || !row.amount.equals(approved.amount) || row.description !== approved.description)
         fail("Per gli acconti approvati puoi modificare la data; importo, descrizione ed eliminazione restano bloccati");
     }
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
+    const customer = await resolveSaleCustomer(tx, { jobOrderId: unit.jobOrderId, unitId: unit.id, name: data.customerName,
+      contact: data.customerContact, recordId: data.customerRecordId, existingRecordId: existing?.customerRecordId,
+      create: data.createCustomer, actor: user?.email ?? userId });
+    const customerName = customer.title;
     const sale = existing
-      ? await tx.propertySale.update({ where: { id: existing.id }, data: { customerName: data.customerName, agreedPrice: data.agreedPrice, saleDate: data.saleDate, updatedByUserId: userId } })
-      : await tx.propertySale.create({ data: { unitId: unit.id, customerName: data.customerName, agreedPrice: data.agreedPrice, saleDate: data.saleDate, createdByUserId: userId, updatedByUserId: userId } });
+      ? await tx.propertySale.update({ where: { id: existing.id }, data: { customerName, customerRecordId: customer.id, agreedPrice: data.agreedPrice, saleDate: data.saleDate, updatedByUserId: userId } })
+      : await tx.propertySale.create({ data: { unitId: unit.id, customerName, customerRecordId: customer.id, agreedPrice: data.agreedPrice, saleDate: data.saleDate, createdByUserId: userId, updatedByUserId: userId } });
     for (const old of existing?.installments ?? []) {
       if (!data.installments.some(row => row.id === old.id)) {
         if (await tx.calendarEventMapping.count({ where: { deadlineId: old.deadlineId } })) fail("Scadenza sincronizzata: modifica data/importo invece di eliminare l'acconto");
@@ -107,7 +188,7 @@ export async function saveSale(input: unknown, userId: string) {
         }
         continue;
       }
-      const deadlineData = { title: `Acconto ${unit.code} · ${data.customerName}`, description: `${unit.jobOrder.name} · ${row.description} · € ${row.amount.toFixed(2)}`, eventDate: row.dueDate, updatedByUserId: userId, lastModifiedAt: new Date(), lastSource: "GIGEST" as const };
+      const deadlineData = { title: `Acconto ${unit.code} · ${customerName}`, description: `${unit.jobOrder.name} · ${row.description} · € ${row.amount.toFixed(2)}`, eventDate: row.dueDate, updatedByUserId: userId, lastModifiedAt: new Date(), lastSource: "GIGEST" as const };
       if (old) {
         await tx.salesInstallment.update({ where: { id: old.id }, data: { description: row.description, amount: row.amount, dueDate: row.dueDate } });
         await tx.deadline.update({ where: { id: old.deadlineId }, data: deadlineData });
