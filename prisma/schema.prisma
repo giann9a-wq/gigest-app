@@ -552,6 +552,9 @@ model JobOrder {
   actualRevenue                   Decimal?       @db.Decimal(12, 2)
   isOwnAccountSite                Boolean        @default(false)
   salesPriceListEnabled           Boolean        @default(false)
+  budgetRevenueSource             String         @default("MANUAL")
+  clientDossierEnabled            Boolean        @default(false)
+  technicalBookEnabled            Boolean        @default(false)
   negativeMarginAlertSnoozedUntil DateTime?
   createdAt                       DateTime       @default(now())
   updatedAt                       DateTime       @updatedAt
@@ -576,6 +579,86 @@ model JobOrder {
   whatsappUploadSessions     WhatsAppUploadSession[]
   photoAuditEvents           PhotoAuditEvent[]
   opportunities              Opportunity[]
+  dossierRecords             JobOrderRecord[]
+  dossierDocuments           JobOrderDocument[]
+}
+
+// Shared operational dossiers; revisions survive changes of purchaser and sale cancellation.
+model JobOrderRecord {
+  id          String   @id @default(cuid())
+  jobOrderId  String
+  kind        String
+  parentId    String?
+  title       String
+  description String   @default("")
+  contact     String   @default("")
+  category    String   @default("")
+  scope       String   @default("")
+  status      String   @default("OPEN")
+  responsible String   @default("")
+  dueDate     DateTime? @db.Date
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  jobOrder    JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Restrict)
+  parent      JobOrderRecord? @relation("DossierChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children    JobOrderRecord[] @relation("DossierChildren")
+  units       JobOrderRecordUnit[]
+  revisions   JobOrderRecordRevision[]
+  documents   JobOrderDocumentLink[]
+  @@index([jobOrderId, kind])
+  @@index([parentId])
+}
+
+model JobOrderRecordUnit {
+  recordId String
+  unitId   String
+  record   JobOrderRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+  unit     SalesUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  @@id([recordId, unitId])
+}
+
+model JobOrderRecordRevision {
+  id        String @id @default(cuid())
+  recordId  String
+  snapshot  Json
+  actor     String
+  createdAt DateTime @default(now())
+  record    JobOrderRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+  @@index([recordId, createdAt])
+}
+
+model JobOrderDocument {
+  id         String @id @default(cuid())
+  jobOrderId String
+  title      String
+  createdAt  DateTime @default(now())
+  jobOrder   JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Restrict)
+  revisions  JobOrderDocumentRevision[]
+  links      JobOrderDocumentLink[]
+  @@index([jobOrderId])
+}
+
+model JobOrderDocumentRevision {
+  id          String @id @default(cuid())
+  documentId  String
+  revision    Int
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  driveFileId String @unique
+  actor       String
+  note        String @default("")
+  createdAt   DateTime @default(now())
+  document    JobOrderDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  @@unique([documentId, revision])
+}
+
+model JobOrderDocumentLink {
+  documentId String
+  recordId   String
+  document   JobOrderDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  record     JobOrderRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+  @@id([documentId, recordId])
 }
 
 model PriceListVersion {
@@ -909,6 +992,7 @@ model SalesUnit {
   updatedAt   DateTime      @updatedAt
   jobOrder    JobOrder      @relation(fields: [jobOrderId], references: [id], onDelete: Restrict)
   sale        PropertySale?
+  dossierLinks JobOrderRecordUnit[]
 
   @@unique([jobOrderId, code])
 }

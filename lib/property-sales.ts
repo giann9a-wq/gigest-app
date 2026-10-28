@@ -42,7 +42,7 @@ export async function setSalesPriceListEnabled(jobOrderId: string, enabled: bool
     if (!await tx.jobOrder.findUnique({ where: { id: jobOrderId }, select: { id: true } })) fail("Commessa non trovata");
     if (!enabled && await tx.propertySale.count({ where: { unit: { jobOrderId } } }))
       fail("Il listino contiene vendite: non puoi disabilitarlo finché sono presenti");
-    await tx.jobOrder.update({ where: { id: jobOrderId }, data: { salesPriceListEnabled: enabled } });
+    await tx.jobOrder.update({ where: { id: jobOrderId }, data: { salesPriceListEnabled: enabled, ...(!enabled ? { budgetRevenueSource: "MANUAL" } : {}) } });
   });
 }
 
@@ -65,6 +65,7 @@ export async function deleteUnit(jobOrderId: string, id: string) {
     const unit = await tx.salesUnit.findUnique({ where: { id }, include: { sale: true } });
     if (!unit || unit.jobOrderId !== jobOrderId) fail("Appartamento non trovato");
     if (unit.sale) fail("Non puoi eliminare un appartamento venduto");
+    if (await tx.jobOrderRecordUnit.count({ where: { unitId: id } })) fail("L'unità è collegata a un fascicolo cliente o al libretto: non puoi eliminarla");
     await tx.salesUnit.delete({ where: { id } });
   });
 }

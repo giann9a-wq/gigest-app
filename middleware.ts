@@ -12,6 +12,7 @@ export const config = {
     "/risorse/:path*",
     "/mezzi/:path*",
     "/commesse/:path*",
+    "/commesse2/:path*",
     "/scadenziario/:path*",
     "/stampa-risorse-mese/:path*",
     "/statistiche-risorse-commesse/:path*",

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSalesView } from "@/lib/property-sales";
 import { getEffectiveResourceHourlyCost } from "@/lib/resource-economics";
+import { effectiveExpectedRevenue } from "@/lib/job-order-sheet";
 import { CostActualCategory, Prisma } from "@prisma/client";
 
 function toAmount(value: unknown) {
@@ -661,6 +662,8 @@ export async function getJobOrderDashboard(jobOrderId: string) {
   const costCategories = await getCostActualCategoryViews(jobOrder.id);
   const importedActualCosts = getCostActualTotalsByCategory(costCategories);
 
+  const listTotal = jobOrder.salesPriceListEnabled && jobOrder.budgetRevenueSource === "LIST"
+    ? await prisma.salesUnit.aggregate({ where: { jobOrderId }, _sum: { listPrice: true } }) : null;
   const budget = {
     personnel: toAmount(jobOrder.budgetPersonnelCost),
     equipment: toAmount(jobOrder.budgetEquipmentCost),
@@ -668,7 +671,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
     professionalServices: toAmount(jobOrder.budgetProfessionalServicesCost),
     thirdPartyServices: toAmount(jobOrder.budgetThirdPartyServicesCost),
     misc: toAmount(jobOrder.budgetMiscCost),
-    revenue: toAmount(jobOrder.budgetExpectedRevenue),
+    revenue: effectiveExpectedRevenue(jobOrder, listTotal?._sum.listPrice),
   };
 
   const actual = {
@@ -703,10 +706,11 @@ export async function getJobOrderDashboard(jobOrderId: string) {
   // A non-negative margin closes the current alert episode. If the margin
   // becomes negative again later, the previous 30-day snooze must not apply.
   if (actualGrossMargin >= 0 && negativeMarginAlertSnoozedUntil) {
-    await prisma.jobOrder.update({
+    const updated = await prisma.jobOrder.update({
       where: { id: jobOrder.id },
       data: { negativeMarginAlertSnoozedUntil: null },
     });
+    jobOrder.updatedAt = updated.updatedAt;
     negativeMarginAlertSnoozedUntil = null;
   }
 
@@ -717,6 +721,10 @@ export async function getJobOrderDashboard(jobOrderId: string) {
       type: jobOrder.type,
       isOwnAccountSite: jobOrder.isOwnAccountSite,
       salesPriceListEnabled: jobOrder.salesPriceListEnabled,
+      budgetRevenueSource: jobOrder.budgetRevenueSource,
+      manualExpectedRevenue: toAmount(jobOrder.budgetExpectedRevenue),
+      clientDossierEnabled: jobOrder.clientDossierEnabled,
+      technicalBookEnabled: jobOrder.technicalBookEnabled,
       negativeMarginAlertSnoozedUntil: negativeMarginAlertSnoozedUntil?.toISOString() ?? null,
       startDate: jobOrder.startDate?.toISOString().slice(0, 10) ?? "",
       endDate: jobOrder.endDate?.toISOString().slice(0, 10) ?? "",
@@ -781,7 +789,7 @@ export async function getJobOrderDashboard(jobOrderId: string) {
         professionalServices: "Import costi actual",
         thirdPartyServices: "Import costi actual",
         misc: "Import costi actual",
-        revenue: "Import fatture emesse",
+        revenue: "Fatture emesse e acconti attivi",
       },
       costCategories,
       revenueDetails: await getRevenueActualView(jobOrder.id),

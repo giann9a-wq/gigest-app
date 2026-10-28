@@ -4,6 +4,7 @@ import { getJobOrderDashboard } from "@/lib/job-order-dashboard";
 import { prisma } from "@/lib/prisma";
 import { salesTransaction, SalesError } from "@/lib/property-sales";
 import { salesApiError } from "@/lib/property-sales-api";
+import { saveJobOrderSection } from "@/lib/job-order-sheet";
 import { JobType, Prisma, ResourceStatus, UserStatus } from "@prisma/client";
 
 const allowedTypes: JobType[] = [
@@ -15,6 +16,16 @@ const allowedTypes: JobType[] = [
   "NATIONAL_HOLIDAY",
   "OTHER",
 ];
+
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const authResult = await getAuthorizedUser();
+  if (authResult.error) return authResult.error;
+  try {
+    const { id } = await context.params;
+    await saveJobOrderSection(id, await request.json());
+    return NextResponse.json(await getJobOrderDashboard(id));
+  } catch (error) { return salesApiError(error); }
+}
 const allowedStatuses: ResourceStatus[] = ["ACTIVE", "SUSPENDED", "ENDED", "COMPLETED"];
 
 function parseOptionalDate(value?: string | null) {

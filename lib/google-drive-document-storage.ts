@@ -244,6 +244,15 @@ export async function uploadDocumentBufferToDrive(input: {
   };
 }
 
+export async function ensureJobOrderDossierFolder(jobOrderId: string) {
+  const accessToken = await getGoogleDriveAccessToken();
+  const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ||
+    await ensureFolder(accessToken, sanitizeDriveName(process.env.GOOGLE_DRIVE_ROOT_FOLDER_NAME || "GiGEST Documentale"));
+  const dossierRoot = await ensureFolder(accessToken, "Fascicoli commesse", rootId);
+  // Stable ID keeps documents together when the job order is renamed.
+  return ensureFolder(accessToken, sanitizeDriveName(jobOrderId), dossierRoot);
+}
+
 export async function uploadDeliveryNoteDocumentToDrive(input: {
   fileName: string;
   mimeType: string;

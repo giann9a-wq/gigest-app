@@ -1,506 +1,105 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import type { Route } from "next";
-import { useParams, useRouter } from "next/navigation";
-import { formatCurrency, formatPercent } from "@/lib/number-format";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import type { JobOrderDashboardResponse } from "@/components/dashboard/job-dashboard-view";
 import { PriceListPanel } from "@/components/sales/price-list-panel";
+import { JobOrderDossierPanel } from "@/components/sales/job-order-dossier-panel";
+import { salesFetch } from "@/components/sales/sales-client";
+import { formatCurrency, formatPercent } from "@/lib/number-format";
 
-type JobTypeValue =
-  | "SITE"
-  | "TRAINING"
-  | "LEAVE"
-  | "SICKNESS"
-  | "RAIN"
-  | "NATIONAL_HOLIDAY"
-  | "OTHER";
-type ResourceStatusValue = "ACTIVE" | "SUSPENDED" | "ENDED" | "COMPLETED";
-
-type BudgetForm = {
-  personnel: string;
-  equipment: string;
-  materials: string;
-  professionalServices: string;
-  thirdPartyServices: string;
-  misc: string;
-  revenue: string;
-};
-
-type JobOrderDashboardResponse = {
-  jobOrder: {
-    id: string;
-    name: string;
-    type: JobTypeValue;
-    isOwnAccountSite: boolean;
-    salesPriceListEnabled: boolean;
-    negativeMarginAlertSnoozedUntil: string | null;
-    startDate: string;
-    endDate: string;
-    status: ResourceStatusValue;
-    description: string;
-    customerName: string;
-    customerContact: string;
-    siteAddress: string;
-    activityCount: number;
-    createdAt: string;
-    updatedAt: string;
-  };
-  budget: {
-    personnel: number;
-    equipment: number;
-    materials: number;
-    professionalServices: number;
-    thirdPartyServices: number;
-    misc: number;
-    revenue: number;
-    totalCosts: number;
-    grossMargin: number;
-    grossMarginPct: number;
-  };
-  actual: {
-    personnel: number;
-    equipment: number;
-    materials: number;
-    professionalServices: number;
-    thirdPartyServices: number;
-    misc: number;
-    revenue: number;
-    totalCosts: number;
-    grossMargin: number;
-    grossMarginPct: number;
-    importSources: {
-      materials: string;
-      professionalServices: string;
-      thirdPartyServices: string;
-      misc: string;
-      revenue: string;
-    };
-  };
-};
-
-type JobOrderForm = {
-  name: string;
-  type: JobTypeValue;
-  startDate: string;
-  endDate: string;
-  status: ResourceStatusValue;
-  description: string;
-  customerName: string;
-  customerContact: string;
-  siteAddress: string;
-  isOwnAccountSite: boolean;
-  salesPriceListEnabled: boolean;
-};
-
-const budgetFields: { key: keyof BudgetForm; label: string }[] = [
-  { key: "personnel", label: "Utilizzo Personale" },
-  { key: "equipment", label: "Utilizzo Mezzi e Attrezzature" },
-  { key: "materials", label: "Materie Prime" },
-  { key: "professionalServices", label: "Prestazioni Professionali" },
-  { key: "thirdPartyServices", label: "Prestazioni Terzi" },
-  { key: "misc", label: "Spese Varie" },
-  { key: "revenue", label: "Fatturato Previsto" },
-];
-
-async function safeJsonFetch(url: string, options?: RequestInit) {
-  const response = await fetch(url, options);
-  const contentType = response.headers.get("content-type") || "";
-  const rawText = await response.text();
-
-  if (!contentType.includes("application/json")) {
-    throw new Error(`Risposta non valida dal server: ${rawText.slice(0, 120)}`);
-  }
-
-  const data = JSON.parse(rawText);
-
-  if (!response.ok) {
-    throw new Error(data.error || "Errore server");
-  }
-
-  return data;
-}
-
-function jobTypeLabel(type: JobTypeValue) {
-  switch (type) {
-    case "SITE":
-      return "Cantiere";
-    case "TRAINING":
-      return "Formazione";
-    case "LEAVE":
-      return "Ferie";
-    case "SICKNESS":
-      return "Malattia";
-    case "RAIN":
-      return "Pioggia";
-    case "NATIONAL_HOLIDAY":
-      return "Festività Nazionale";
-    case "OTHER":
-      return "Altro";
-  }
-}
-
-function statusLabel(status: ResourceStatusValue) {
-  switch (status) {
-    case "ACTIVE":
-      return "Attivo";
-    case "SUSPENDED":
-      return "Sospeso";
-    case "ENDED":
-      return "Estinto";
-    case "COMPLETED":
-      return "Concluso";
-  }
-}
-
-function formatInputValue(value: number) {
-  return value ? value.toFixed(2) : "";
-}
-
-function parseAmount(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return 0;
-
-  const lastComma = trimmed.lastIndexOf(",");
-  const lastDot = trimmed.lastIndexOf(".");
-  let normalized = trimmed;
-
-  if (lastComma >= 0 && lastDot >= 0) {
-    normalized =
-      lastComma > lastDot
-        ? trimmed.replace(/\./g, "").replace(",", ".")
-        : trimmed.replace(/,/g, "");
-  } else if (lastComma >= 0) {
-    normalized = trimmed.replace(",", ".");
-  }
-
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatDateTime(value: string) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleString("it-IT", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
+type Tab = "data" | "budget" | "list" | "clients" | "technical";
+type Sheet = JobOrderDashboardResponse & { jobOrder: JobOrderDashboardResponse["jobOrder"] & {
+  salesPriceListEnabled: boolean; budgetRevenueSource: string; manualExpectedRevenue: number; clientDossierEnabled: boolean; technicalBookEnabled: boolean;
+} };
+type DataForm = { name: string; type: string; status: string; isOwnAccountSite: boolean; startDate: string; endDate: string; description: string; customerName: string; customerContact: string; siteAddress: string };
+type Budget = { personnel: string; equipment: string; materials: string; professionalServices: string; thirdPartyServices: string; misc: string; revenue: string };
+const types: Record<string, string> = { SITE: "Cantiere", OTHER: "Altro", TRAINING: "Formazione", LEAVE: "Ferie", SICKNESS: "Malattia", RAIN: "Pioggia", NATIONAL_HOLIDAY: "Festività nazionale" };
+const statuses: Record<string, string> = { ACTIVE: "Attiva", SUSPENDED: "Sospesa", COMPLETED: "Conclusa", ENDED: "Estinta" };
+const categories = [{ key: "personnel", label: "Utilizzo personale" }, { key: "equipment", label: "Mezzi e attrezzature" }, { key: "materials", label: "Materie prime" }, { key: "professionalServices", label: "Prestazioni professionali" }, { key: "thirdPartyServices", label: "Prestazioni terzi" }, { key: "misc", label: "Spese varie" }] as const;
+const tabs: { id: Tab; label: string }[] = [{ id: "data", label: "Dati Commessa" }, { id: "budget", label: "Budget" }, { id: "list", label: "Listino" }, { id: "clients", label: "Clienti" }, { id: "technical", label: "Libretto immobile" }];
+const inputAmount = (value: number) => value ? value.toFixed(2) : "";
+const dataFrom = (d: Sheet): DataForm => ({ name: d.jobOrder.name, type: d.jobOrder.type, status: d.jobOrder.status, isOwnAccountSite: d.jobOrder.isOwnAccountSite, startDate: d.jobOrder.startDate, endDate: d.jobOrder.endDate, description: d.jobOrder.description, customerName: d.jobOrder.customerName, customerContact: d.jobOrder.customerContact, siteAddress: d.jobOrder.siteAddress });
+const budgetFrom = (d: Sheet): Budget => ({ personnel: inputAmount(d.budget.personnel), equipment: inputAmount(d.budget.equipment), materials: inputAmount(d.budget.materials), professionalServices: inputAmount(d.budget.professionalServices), thirdPartyServices: inputAmount(d.budget.thirdPartyServices), misc: inputAmount(d.budget.misc), revenue: inputAmount(d.jobOrder.manualExpectedRevenue) });
 
 export default function SchedaCommessaPage() {
-  const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const [dashboard, setDashboard] = useState<JobOrderDashboardResponse | null>(null);
-  const [jobOrderForm, setJobOrderForm] = useState<JobOrderForm | null>(null);
-  const [budget, setBudget] = useState<BudgetForm>({
-    personnel: "",
-    equipment: "",
-    materials: "",
-    professionalServices: "",
-    thirdPartyServices: "",
-    misc: "",
-    revenue: "",
-  });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [tab, setTab] = useState<"sheet" | "list">("sheet");
-  const [savingListFlag, setSavingListFlag] = useState(false);
-
-  async function toggleListFlag(enabled: boolean) {
-    if (!jobOrderForm || !dashboard || savingListFlag) return;
-    const previous = dashboard.jobOrder.salesPriceListEnabled;
-    setJobOrderForm(current => current ? { ...current, salesPriceListEnabled: enabled } : current);
-    setSavingListFlag(true);
-    setError("");
-    setMessage("");
+  const { id } = useParams<{ id: string }>(); const router = useRouter(); const search = useSearchParams();
+  const requestedTab = search.get("tab"); const tab: Tab = tabs.some(t => t.id === requestedTab) ? requestedTab as Tab : "data";
+  const from2 = search.get("from") === "commesse2";
+  const requestedReturn = search.get("returnTo");
+  const back = from2 ? (requestedReturn === "/commesse2" || requestedReturn?.startsWith("/commesse2?") ? requestedReturn : "/commesse2") : "/commesse";
+  const [sheet, setSheet] = useState<Sheet | null>(null); const [form, setForm] = useState<DataForm | null>(null);
+  const [budget, setBudget] = useState<Budget | null>(null); const [source, setSource] = useState("MANUAL");
+  const [dirtyData, setDirtyData] = useState(false); const [dirtyBudget, setDirtyBudget] = useState(false); const [dirtyDossier, setDirtyDossier] = useState(false);
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [message, setMessage] = useState("");
+  const [showModules, setShowModules] = useState(false);
+  const dirty = dirtyData || dirtyBudget || dirtyDossier;
+  async function refresh() { const next = await salesFetch<Sheet>(`/api/commesse/${id}`); setSheet(next); return next; }
+  useEffect(() => { let active = true; salesFetch<Sheet>(`/api/commesse/${id}`).then(next => { if (!active) return; setSheet(next); setForm(dataFrom(next)); setBudget(budgetFrom(next)); setSource(next.jobOrder.budgetRevenueSource); }).catch(e => { if (active) setError(e.message); }); return () => { active = false; }; }, [id]);
+  useEffect(() => { const leave = (event: BeforeUnloadEvent) => { if (dirty) event.preventDefault(); }; window.addEventListener("beforeunload", leave); return () => window.removeEventListener("beforeunload", leave); }, [dirty]);
+  function mayLeave() { return !dirty || window.confirm("Ci sono modifiche non salvate. Vuoi abbandonarle?"); }
+  function navigate(url: string) { if (mayLeave()) router.push(url as Route); }
+  function changeTab(next: Tab) {
+    if (busy || next === tab) return;
+    if (dirtyDossier && !window.confirm("Ci sono modifiche al fascicolo non salvate. Vuoi abbandonarle?")) return;
+    setDirtyDossier(false); setMessage("");
+    const query = new URLSearchParams(search.toString()); query.set("tab", next);
+    router.replace(`/commesse/${id}?${query}` as Route, { scroll: false });
+  }
+  async function save(section: "DATA" | "BUDGET") {
+    if (!sheet || !form || !budget) return;
+    setBusy(true); setError(""); setMessage("");
     try {
-      await safeJsonFetch(`/api/commesse/${params.id}/listino`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }),
-      });
-      setDashboard(current => current ? { ...current, jobOrder: { ...current.jobOrder, salesPriceListEnabled: enabled } } : current);
-      if (!enabled) setTab("sheet");
-    } catch (error) {
-      setJobOrderForm(current => current ? { ...current, salesPriceListEnabled: previous } : current);
-      setError(error instanceof Error ? error.message : "Errore nel salvataggio del flag listino");
-    } finally { setSavingListFlag(false); }
+      const body = section === "DATA" ? { section, updatedAt: sheet.jobOrder.updatedAt, ...form } : { section, updatedAt: sheet.jobOrder.updatedAt, budget, budgetRevenueSource: source };
+      const next = await salesFetch<Sheet>(`/api/commesse/${id}`, { method: "PATCH", body: JSON.stringify(body) }); setSheet(next);
+      if (section === "DATA") { setForm(dataFrom(next)); setDirtyData(false); } else { setBudget(budgetFrom(next)); setSource(next.jobOrder.budgetRevenueSource); setDirtyBudget(false); }
+      setMessage(section === "DATA" ? "Dati commessa salvati." : "Budget salvato.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Salvataggio non riuscito"); } finally { setBusy(false); }
   }
-
-  async function loadData() {
-    setLoading(true);
-    setError("");
-
-    try {
-      const data = (await safeJsonFetch(`/api/commesse/${params.id}`)) as JobOrderDashboardResponse;
-      setDashboard(data);
-      setJobOrderForm({
-        name: data.jobOrder.name,
-        type: data.jobOrder.type,
-        startDate: data.jobOrder.startDate,
-        endDate: data.jobOrder.endDate,
-        status: data.jobOrder.status,
-        description: data.jobOrder.description,
-        customerName: data.jobOrder.customerName,
-        customerContact: data.jobOrder.customerContact,
-        siteAddress: data.jobOrder.siteAddress,
-        isOwnAccountSite: data.jobOrder.isOwnAccountSite,
-        salesPriceListEnabled: data.jobOrder.salesPriceListEnabled,
-      });
-      setBudget({
-        personnel: formatInputValue(data.budget.personnel),
-        equipment: formatInputValue(data.budget.equipment),
-        materials: formatInputValue(data.budget.materials),
-        professionalServices: formatInputValue(data.budget.professionalServices),
-        thirdPartyServices: formatInputValue(data.budget.thirdPartyServices),
-        misc: formatInputValue(data.budget.misc),
-        revenue: formatInputValue(data.budget.revenue),
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore nel caricamento scheda");
-    } finally {
-      setLoading(false);
-    }
+  async function modules(clientDossierEnabled: boolean, technicalBookEnabled: boolean) {
+    if (!sheet || dirtyDossier || busy) return;
+    setBusy(true); setError(""); setMessage("");
+    try { const next = await salesFetch<Sheet>(`/api/commesse/${id}`, { method: "PATCH", body: JSON.stringify({ section: "MODULES", updatedAt: sheet.jobOrder.updatedAt, clientDossierEnabled, technicalBookEnabled }) }); setSheet(next); setMessage("Moduli aggiornati. I dati già inseriti restano conservati."); }
+    catch (e) { setError(e instanceof Error ? e.message : "Aggiornamento non riuscito"); } finally { setBusy(false); }
   }
-
-  useEffect(() => {
-    loadData();
-  }, [params.id]);
-
-  async function handleSave() {
-    if (!jobOrderForm) return;
-
-    setSaving(true);
-    setMessage("");
-    setError("");
-
-    try {
-      const data = (await safeJsonFetch(`/api/commesse/${params.id}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: jobOrderForm.name,
-          type: jobOrderForm.type,
-          startDate: jobOrderForm.startDate,
-          status: jobOrderForm.status,
-          endDate: jobOrderForm.endDate,
-          description: jobOrderForm.description,
-          customerName: jobOrderForm.customerName,
-          customerContact: jobOrderForm.customerContact,
-          siteAddress: jobOrderForm.siteAddress,
-          isOwnAccountSite: jobOrderForm.isOwnAccountSite,
-          salesPriceListEnabled: jobOrderForm.salesPriceListEnabled,
-          budget,
-        }),
-      })) as JobOrderDashboardResponse & { success: boolean };
-
-      setDashboard(data);
-      setMessage("Scheda commessa salvata correttamente.");
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore nel salvataggio");
-    } finally {
-      setSaving(false);
-    }
+  async function listEnabled(enabled: boolean) {
+    if (!sheet || busy) return;
+    setBusy(true); setError(""); setMessage("");
+    try { await salesFetch(`/api/commesse/${id}/listino`, { method: "PATCH", body: JSON.stringify({ enabled }) }); const next = await refresh(); if (!enabled || !dirtyBudget) setSource(next.jobOrder.budgetRevenueSource); setMessage(enabled ? "Listino abilitato. Puoi scegliere nel Budget se usarlo per il fatturato previsto." : "Listino disabilitato. Ripristinata la previsione manuale conservata."); }
+    catch (e) { setError(e instanceof Error ? e.message : "Aggiornamento non riuscito"); } finally { setBusy(false); }
   }
-
-  if (loading && !dashboard) {
-    return <div className="card">Caricamento scheda commessa...</div>;
-  }
-
-  if (!dashboard || !jobOrderForm) {
-    return <div className="card">{error || "Commessa non trovata"}</div>;
-  }
-
-  const budgetPreview = {
-    personnel: parseAmount(budget.personnel),
-    equipment: parseAmount(budget.equipment),
-    materials: parseAmount(budget.materials),
-    professionalServices: parseAmount(budget.professionalServices),
-    thirdPartyServices: parseAmount(budget.thirdPartyServices),
-    misc: parseAmount(budget.misc),
-    revenue: parseAmount(budget.revenue),
-  };
-  const budgetTotalCosts =
-    budgetPreview.personnel +
-    budgetPreview.equipment +
-    budgetPreview.materials +
-    budgetPreview.professionalServices +
-    budgetPreview.thirdPartyServices +
-    budgetPreview.misc;
-  const budgetMargin = budgetPreview.revenue - budgetTotalCosts;
-  const budgetMarginPct = budgetPreview.revenue
-    ? ((budgetPreview.revenue - budgetTotalCosts) / budgetPreview.revenue) * 100
-    : 0;
-
-  return (
-    <div className="job-sheet-page">
-      <section className="card job-sheet-shell">
-        <div className="job-sheet-topbar">
-          <div>
-            <p className="job-dashboard-kicker">GiGEST</p>
-            <h1 className="job-dashboard-title">Scheda Commessa</h1>
-          </div>
-          <div className="job-sheet-actions">
-            <button className="mobile-button-secondary" type="button" onClick={() => router.push("/dashboard-commessa" as Route)}>
-              Vai a Dashboard Commessa
-            </button>
-            <button className="button" type="button" onClick={() => router.push("/commesse")}>
-              Chiudi
-            </button>
-          </div>
-        </div>
-
-        {message ? <div className="job-dashboard-success">{message}</div> : null}
-        {error ? <div className="job-dashboard-error">{error}</div> : null}
-
-        <div className="job-order-tabs" role="tablist" aria-label="Scheda commessa">
-          <button type="button" role="tab" aria-selected={tab === "sheet"} className={`job-order-tab ${tab === "sheet" ? "job-order-tab-active" : ""}`} onClick={() => setTab("sheet")}>Scheda</button>
-          {jobOrderForm.salesPriceListEnabled && <button type="button" role="tab" disabled={savingListFlag} aria-selected={tab === "list"} className={`job-order-tab ${tab === "list" ? "job-order-tab-active" : ""}`} onClick={() => setTab("list")}>Listino</button>}
-        </div>
-        {tab === "list" && dashboard.jobOrder.salesPriceListEnabled ? <PriceListPanel jobOrderId={params.id} /> : <>
-        <div className="job-sheet-grid">
-          <div className="job-sheet-panel">
-            <h2 className="job-sheet-panel-title">Dati Commessa</h2>
-            <label className="sales-enable"><input type="checkbox" disabled={saving || savingListFlag} checked={jobOrderForm.salesPriceListEnabled} onChange={e => toggleListFlag(e.target.checked)} />Abilita listino appartamenti, box e vendite</label>
-            {savingListFlag && <p role="status" className="muted">Salvataggio impostazione listino…</p>}
-            <div className="job-sheet-form-grid">
-              <label className="job-sheet-field job-sheet-field-wide">
-                <span>Commessa</span>
-                <input className="job-dashboard-head-input" value={jobOrderForm.name} onChange={(e) => setJobOrderForm((current) => current ? { ...current, name: e.target.value } : current)} />
-              </label>
-              <label className="job-sheet-field">
-                <span>Tipologia</span>
-                <select className="job-dashboard-head-input" value={jobOrderForm.type} onChange={(e) => setJobOrderForm((current) => current ? { ...current, type: e.target.value as JobTypeValue } : current)}>
-                  <option value="SITE">{jobTypeLabel("SITE")}</option>
-                  <option value="TRAINING">{jobTypeLabel("TRAINING")}</option>
-                  <option value="LEAVE">{jobTypeLabel("LEAVE")}</option>
-                  <option value="SICKNESS">{jobTypeLabel("SICKNESS")}</option>
-                  <option value="RAIN">{jobTypeLabel("RAIN")}</option>
-                  <option value="NATIONAL_HOLIDAY">{jobTypeLabel("NATIONAL_HOLIDAY")}</option>
-                  <option value="OTHER">{jobTypeLabel("OTHER")}</option>
-                </select>
-              </label>
-              <label className="job-sheet-field">
-                <span>Stato</span>
-                <select className="job-dashboard-head-input" value={jobOrderForm.status} onChange={(e) => setJobOrderForm((current) => current ? { ...current, status: e.target.value as ResourceStatusValue } : current)}>
-                  <option value="ACTIVE">{statusLabel("ACTIVE")}</option>
-                  <option value="SUSPENDED">{statusLabel("SUSPENDED")}</option>
-                  <option value="ENDED">{statusLabel("ENDED")}</option>
-                  <option value="COMPLETED">{statusLabel("COMPLETED")}</option>
-                </select>
-              </label>
-              <label className="job-sheet-field">
-                <span>Cantiere Conto proprio</span>
-                <select
-                  className="job-dashboard-head-input"
-                  value={jobOrderForm.isOwnAccountSite ? "yes" : "no"}
-                  onChange={(e) =>
-                    setJobOrderForm((current) =>
-                      current ? { ...current, isOwnAccountSite: e.target.value === "yes" } : current
-                    )
-                  }
-                >
-                  <option value="no">No</option>
-                  <option value="yes">Sì</option>
-                </select>
-              </label>
-              <label className="job-sheet-field">
-                <span>Data Inizio</span>
-                <input type="date" className="job-dashboard-head-input" value={jobOrderForm.startDate} onChange={(e) => setJobOrderForm((current) => current ? { ...current, startDate: e.target.value } : current)} />
-              </label>
-              <label className="job-sheet-field">
-                <span>Data Fine</span>
-                <input type="date" className="job-dashboard-head-input" value={jobOrderForm.endDate} onChange={(e) => setJobOrderForm((current) => current ? { ...current, endDate: e.target.value } : current)} />
-              </label>
-              <label className="job-sheet-field job-sheet-field-wide">
-                <span>Descrizione</span>
-                <textarea className="job-dashboard-head-input job-dashboard-head-textarea" value={jobOrderForm.description} onChange={(e) => setJobOrderForm((current) => current ? { ...current, description: e.target.value } : current)} />
-              </label>
-              <label className="job-sheet-field">
-                <span>Cliente</span>
-                <input className="job-dashboard-head-input" value={jobOrderForm.customerName} onChange={(e) => setJobOrderForm((current) => current ? { ...current, customerName: e.target.value } : current)} />
-              </label>
-              <label className="job-sheet-field">
-                <span>Contatto cliente</span>
-                <input className="job-dashboard-head-input" value={jobOrderForm.customerContact} onChange={(e) => setJobOrderForm((current) => current ? { ...current, customerContact: e.target.value } : current)} />
-              </label>
-              <label className="job-sheet-field job-sheet-field-wide">
-                <span>Indirizzo cantiere</span>
-                <input className="job-dashboard-head-input" value={jobOrderForm.siteAddress} onChange={(e) => setJobOrderForm((current) => current ? { ...current, siteAddress: e.target.value } : current)} />
-              </label>
-            </div>
-          </div>
-
-          <div className="job-sheet-panel">
-            <h2 className="job-sheet-panel-title">Budget Commessa</h2>
-            <div className="job-sheet-budget-list">
-              {budgetFields.map((field) => (
-                <label key={field.key} className="job-dashboard-line">
-                  <span>{field.label}</span>
-                  <input type="number" min="0" step="0.01" value={budget[field.key]} onChange={(e) => setBudget((current) => ({ ...current, [field.key]: e.target.value }))} className="job-dashboard-amount-input" />
-                </label>
-              ))}
-            </div>
-            <div className="job-dashboard-divider" />
-            <div className="job-dashboard-summary-list">
-              <div className="job-dashboard-summary-row">
-                <span>Totale Budget costi</span>
-                <strong>{formatCurrency(budgetTotalCosts)}</strong>
-              </div>
-              <div className="job-dashboard-summary-row">
-                <span>Primo Margine Previsto</span>
-                <div className="job-dashboard-summary-values">
-                  <strong>{formatCurrency(budgetMargin)}</strong>
-                  <span>{formatPercent(budgetMarginPct)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="job-sheet-grid">
-          <div className="job-sheet-panel">
-            <h2 className="job-sheet-panel-title">Situazione Actual</h2>
-            <div className="job-dashboard-summary-list">
-              <div className="job-dashboard-summary-row"><span>Utilizzo Personale</span><span className="job-dashboard-value">{formatCurrency(dashboard.actual.personnel)}</span></div>
-              <div className="job-dashboard-summary-row"><span>Utilizzo Mezzi e Attrezzature</span><span className="job-dashboard-value">{formatCurrency(dashboard.actual.equipment)}</span></div>
-              <div className="job-dashboard-summary-row"><span>Materie Prime</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.materials)}</span><small>{dashboard.actual.importSources.materials}</small></div></div>
-              <div className="job-dashboard-summary-row"><span>Prestazioni Professionali</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.professionalServices)}</span><small>{dashboard.actual.importSources.professionalServices}</small></div></div>
-              <div className="job-dashboard-summary-row"><span>Prestazioni Terzi</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.thirdPartyServices)}</span><small>{dashboard.actual.importSources.thirdPartyServices}</small></div></div>
-              <div className="job-dashboard-summary-row"><span>Spese Varie</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.misc)}</span><small>{dashboard.actual.importSources.misc}</small></div></div>
-              <div className="job-dashboard-summary-row"><span>Fatturato Actual</span><div className="job-dashboard-summary-values"><span className="job-dashboard-value">{formatCurrency(dashboard.actual.revenue)}</span><small>{dashboard.actual.importSources.revenue}</small></div></div>
-            </div>
-          </div>
-
-          <div className="job-sheet-panel">
-            <h2 className="job-sheet-panel-title">Riepilogo</h2>
-            <div className="job-dashboard-summary-list">
-              <div className="job-dashboard-summary-row"><span>Caricamenti collegati</span><span className="job-dashboard-value">{dashboard.jobOrder.activityCount}</span></div>
-              <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Totale costi actual</span><strong>{formatCurrency(dashboard.actual.totalCosts)}</strong></div>
-              <div className="job-dashboard-summary-row job-dashboard-total-row"><span>Primo margine actual</span><div className="job-dashboard-summary-values"><strong>{formatCurrency(dashboard.actual.grossMargin)}</strong><span>{formatPercent(dashboard.actual.grossMarginPct)}</span></div></div>
-              <div className="job-dashboard-summary-row"><span>Creata il</span><span className="job-dashboard-value">{formatDateTime(dashboard.jobOrder.createdAt)}</span></div>
-              <div className="job-dashboard-summary-row"><span>Ultimo aggiornamento</span><span className="job-dashboard-value">{formatDateTime(dashboard.jobOrder.updatedAt)}</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div className="job-dashboard-import-note">
-          Le voci actual alimentate da import resteranno compilabili dai futuri flussi di import; qui le vedi nel dettaglio della commessa, mentre l’analisi comparativa e il breakdown per risorsa sono nella sezione `Dashboard Commessa`.
-        </div>
-
-        <div className="job-dashboard-actions">
-          <button className="button" type="button" onClick={() => router.push("/commesse")}>
-            Torna a Commesse
-          </button>
-          <button className="button" type="button" onClick={handleSave} disabled={saving || savingListFlag}>
-            {saving ? "Salvataggio..." : "Salva Scheda"}
-          </button>
-        </div>
-        </>}
-      </section>
-    </div>
-  );
+  function dataField<K extends keyof DataForm>(key: K, value: DataForm[K]) { setForm(current => current ? { ...current, [key]: value } : current); setDirtyData(true); }
+  function budgetField(key: keyof Budget, value: string) { setBudget(current => current ? { ...current, [key]: value } : current); setDirtyBudget(true); }
+  if (!sheet || !form || !budget) return <div className="card">{error || "Caricamento scheda commessa…"}</div>;
+  const listTotal = sheet.sales?.listTotal ?? 0;
+  const revenue = source === "LIST" && sheet.jobOrder.salesPriceListEnabled ? listTotal : Number(budget.revenue || 0);
+  const costs = categories.reduce((sum, c) => sum + Number(budget[c.key] || 0), 0);
+  const margin = revenue - costs;
+  const visibleTabs = tabs.filter(t => t.id !== "clients" || sheet.jobOrder.clientDossierEnabled).filter(t => t.id !== "technical" || sheet.jobOrder.technicalBookEnabled);
+  const activeTab = visibleTabs.some(t => t.id === tab) ? tab : "data";
+  return <div className="job-sheet-page"><section className="card job-sheet-shell">
+    <div className="job-sheet-topbar"><div><p className="job-dashboard-kicker">Scheda commessa</p><h1 className="job-dashboard-title">{sheet.jobOrder.name}</h1><p>{types[sheet.jobOrder.type]} · {statuses[sheet.jobOrder.status]}</p></div><div className="job-sheet-actions"><button className="button" type="button" onClick={() => navigate(`/dashboard-commessa?jobOrderId=${id}${from2 ? "&from=commesse2" : ""}`)}>Apri dashboard →</button><button className="mobile-button-secondary" type="button" onClick={() => setShowModules(!showModules)}>Moduli commessa</button><button className="mobile-button-secondary" type="button" onClick={() => navigate(back)}>Chiudi</button></div></div>
+    {error && <div role="alert" className="job-dashboard-error">{error}<button className="mobile-button-secondary" onClick={() => { if (mayLeave()) window.location.reload(); }}>Ricarica scheda</button></div>}{message && <div role="status" className="job-dashboard-success">{message}</div>}
+    {showModules && <section className="job-sheet-panel sheet-modules"><h2>Moduli facoltativi</h2><label><input type="checkbox" checked={sheet.jobOrder.clientDossierEnabled} disabled={busy || dirtyDossier} onChange={e => modules(e.target.checked, sheet.jobOrder.technicalBookEnabled)} />Fascicoli clienti</label><label><input type="checkbox" checked={sheet.jobOrder.technicalBookEnabled} disabled={busy || dirtyDossier} onChange={e => modules(sheet.jobOrder.clientDossierEnabled, e.target.checked)} />Libretto immobile</label><small>Disattivare un modulo nasconde le schede senza cancellare lo storico. Riattivalo per consultarle.</small></section>}
+    <div className="job-order-tabs" role="tablist" aria-label="Scheda commessa">{visibleTabs.map(t => <button type="button" role="tab" id={`sheet-tab-${t.id}`} aria-controls={`sheet-panel-${t.id}`} aria-selected={activeTab === t.id} disabled={busy} key={t.id} className={`job-order-tab ${activeTab === t.id ? "job-order-tab-active" : ""}`} onClick={() => changeTab(t.id)}>{t.label}{t.id === "data" && dirtyData || t.id === "budget" && dirtyBudget ? " *" : ""}</button>)}</div>
+    {activeTab === "data" && <section id="sheet-panel-data" role="tabpanel" aria-labelledby="sheet-tab-data" className="job-sheet-panel"><h2>Dati Commessa</h2><form onSubmit={e => { e.preventDefault(); save("DATA"); }}><fieldset disabled={busy}><div className="job-sheet-form-grid">
+      <label className="job-sheet-field job-sheet-field-wide"><span>Commessa</span><input required maxLength={300} value={form.name} onChange={e => dataField("name", e.target.value)} /></label>
+      <label className="job-sheet-field"><span>Tipologia</span><select value={form.type} onChange={e => dataField("type", e.target.value)}>{Object.entries(types).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+      <label className="job-sheet-field"><span>Stato</span><select value={form.status} onChange={e => dataField("status", e.target.value)}>{Object.entries(statuses).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+      <label className="job-sheet-field"><span>Cantiere conto proprio</span><select value={form.isOwnAccountSite ? "yes" : "no"} onChange={e => dataField("isOwnAccountSite", e.target.value === "yes")}><option value="no">No</option><option value="yes">Sì</option></select></label>
+      <label className="job-sheet-field"><span>Data inizio</span><input type="date" value={form.startDate} onChange={e => dataField("startDate", e.target.value)} /></label>
+      <label className="job-sheet-field"><span>Data fine</span><input type="date" value={form.endDate} onChange={e => dataField("endDate", e.target.value)} /></label>
+      <label className="job-sheet-field job-sheet-field-wide"><span>Descrizione</span><textarea rows={3} maxLength={10000} value={form.description} onChange={e => dataField("description", e.target.value)} /></label>
+      <label className="job-sheet-field"><span>Cliente / committente</span><input maxLength={300} value={form.customerName} onChange={e => dataField("customerName", e.target.value)} /></label>
+      <label className="job-sheet-field"><span>Contatto committente</span><input maxLength={1000} value={form.customerContact} onChange={e => dataField("customerContact", e.target.value)} /></label>
+      <label className="job-sheet-field job-sheet-field-wide"><span>Indirizzo cantiere</span><input maxLength={1000} value={form.siteAddress} onChange={e => dataField("siteAddress", e.target.value)} /></label>
+    </div><div className="job-dashboard-actions"><button className="button">{busy ? "Salvataggio…" : "Salva dati commessa"}</button></div></fieldset></form></section>}
+    {activeTab === "budget" && <section id="sheet-panel-budget" role="tabpanel" aria-labelledby="sheet-tab-budget"><form onSubmit={e => { e.preventDefault(); save("BUDGET"); }}><fieldset disabled={busy}><div className="job-sheet-panel"><h2>Budget e Actual</h2><div className="job-premium-table-wrap"><table className="job-premium-summary-table sheet-budget-table"><thead><tr><th>Voce</th><th>Budget (€)</th><th>Actual (€)</th></tr></thead><tbody>{categories.map(c => <tr key={c.key}><td>{c.label}</td><td><input aria-label={`Budget ${c.label}`} type="number" min="0" max="9999999999.99" step="0.01" value={budget[c.key]} onChange={e => budgetField(c.key, e.target.value)} /></td><td>{formatCurrency(sheet.actual[c.key])}</td></tr>)}<tr><td>Fatturato previsto / ricavi actual</td><td>{source === "LIST" ? <strong>{sheet.sales?.units.length ? formatCurrency(revenue) : "Listino da compilare"}</strong> : <input aria-label="Fatturato previsto" type="number" min="0" max="9999999999.99" step="0.01" value={budget.revenue} onChange={e => budgetField("revenue", e.target.value)} />}</td><td>{formatCurrency(sheet.actual.revenue)}</td></tr></tbody></table></div>
+      <div className="sheet-revenue-source"><label>Fonte del fatturato previsto<select value={source} onChange={e => { setSource(e.target.value); setDirtyBudget(true); }}><option value="MANUAL">Importo manuale</option><option value="LIST" disabled={!sheet.jobOrder.salesPriceListEnabled}>Totale prezzi di listino</option></select></label><p>{source === "LIST" ? `Previsione aggiornata dai prezzi delle unità. Importo manuale conservato: ${formatCurrency(sheet.jobOrder.manualExpectedRevenue)}.` : "Compila il fatturato previsto. Se abiliti il listino puoi scegliere di utilizzarne il totale."}</p></div><p className="sheet-source-note">Actual: personale e mezzi dal Diario; altre categorie da import costi; ricavi da fatture emesse e acconti attivi.</p></div>
+      <div className="job-sheet-panel"><h2>Riepilogo</h2><div className="job-premium-table-wrap"><table className="job-premium-summary-table"><thead><tr><th>Indicatore</th><th>Budget</th><th>Actual</th></tr></thead><tbody><tr><th>Totale costi</th><td>{formatCurrency(costs)}</td><td>{formatCurrency(sheet.actual.totalCosts)}</td></tr><tr><th>Primo margine</th><td>{source === "LIST" && !sheet.sales?.units.length ? "Da completare" : formatCurrency(margin)}</td><td>{formatCurrency(sheet.actual.grossMargin)}</td></tr><tr><th>Margine %</th><td>{revenue ? formatPercent(margin / revenue * 100) : "—"}</td><td>{sheet.actual.revenue ? formatPercent(sheet.actual.grossMarginPct) : "—"}</td></tr></tbody></table></div><div className="sheet-summary-meta"><span>{sheet.jobOrder.activityCount} caricamenti collegati</span><span>Creata: {new Date(sheet.jobOrder.createdAt).toLocaleString("it-IT")}</span><span>Aggiornata: {new Date(sheet.jobOrder.updatedAt).toLocaleString("it-IT")}</span></div><button className="button" type="submit">{busy ? "Salvataggio…" : "Salva budget"}</button></div></fieldset></form></section>}
+    {activeTab === "list" && <section id="sheet-panel-list" role="tabpanel" aria-labelledby="sheet-tab-list"><div className="job-sheet-panel"><h2>Listino</h2><label className="sales-enable"><input type="checkbox" disabled={busy} checked={sheet.jobOrder.salesPriceListEnabled} onChange={e => listEnabled(e.target.checked)} />Abilita listino appartamenti, box e vendite</label>{!sheet.jobOrder.salesPriceListEnabled && <p>Listino inattivo. Abilitalo per inserire le unità; nel Budget il fatturato può essere compilato manualmente.</p>}</div>{sheet.jobOrder.salesPriceListEnabled && <PriceListPanel jobOrderId={id} clientDossierEnabled={sheet.jobOrder.clientDossierEnabled} onOpenClient={unitId => { const query = new URLSearchParams(search.toString()); query.set("tab", "clients"); query.set("unitId", unitId); router.replace(`/commesse/${id}?${query}` as Route, { scroll: false }); }} onChanged={async () => { await refresh(); }} />}</section>}
+    {activeTab === "clients" && <section id="sheet-panel-clients" role="tabpanel" aria-labelledby="sheet-tab-clients"><JobOrderDossierPanel key={`client-${id}`} jobOrderId={id} mode="client" unitId={search.get("unitId") ?? ""} onDirtyChange={setDirtyDossier} /></section>}
+    {activeTab === "technical" && <section id="sheet-panel-technical" role="tabpanel" aria-labelledby="sheet-tab-technical"><JobOrderDossierPanel key={`technical-${id}`} jobOrderId={id} mode="technical" onDirtyChange={setDirtyDossier} /></section>}
+    <div className="job-dashboard-actions"><button className="mobile-button-secondary" onClick={() => navigate(back)}>← Torna a Commesse{from2 ? "2" : ""}</button>{dirty && <span role="status">Modifiche non salvate</span>}</div>
+  </section></div>;
 }

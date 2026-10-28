@@ -15,6 +15,73 @@
   --shadow-soft: 0 18px 48px rgba(122, 64, 28, 0.09);
 }
 
+/* Commesse2 shares job-order data and the operational sheet with the original area. */
+.jobs2-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+.jobs2-heading h1, .jobs2-heading h2 { margin: 0 0 8px; }
+.jobs2-heading p { color: var(--text-muted); margin: 8px 0; }
+.jobs2-dashboard-picker { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px; background: var(--brand-soft); padding: 14px; border-radius: 14px; margin: 14px 0; }
+.jobs2-dashboard-picker label { flex: 1; min-width: min(260px, 100%); }
+.jobs2-dashboard-picker label, .jobs2-filters label, .jobs2-create label, .sheet-revenue-source label, .dossier-upload label { display: grid; gap: 7px; font-size: 14px; }
+.jobs2-dashboard-picker select, .jobs2-filters input, .jobs2-filters select, .jobs2-create input, .jobs2-create select, .sheet-revenue-source select, .dossier-panel input:not([type=checkbox]), .dossier-panel select, .dossier-panel textarea { width: 100%; min-width: 0; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface-strong); color: var(--text-main); padding: 10px 12px; font: inherit; }
+.jobs2-filters { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.jobs2-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.jobs2-totals article { padding: 16px; background: var(--surface-strong); border: 1px solid var(--border-soft); border-radius: 14px; }
+.jobs2-totals span, .jobs2-metrics span { display: block; color: var(--text-muted); font-size: 13px; }
+.jobs2-totals strong { display: block; font-size: clamp(18px, 2vw, 25px); margin-top: 8px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.jobs2-negative { color: #a31f13 !important; }
+.jobs2-meta { color: var(--text-muted); font-size: 14px; margin: 22px 0 12px; }
+.jobs2-list { display: grid; gap: 18px; }
+.jobs2-card { border: 1px solid var(--border-soft); border-radius: 18px; background: var(--surface-strong); padding: 22px; min-width: 0; }
+.jobs2-card-top { display: flex; gap: 18px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.jobs2-card-top h2 { font-size: 21px; margin: 0 0 6px; overflow-wrap: anywhere; }
+.jobs2-card-top small { display: block; color: var(--text-muted); margin: 3px 0; }
+.jobs2-actions { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.jobs2-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 22px; padding: 18px 0; border-top: 1px solid var(--border-soft); }
+.jobs2-metrics strong { display: block; font-size: clamp(17px, 1.7vw, 23px); margin-top: 6px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.jobs2-card details, .dossier-panel details { padding: 14px 0; border-top: 1px solid var(--border-soft); }
+.jobs2-card summary, .dossier-panel summary { cursor: pointer; font-weight: 600; }
+.jobs2-card details p { color: var(--text-muted); }
+.jobs2-completed { background: #fcfaf8; }
+.jobs2-alert { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px; background: #fff1e7; border-radius: 10px; margin-bottom: 14px; }
+.jobs2-create { margin: 20px 0; display: grid; gap: 16px; }
+.sheet-modules { display: grid; gap: 12px; margin: 14px 0; }
+.sheet-modules label { display: flex; align-items: center; gap: 10px; }
+.sheet-modules small, .sheet-source-note, .sheet-summary-meta { color: var(--text-muted); }
+.sheet-budget-table input { width: 160px; max-width: 100%; padding: 9px 12px; border: 1px solid var(--border-soft); border-radius: 8px; text-align: right; font: inherit; }
+.sheet-budget-table td:nth-child(n+2), .sheet-budget-table th:nth-child(n+2) { text-align: right; }
+.sheet-revenue-source { display: grid; grid-template-columns: minmax(240px, 1fr) 2fr; gap: 20px; align-items: center; margin-top: 22px; }
+.sheet-revenue-source p { color: var(--text-muted); }
+.sheet-summary-meta { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; margin: 18px 0; }
+.job-sheet-shell > [role=tabpanel] { margin-top: 18px; }
+.job-sheet-shell form > fieldset, .job-sheet-panel form > fieldset, .dossier-panel fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.dossier-layout { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: 22px; margin-top: 20px; }
+.dossier-index { display: flex; flex-direction: column; gap: 10px; }
+.dossier-index button, .dossier-children button { border: 1px solid var(--border-soft); background: var(--surface-strong); border-radius: 10px; text-align: left; padding: 14px; color: var(--text-main); cursor: pointer; overflow-wrap: anywhere; font: inherit; }
+.dossier-index button[aria-pressed=true] { background: var(--brand-soft); border-color: var(--brand); }
+.dossier-index small, .dossier-panel small { display: block; color: var(--text-muted); margin-top: 5px; }
+.dossier-content { display: grid; gap: 18px; min-width: 0; }
+.dossier-content h2 { margin-top: 0; font-size: 20px; }
+.dossier-description { white-space: pre-wrap; overflow-wrap: anywhere; }
+.dossier-children { display: grid; gap: 10px; margin-top: 18px; }
+.dossier-unit-picker { margin: 18px 0 !important; display: grid; gap: 8px; }
+.dossier-unit-picker label { display: flex; gap: 10px; align-items: center; }
+.dossier-upload fieldset { display: grid; gap: 14px; padding: 18px 0 !important; }
+.dossier-upload button { justify-self: start; }
+.dossier-panel .sales-actions select { flex: 1; min-width: min(200px, 100%); }
+.dossier-related-links { font-size: 14px; color: var(--brand-dark); }
+.sheet-context-nav { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
+@media (max-width: 1100px) { .jobs2-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .jobs2-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jobs2-totals, .jobs2-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jobs2-card { padding: 16px; }
+  .dossier-layout { grid-template-columns: minmax(0, 1fr); }
+  .dossier-index { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); }
+  .sheet-revenue-source { grid-template-columns: minmax(0, 1fr); }
+  .jobs2-dashboard-picker input, .jobs2-dashboard-picker select, .jobs2-filters input, .jobs2-filters select, .sheet-budget-table input { font-size: 16px; }
+}
+@media (max-width: 420px) { .jobs2-filters { grid-template-columns: minmax(0, 1fr); } .jobs2-totals article { padding: 14px; } }
+
 .cost-import-wizard { display: grid; gap: 18px; }
 .cost-wizard-steps { display: flex; gap: 12px; padding: 0; margin: 24px 0; list-style: none; }
 .cost-wizard-steps li { display: flex; align-items: center; gap: 10px; flex: 1; padding: 12px; border-radius: 12px; background: var(--surface-muted); color: var(--text-muted); }

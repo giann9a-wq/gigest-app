@@ -7,5 +7,7 @@ node_modules
 coverage
 db-costs.json
 tmp
+.codex
+.codex-remote-attachments
 tsconfig.tsbuildinfo
 prisma/dev.db*
