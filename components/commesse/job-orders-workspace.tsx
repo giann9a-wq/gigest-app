@@ -21,7 +21,9 @@ export function JobOrdersWorkspace() {
   const returnTo = `/commesse?${filterQuery}`;
   const sheetUrl = (id: string, tab = "data") => `/commesse/${id}?from=commesse&tab=${tab}&returnTo=${encodeURIComponent(returnTo)}` as Route;
   function filter(key: string, value: string) { setFilters(current => ({ ...current, [key]: value })); }
-  useEffect(() => { const timer = setTimeout(() => router.replace(`/commesse?${filterQuery}` as Route, { scroll: false }), 250); return () => clearTimeout(timer); }, [filterQuery, router]);
+  // These filters only change the already loaded list. Keep the address in sync
+  // without starting a route transition that could cancel an "Apri scheda" click.
+  useEffect(() => { window.history.replaceState(window.history.state, "", `/commesse?${filterQuery}`); }, [filterQuery]);
   useEffect(() => { let active = true; fetch("/api/commesse2", { cache: "no-store" }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "Caricamento non riuscito"); if (active) setRows(d.rows); }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
   const visible = useMemo(() => rows.filter(row => row.name.toLocaleLowerCase("it").includes(filters.q.toLocaleLowerCase("it"))
     && (!filters.status || row.status === filters.status) && (!filters.type || (filters.type === "sites" ? ["SITE", "OTHER"].includes(row.type) : row.type === filters.type))
