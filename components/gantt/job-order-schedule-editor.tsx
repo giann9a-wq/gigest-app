@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { addScheduleDays, formatScheduleDate, scheduleChangeSchema, scheduleEntryLanes, scheduleRowColor, scheduleRowInk, scheduleStatuses, scheduleTypes, type ScheduleEntry, type SchedulePlan, type ScheduleSection } from "@/lib/job-order-schedule-data";
 import { ScheduleAxis, ScheduleGrid, ScheduleViewportToolbar, scheduleDaysBetween, useScheduleViewport } from "./use-schedule-viewport";
 import { SchedulePdfButton } from "./schedule-pdf-button";
+import { ScheduleTextImport } from "./schedule-text-import";
 
 async function requestPlan(url: string, body?: unknown): Promise<SchedulePlan> {
   const response = await fetch(url, body ? { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : { cache: "no-store" });
@@ -16,6 +17,7 @@ export function JobOrderScheduleEditor({ jobOrderId, onDirtyChange }: { jobOrder
   const [plan, setPlan] = useState<SchedulePlan | null>(null);
   const [sections, setSections] = useState<ScheduleSection[]>([]);
   const panel = useRef<HTMLDetailsElement>(null);
+  const fitImportedPlan = useRef(false);
   const [busy, setBusy] = useState(false); const [dirty, setDirty] = useState(false);
   const [error, setError] = useState(""); const [message, setMessage] = useState("");
   const [tool, setTool] = useState<ScheduleEntry["type"]>("ACTIVITY");
@@ -25,6 +27,7 @@ export function JobOrderScheduleEditor({ jobOrderId, onDirtyChange }: { jobOrder
   const [preview, setPreview] = useState<Gesture | null>(null);
   const url = `/api/commesse/${jobOrderId}/gantt`;
   const viewport = useScheduleViewport(sections);
+  useEffect(() => { if (fitImportedPlan.current) { fitImportedPlan.current = false; viewport.fit(); } }, [sections, viewport]);
   useEffect(() => { if (window.location.hash === "#gantt-pianificazione" && panel.current) panel.current.open = true; }, []);
   useEffect(() => { let active = true; requestPlan(url).then(data => { if (active) { setPlan(data); setSections(data.sections); } }).catch(e => { if (active) setError(e.message); }); return () => { active = false; }; }, [url]);
   function change(next: ScheduleSection[]) { setSections(next); setDirty(true); onDirtyChange(true); setMessage(""); }
@@ -85,6 +88,7 @@ export function JobOrderScheduleEditor({ jobOrderId, onDirtyChange }: { jobOrder
     <p>Aggiungi le righe a sinistra. Per una barra trascina sul calendario; per una milestone scegli lo strumento e tocca la data. Trascina gli elementi per spostarli e i bordi delle barre per modificarne la durata.</p>
     {error && <div role="alert" className="job-dashboard-error">{error}</div>}{message && <div role="status" className="job-dashboard-success">{message}</div>}
     {!plan && <p>Caricamento pianificazione… <button type="button" className="text-link" onClick={reload}>Riprova</button></p>}
+    <ScheduleTextImport sections={sections} disabled={busy || !plan} onApply={next => { fitImportedPlan.current = true; setSelection(null); change(next); }} />
     <form onSubmit={save}><fieldset disabled={busy || !plan}>
       <ScheduleViewportToolbar viewport={viewport}><label>PDF<select aria-label="Periodo esportazione PDF" value={pdfScope} onChange={e => setPdfScope(e.target.value)}><option value="all">Piano completo</option><option value="view">Periodo visibile</option></select></label><SchedulePdfButton url={`${url}/pdf`} data={{ version: plan?.version ?? 0, sections, ...(pdfScope === "view" ? { range: viewport.view } : {}) }} disabled={!sections.some(s => s.entries.length) || !plan} /></ScheduleViewportToolbar>
       <div className="gantt-draw-tools" role="group" aria-label="Strumento di pianificazione">{Object.entries(scheduleTypes).map(([key, label]) => <button type="button" className="mobile-button-secondary" aria-pressed={tool === key} key={key} onClick={() => setTool(key as ScheduleEntry["type"])}>{key === "ACTIVITY" ? "▰ Barra" : key === "MILESTONE" ? "◆ Milestone" : "◇ Milestone intermedia"}</button>)}<span>Seleziona un elemento per titolo, descrizione e dettagli.</span></div>

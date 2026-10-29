@@ -1,0 +1,11 @@
+GIGEST GANTT 1
+TITOLO | Ristrutturazione completa appartamento
+CALENDARIO | Giorni naturali, date inclusive
+NOTA | Esempio illustrativo: anno 2026 e inizio 28/09/2026 da confermare per il proprio cantiere.
+NOTA | Quattro settimane = 28 giorni; due settimane = 14 giorni. Festività e sospensioni non considerate.
+NOTA | Finiture stimate nel periodo residuo fino alla consegna; durata da verificare.
+ATTIVITA | Demolizioni | 28/09/2026 | 25/10/2026 | #F97316
+ATTIVITA | Pareti in cartongesso | 26/10/2026 | 08/11/2026 | #8B5CF6
+ATTIVITA | Impianti idraulici ed elettrici | 09/11/2026 | 06/12/2026 | #0EA5E9
+ATTIVITA | Finiture | 07/12/2026 | 31/01/2027 | #10B981
+MILESTONE | Finiture | Consegna appartamento | 31/01/2027

@@ -12089,6 +12089,62 @@ a {
 .gantt-keyboard-add summary { cursor: pointer; }
 .gantt-pdf-action { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .gantt-pdf-action > span[role=alert] { max-width: 350px; font-size: 12px; color: #b91c1c; }
+.gantt-text-import { margin: 14px 0 18px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface-muted); }
+.gantt-text-import > summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+.gantt-text-import > p, .gantt-import-preview > p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.gantt-import-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 12px 0; font-size: 13px; }
+.gantt-import-source { display: grid; gap: 6px; font-size: 13px; margin: 14px 0 10px; }
+.job-sheet-shell .gantt-import-source textarea { font-family: Consolas, monospace; font-size: 12px; }
+.gantt-import-preview { display: grid; gap: 12px; margin-top: 16px; }
+.gantt-import-preview > p { margin: 0; }
+.gantt-import-notes { padding: 12px; background: #fff5df; border-radius: 8px; font-size: 13px; }
+.gantt-import-notes ul { margin: 8px 0 0; padding-left: 20px; }
+.gantt-import-notes li { margin: 4px 0; }
+.gantt-import-table-scroll { overflow-x: auto; max-width: 100%; }
+.gantt-import-table { width: 100%; border-collapse: collapse; min-width: 530px; font-size: 12px; text-align: left; }
+.gantt-import-table th, .gantt-import-table td { padding: 9px 10px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+.gantt-import-table th { font-size: 11px; color: var(--text-muted); }
+.gantt-import-swatch { display: inline-block; width: 9px; height: 9px; margin-right: 7px; border: 1px solid #17243830; border-radius: 2px; }
+.gantt-import-confirm { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+.gantt-import-confirm > label { display: grid; gap: 6px; font-size: 13px; }
+.gantt-import-confirm .gantt-import-ack { display: flex; align-items: center; gap: 7px; }
+.job-sheet-shell .gantt-text-import input[type=file] { width: auto; max-width: 100%; font-size: 12px; }
+.card.job-sheet-shell { padding: 16px 18px; gap: 12px; }
+.job-sheet-shell .job-dashboard-title { font-size: 22px; line-height: 1.25; }
+.job-sheet-shell .job-sheet-topbar p { margin-top: 4px; font-size: 12px; }
+.job-sheet-shell .job-sheet-topbar .job-dashboard-kicker { margin-top: 0; font-size: 10px; }
+.job-sheet-shell .job-order-tabs { gap: 6px; }
+.job-sheet-shell .job-order-tabs .job-order-tab { min-height: 32px; padding: 6px 11px; font-size: 13px; }
+.job-sheet-shell > [role=tabpanel] { margin-top: 2px; }
+.job-sheet-shell .job-sheet-panel { padding: 14px; gap: 10px; }
+.job-sheet-shell .job-sheet-data-card h2 { margin: 0; font-size: 17px; }
+.job-sheet-shell .job-sheet-form-grid.job-sheet-data-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px 14px; }
+.job-sheet-data-grid .job-sheet-field { gap: 4px; min-width: 0; align-content: start; }
+.job-sheet-data-grid .job-sheet-data-name, .job-sheet-data-grid .job-sheet-data-wide { grid-column: span 3; }
+.job-sheet-data-grid .job-sheet-data-party { grid-column: span 2; }
+.job-sheet-shell .job-sheet-data-grid .job-sheet-field > span { font-size: 12px; line-height: 1.3; }
+.job-sheet-shell .job-sheet-data-card .job-sheet-field input, .job-sheet-shell .job-sheet-data-card .job-sheet-field select, .job-sheet-shell .job-sheet-data-card .job-sheet-field textarea { min-height: 34px; padding: 6px 9px; border-radius: 6px; font-size: 13px; line-height: 1.4; }
+.job-sheet-shell .job-sheet-data-card textarea { min-height: 52px; height: 52px; }
+.job-sheet-shell .job-sheet-data-card .job-dashboard-actions { margin-top: 10px; }
+.job-sheet-shell .job-sheet-data-card .button, .job-sheet-shell .job-sheet-topbar .button, .job-sheet-shell .job-sheet-topbar .mobile-button-secondary { min-height: 32px; padding: 6px 11px; font-size: 13px; }
+@media (min-width: 641px) and (max-width: 1100px) {
+  .job-sheet-shell .job-sheet-form-grid.job-sheet-data-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .job-sheet-data-grid .job-sheet-data-name, .job-sheet-data-grid .job-sheet-data-wide, .job-sheet-data-grid .job-sheet-data-own { grid-column: span 2; }
+}
+@media (max-width: 640px) {
+  .card.job-sheet-shell { padding: 12px; gap: 10px; }
+  .job-sheet-shell .job-dashboard-title { font-size: 20px; }
+  .job-sheet-shell .job-sheet-form-grid.job-sheet-data-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .job-sheet-data-grid .job-sheet-data-name, .job-sheet-data-grid .job-sheet-data-wide, .job-sheet-data-grid .job-sheet-data-own { grid-column: 1 / -1; }
+  .job-sheet-data-grid .job-sheet-data-party { grid-column: auto; }
+  .job-sheet-shell .job-sheet-data-card .job-sheet-field input, .job-sheet-shell .job-sheet-data-card .job-sheet-field select, .job-sheet-shell .job-sheet-data-card .job-sheet-field textarea { min-height: 40px; font-size: 16px; }
+  .job-sheet-shell .job-sheet-data-card textarea { min-height: 58px; height: 58px; }
+  .job-sheet-shell .job-sheet-data-card .button, .job-sheet-shell .job-sheet-topbar .button, .job-sheet-shell .job-sheet-topbar .mobile-button-secondary { min-height: 40px; }
+}
+@media (max-width: 420px) {
+  .job-sheet-shell .job-sheet-form-grid.job-sheet-data-grid { grid-template-columns: minmax(0, 1fr); }
+  .job-sheet-data-grid .job-sheet-field { grid-column: auto; }
+}
 .gantt-axis > span { overflow: hidden; white-space: nowrap; }
 .gantt-row-color { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: 11px; color: var(--text-muted); }
 .job-sheet-shell .gantt-row-color input[type=color] { width: 26px; min-height: 22px; height: 22px; padding: 2px; border-radius: 4px; cursor: pointer; }

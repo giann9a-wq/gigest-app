@@ -1,6 +1,9 @@
 # Pianificazione Gantt delle commesse
 
 La scheda commessa, nel tab **Dati Commessa**, contiene **Pianificazione Gantt**.
+La card dei dati usa una griglia compatta: sei colonne su desktop, quattro su tablet,
+una o due su mobile, con controlli più alti sui dispositivi piccoli. Indirizzo e descrizione
+sono affiancati sui display ampi; la descrizione resta ridimensionabile.
 L'editor è una tabella: nomi e aggiunta delle righe nella colonna sinistra, asse temporale
 scorribile nella colonna destra. Le righe rappresentano le sezioni già salvate, senza
 conversioni dei dati. Trascinando sul calendario si crea una barra; scegliendo lo strumento
@@ -49,6 +52,38 @@ righe, corsie sovrapposte e note proseguono sulle pagine successive. Ogni pagina
 commessa, periodo e numero di pagina. L'esportazione è limitata a 100 pagine per richiesta.
 Non modifica date, versioni o dati delle commesse. Nessuna nuova migrazione necessaria.
 
+## Skill portabile e importazione da testo
+
+In Dati Commessa > Pianificazione Gantt > Importa da AI è possibile copiare le istruzioni
+da portare nel proprio assistente AI, oppure scaricare il file Markdown e il pacchetto ZIP.
+Non viene chiamato alcun servizio AI da GiGEST e non occorrono chiavi API.
+
+La skill canonica è `public/skills/gigest-gantt/SKILL.md`, accompagnata da `esempio.txt`.
+Il pacchetto `public/skills/gigest-gantt.zip` contiene entrambi nella cartella gigest-gantt;
+rigenerarlo quando cambia la skill. Una copia è installata nelle skill locali di Codex.
+La skill chiede di chiarire anno, data iniziale, calendario e durate mancanti; eventuali
+ipotesi esplicite sono riportate come NOTA nel testo di scambio.
+
+Il formato testo GIGEST GANTT 1 usa una riga per comando, con campi separati da `|`:
+
+- `ATTIVITA | Nome | Inizio | Fine | #RRGGBB | Descrizione facoltativa`
+- `MILESTONE | Nome attività | Nome traguardo | Data | Descrizione facoltativa`
+- `INTERMEDIA | Nome attività | Nome verifica | Data | Descrizione facoltativa`
+- `TITOLO | ...`, `CALENDARIO | ...`, `NOTA | ...` per il contesto.
+
+Sono accettate date complete gg/mm/aaaa e aaaa-mm-gg, righe vuote, ATTIVITÀ accentato,
+un'eventuale recinzione Markdown e un BOM iniziale. Le milestone sono risolte per nome
+dell'attività, anche se precedono le righe ATTIVITA. I nomi sono confrontati senza distinzione
+di maiuscole e accenti. Ripetere lo stesso nome aggiunge barre nella medesima riga.
+Non vengono eseguiti comandi, interpretate istruzioni libere o modificati dati dal parser.
+
+La verifica presenta una tabella con date, colori e milestone, note e avvisi. Richiede
+la conferma di revisione e permette di aggiungere righe (default) o sostituire il piano
+nell'editor. Applica all'editor cambia solo la bozza locale; Salva pianificazione conserva
+i controlli di versione esistenti. Titolo, calendario e ipotesi vengono mantenuti nella
+descrizione della prima riga, quindi sono disponibili anche dopo salvataggio e nei PDF.
+I limiti sono 1 MB di testo, 50 righe e 500 elementi; errori di formato riportano la riga.
+
 I dati sono salvati nella tabella `JobOrderSchedule`, collegata alla commessa.
 La migrazione `20261029100000_job_order_gantt` è additiva.
 
@@ -57,6 +92,8 @@ La migrazione `20261029100000_job_order_gantt` è additiva.
 - `npm run build`
 - `npm run test:gantt-pdf`: generazione di PDF completi, bozze, periodi selezionati,
   piani pluriennali, corsie sovrapposte e note lunghe; verifica visiva in `tmp/pdfs`.
+- `npm run test:gantt-text`: esempio ristrutturazione settembre-gennaio, formati data,
+  milestone nella riga, colori, note, errori e limiti del formato testo.
 - `npm run test:gantt`: validazione date, intervalli, milestone, conflitti concorrenti e
   persistenza in uno schema PostgreSQL temporaneo isolato.
 - `TEST_GANTT_UI=1` abilita anche le verifiche browser sul build locale: editor,
