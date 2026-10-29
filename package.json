@@ -5,6 +5,7 @@
   "scripts": {
     "test:commesse": "tsx scripts/test-job-order-workspace.ts",
     "test:gantt": "tsx scripts/test-job-order-gantt.ts",
+    "test:gantt-pdf": "tsx scripts/test-gantt-pdf.ts",
     "test:supplier-links": "tsx --test scripts/test-supplier-link-rejections.ts",
     "test:scans": "tsx --test scripts/test-scan-suggestions.ts scripts/test-scan-preparation.ts",
     "test:sales": "tsx scripts/test-property-sales.ts",

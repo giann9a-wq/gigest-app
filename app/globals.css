@@ -12087,6 +12087,8 @@ a {
 .gantt-drag-feedback { color: var(--brand-dark); font-size: 13px; margin: 10px 0; font-variant-numeric: tabular-nums; }
 .gantt-keyboard-add { font-size: 12px; color: var(--text-muted); margin-left: auto; }
 .gantt-keyboard-add summary { cursor: pointer; }
+.gantt-pdf-action { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gantt-pdf-action > span[role=alert] { max-width: 350px; font-size: 12px; color: #b91c1c; }
 .gantt-axis > span { overflow: hidden; white-space: nowrap; }
 .gantt-row-color { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: 11px; color: var(--text-muted); }
 .job-sheet-shell .gantt-row-color input[type=color] { width: 26px; min-height: 22px; height: 22px; padding: 2px; border-radius: 4px; cursor: pointer; }

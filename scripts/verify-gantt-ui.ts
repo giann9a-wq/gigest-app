@@ -27,6 +27,8 @@ export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db
     const anonymous = await browser.newContext();
     assert.equal((await anonymous.request.get(`http://localhost:3108/api/commesse/${jobOrderId}/gantt`)).status(), 401);
     assert.equal((await anonymous.request.put(`http://localhost:3108/api/commesse/${jobOrderId}/gantt`, { data: { version: 0, sections: [] } })).status(), 401);
+    assert.equal((await anonymous.request.post(`http://localhost:3108/api/commesse/${jobOrderId}/gantt/pdf`, { data: { version: 0, sections: [] } })).status(), 401);
+    assert.equal((await anonymous.request.get("http://localhost:3108/api/gantt/pdf?start=2026-01-01&end=2026-12-31")).status(), 401);
     assert.equal((await anonymous.request.get("http://localhost:3108/dashboard002", { maxRedirects: 0 })).status(), 307); await anonymous.close();
     const { encode } = await import("next-auth/jwt"); const token = await encode({ token: { email: actor, sub: userId, id: userId }, secret, salt: "authjs.session-token" });
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -94,6 +96,10 @@ export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db
     await editor.getByRole("button", { name: "+ Nuova riga", exact: true }).click();
     await page.getByLabel("Nome riga 2", { exact: true }).fill("Finiture");
     await page.getByRole("button", { name: "Sposta su riga 2", exact: true }).click();
+    const [draftDownload] = await Promise.all([page.waitForEvent("download"), editor.getByRole("button", { name: "Esporta PDF", exact: true }).click()]);
+    await draftDownload.saveAs("tmp/pdfs/gantt-ui-bozza.pdf");
+    const beforeSave = await db.jobOrderSchedule.findUniqueOrThrow({ where: { jobOrderId } });
+    assert.equal(beforeSave.version, 3); assert.deepEqual(beforeSave.sections, []);
     await editor.getByRole("button", { name: "Salva pianificazione", exact: true }).click();
     await editor.getByText("Pianificazione Gantt salvata.", { exact: true }).waitFor();
     const saved = await db.jobOrderSchedule.findUniqueOrThrow({ where: { jobOrderId } }); assert.equal(saved.version, 4);
@@ -103,6 +109,9 @@ export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db
     assert.equal(rows[1].entries[1].type, "MILESTONE"); assert.equal(rows[1].entries[2].type, "INTERMEDIATE_MILESTONE");
     await page.reload(); await editor.locator(".gantt-draw-bar").first().waitFor();
     assert.equal(await page.getByLabel("Colore riga 2", { exact: true }).inputValue(), "#8b5cf6");
+    const [savedDownload] = await Promise.all([page.waitForEvent("download"), editor.getByRole("button", { name: "Esporta PDF", exact: true }).click()]);
+    await savedDownload.saveAs("tmp/pdfs/gantt-ui-salvato.pdf");
+    assert.equal((await context.request.get("http://localhost:3108/api/gantt/pdf?start=2026-02-30&end=2026-12-31")).status(), 400);
     await page.screenshot({ path: "tmp/gantt-table-editor-desktop.png", fullPage: true });
     const initialWidth = await editor.locator(".gantt-draw-bar").first().evaluate((e: HTMLElement) => e.getBoundingClientRect().width);
     await editor.getByRole("button", { name: "Dilata asse temporale", exact: true }).click();
@@ -126,6 +135,8 @@ export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db
     for (const marker of await job.locator(".gantt-diamond").all()) { const box = await marker.boundingBox(); assert.ok(Math.abs(box.y + box.height / 2 - activityBox.y - activityBox.height / 2) < 1); }
     assert.ok((await job.locator(".gantt-entry-row").boundingBox()).height < 60);
     await page.screenshot({ path: "tmp/dashboard002-scrolling-desktop.png", fullPage: true });
+    const [dashboardDownload] = await Promise.all([page.waitForEvent("download"), gantt.getByRole("button", { name: "Esporta PDF", exact: true }).click()]);
+    await dashboardDownload.saveAs("tmp/pdfs/gantt-ui-dashboard.pdf");
     // Native horizontal scroll updates both the period and the set of visible jobs.
     const dashboardScroll = gantt.locator(".gantt-continuous-scroll");
     await dashboardScroll.evaluate((el: HTMLElement) => { el.scrollLeft += (el.clientWidth - 250) * 1.5; });

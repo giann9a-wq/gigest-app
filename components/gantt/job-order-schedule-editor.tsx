@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { addScheduleDays, formatScheduleDate, scheduleChangeSchema, scheduleEntryLanes, scheduleRowColor, scheduleRowInk, scheduleStatuses, scheduleTypes, type ScheduleEntry, type SchedulePlan, type ScheduleSection } from "@/lib/job-order-schedule-data";
 import { ScheduleAxis, ScheduleGrid, ScheduleViewportToolbar, scheduleDaysBetween, useScheduleViewport } from "./use-schedule-viewport";
+import { SchedulePdfButton } from "./schedule-pdf-button";
 
 async function requestPlan(url: string, body?: unknown): Promise<SchedulePlan> {
   const response = await fetch(url, body ? { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : { cache: "no-store" });
@@ -19,6 +20,7 @@ export function JobOrderScheduleEditor({ jobOrderId, onDirtyChange }: { jobOrder
   const [error, setError] = useState(""); const [message, setMessage] = useState("");
   const [tool, setTool] = useState<ScheduleEntry["type"]>("ACTIVITY");
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [pdfScope, setPdfScope] = useState("all");
   const gesture = useRef<Gesture | null>(null);
   const [preview, setPreview] = useState<Gesture | null>(null);
   const url = `/api/commesse/${jobOrderId}/gantt`;
@@ -84,7 +86,7 @@ export function JobOrderScheduleEditor({ jobOrderId, onDirtyChange }: { jobOrder
     {error && <div role="alert" className="job-dashboard-error">{error}</div>}{message && <div role="status" className="job-dashboard-success">{message}</div>}
     {!plan && <p>Caricamento pianificazione… <button type="button" className="text-link" onClick={reload}>Riprova</button></p>}
     <form onSubmit={save}><fieldset disabled={busy || !plan}>
-      <ScheduleViewportToolbar viewport={viewport} />
+      <ScheduleViewportToolbar viewport={viewport}><label>PDF<select aria-label="Periodo esportazione PDF" value={pdfScope} onChange={e => setPdfScope(e.target.value)}><option value="all">Piano completo</option><option value="view">Periodo visibile</option></select></label><SchedulePdfButton url={`${url}/pdf`} data={{ version: plan?.version ?? 0, sections, ...(pdfScope === "view" ? { range: viewport.view } : {}) }} disabled={!sections.some(s => s.entries.length) || !plan} /></ScheduleViewportToolbar>
       <div className="gantt-draw-tools" role="group" aria-label="Strumento di pianificazione">{Object.entries(scheduleTypes).map(([key, label]) => <button type="button" className="mobile-button-secondary" aria-pressed={tool === key} key={key} onClick={() => setTool(key as ScheduleEntry["type"])}>{key === "ACTIVITY" ? "▰ Barra" : key === "MILESTONE" ? "◆ Milestone" : "◇ Milestone intermedia"}</button>)}<span>Seleziona un elemento per titolo, descrizione e dettagli.</span></div>
       <div ref={viewport.scrollRef} onScroll={viewport.onScroll} className="gantt-scroll gantt-continuous-scroll" role="region" tabIndex={0} aria-label="Pianificazione su asse temporale scorribile"><div className="gantt-board" style={viewport.boardStyle}>
         <ScheduleAxis viewport={viewport} label="Sezioni / righe" />

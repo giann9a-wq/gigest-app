@@ -4,13 +4,14 @@ import Link from "next/link";
 import type { Route } from "next";
 import { formatScheduleDate, scheduleEntryLanes, scheduleOverlaps, scheduleRange, scheduleRowColor, scheduleStatuses, scheduleTypes, type ScheduleJob } from "@/lib/job-order-schedule-data";
 import { ScheduleAxis, ScheduleGrid, ScheduleViewportToolbar, scheduleDaysBetween, useScheduleViewport } from "./use-schedule-viewport";
+import { SchedulePdfButton } from "./schedule-pdf-button";
 
 export function ScheduleTimeline({ jobs, expandJobs = false, showEditLinks = true }: { jobs: ScheduleJob[]; expandJobs?: boolean; showEditLinks?: boolean }) {
   const sections = useMemo(() => jobs.flatMap(job => job.sections), [jobs]);
   const viewport = useScheduleViewport(sections);
   const visibleJobs = jobs.filter(job => scheduleOverlaps(job.sections, viewport.view));
   return <div className="gantt-view gantt-scrolling-view gantt-compact-dashboard" aria-label="Diagramma Gantt delle commesse">
-    <ScheduleViewportToolbar viewport={viewport} />
+    <ScheduleViewportToolbar viewport={viewport}><SchedulePdfButton url={`/api/gantt/pdf?start=${viewport.view.start}&end=${viewport.view.end}`} disabled={!visibleJobs.length || !viewport.ready} /></ScheduleViewportToolbar>
     <div className="gantt-compact-caption"><span aria-live="polite">{visibleJobs.length} commesse nel periodo</span><span>◆ Milestone · ◇ Intermedia · Scorri per altre date</span></div>
     <div ref={viewport.scrollRef} onScroll={viewport.onScroll} className="gantt-scroll gantt-continuous-scroll" role="region" tabIndex={0} aria-label="Linea del tempo scorribile"><div className="gantt-board" style={viewport.boardStyle}>
       <ScheduleAxis viewport={viewport} label="Commessa / attività" />

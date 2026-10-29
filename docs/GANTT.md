@@ -34,12 +34,29 @@ Le etichette dell'asse hanno almeno 90 pixel di distanza; la scala sceglie inter
 giorni, mesi o anni e nasconde le etichette parziali ai bordi del periodo visibile.
 Non si generano date presunte né si modificano le date anagrafiche della commessa.
 
+## Esportazione PDF
+
+Il pulsante Esporta PDF nella scheda produce il piano completo oppure il periodo visibile.
+Il POST autenticato `/api/commesse/[id]/gantt/pdf` valida il piano visualizzato senza
+salvarlo: se differisce dal piano persistito, il PDF riporta Bozza non salvata. Il confronto
+è strutturale, indipendente dall'ordine delle chiavi JSON di PostgreSQL.
+Nella dashboard il pulsante esporta le sole commesse pianificate nel periodo visibile,
+tramite GET autenticato `/api/gantt/pdf?start=...&end=...`.
+
+L'output vettoriale è A3 orizzontale, conserva colori e milestone sulla stessa riga e include
+note e dettagli dei traguardi. I periodi lunghi sono divisi in finestre di massimo sei mesi;
+righe, corsie sovrapposte e note proseguono sulle pagine successive. Ogni pagina riporta
+commessa, periodo e numero di pagina. L'esportazione è limitata a 100 pagine per richiesta.
+Non modifica date, versioni o dati delle commesse. Nessuna nuova migrazione necessaria.
+
 I dati sono salvati nella tabella `JobOrderSchedule`, collegata alla commessa.
 La migrazione `20261029100000_job_order_gantt` è additiva.
 
 ## Verifiche
 
 - `npm run build`
+- `npm run test:gantt-pdf`: generazione di PDF completi, bozze, periodi selezionati,
+  piani pluriennali, corsie sovrapposte e note lunghe; verifica visiva in `tmp/pdfs`.
 - `npm run test:gantt`: validazione date, intervalli, milestone, conflitti concorrenti e
   persistenza in uno schema PostgreSQL temporaneo isolato.
 - `TEST_GANTT_UI=1` abilita anche le verifiche browser sul build locale: editor,
