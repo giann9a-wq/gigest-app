@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { addScheduleDays, formatScheduleDate, initialScheduleWindow, scheduleDay, scheduleRange, type ScheduleSection } from "@/lib/job-order-schedule-data";
+import { addScheduleDays, formatScheduleDate, initialScheduleWindow, scheduleAxisTicks, scheduleDay, scheduleRange, type ScheduleSection } from "@/lib/job-order-schedule-data";
 
 export const scheduleDaysBetween = (start: string, end: string) => Math.round((scheduleDay(end) - scheduleDay(start)) / 86400000);
 export function useScheduleViewport(sections: ScheduleSection[]) {
@@ -77,15 +77,10 @@ export function useScheduleViewport(sections: ScheduleSection[]) {
     else { pendingScroll.current = nextLeft; setScale(next); }
   }
   function pan(direction: number) { scrollRef.current?.scrollBy({ left: direction * timeWidth * 0.8, behavior: "smooth" }); }
-  const tickStep = px >= 24 ? 1 : px >= 9 ? 7 : px >= 2 ? 14 : Math.ceil(90 / px / 30) * 30;
-  const ticks = [];
-  for (let i = Math.max(0, Math.floor(startIndex / tickStep) * tickStep); i <= Math.min(totalDays, endIndex + tickStep); i += tickStep) {
-    const date = addScheduleDays(domain.start, i);
-    ticks.push({ date, x: i * px, label: new Date(scheduleDay(date)).toLocaleDateString("it-IT", { timeZone: "UTC", ...(px < 1 ? { month: "short", year: "numeric" } : { day: "2-digit", month: "short", year: "2-digit" }) }) });
-  }
+  const ticks = scheduleAxisTicks(domain.start, view, px);
   return { scrollRef, today, domain, view, px, left, labelWidth, timelineWidth, ticks, dateX, dateAt, setZoom, pan, goToday, fit, ready: !!scale,
     onScroll: () => setLeft(scrollRef.current?.scrollLeft ?? 0),
-    boardStyle: { width: labelWidth + timelineWidth, "--gantt-label-width": `${labelWidth}px` } as React.CSSProperties };
+    timeWidth, boardStyle: { width: labelWidth + timelineWidth, "--gantt-label-width": `${labelWidth}px` } as React.CSSProperties };
 }
 export type ScheduleViewport = ReturnType<typeof useScheduleViewport>;
 export function ScheduleViewportToolbar({ viewport, children }: { viewport: ScheduleViewport; children?: React.ReactNode }) {
@@ -100,7 +95,7 @@ export function ScheduleViewportToolbar({ viewport, children }: { viewport: Sche
   </div><span className="gantt-range-label" aria-live="polite">{viewport.ready ? `${formatScheduleDate(viewport.view.start)} – ${formatScheduleDate(viewport.view.end)}` : "Caricamento periodo…"}</span></div></>;
 }
 export function ScheduleAxis({ viewport, label }: { viewport: ScheduleViewport; label: React.ReactNode }) {
-  return <div className="gantt-row gantt-axis-row"><div className="gantt-label">{label}</div><div className="gantt-axis">{viewport.ticks.map(t => <span key={t.date} style={{ left: t.x }}>{t.label}</span>)}</div></div>;
+  return <div className="gantt-row gantt-axis-row"><div className="gantt-label">{label}</div><div className="gantt-axis">{viewport.ticks.filter(t => t.x >= viewport.left + 2 && t.x + 82 <= viewport.left + viewport.timeWidth).map(t => <span key={t.date} style={{ left: t.x, width: 80 }}>{t.label}</span>)}</div></div>;
 }
 export function ScheduleGrid({ viewport }: { viewport: ScheduleViewport }) {
   return <><div className="gantt-grid-lines" aria-hidden="true">{viewport.ticks.map(t => <span key={t.date} style={{ left: t.x }} />)}</div><span className="gantt-today-line" style={{ left: viewport.dateX(viewport.today) + viewport.px / 2 }} aria-hidden="true" /></>;

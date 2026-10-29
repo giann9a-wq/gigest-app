@@ -12087,6 +12087,32 @@ a {
 .gantt-drag-feedback { color: var(--brand-dark); font-size: 13px; margin: 10px 0; font-variant-numeric: tabular-nums; }
 .gantt-keyboard-add { font-size: 12px; color: var(--text-muted); margin-left: auto; }
 .gantt-keyboard-add summary { cursor: pointer; }
+.gantt-axis > span { overflow: hidden; white-space: nowrap; }
+.gantt-row-color { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: 11px; color: var(--text-muted); }
+.job-sheet-shell .gantt-row-color input[type=color] { width: 26px; min-height: 22px; height: 22px; padding: 2px; border-radius: 4px; cursor: pointer; }
+.job-sheet-shell .gantt-draw-row button.gantt-draw-bar { background: var(--gantt-row-color); color: var(--gantt-row-ink); border: 1px solid #17243830; }
+.job-sheet-shell .gantt-draw-row button.gantt-draw-milestone { z-index: 6; }
+.gantt-draw-row .gantt-draw-diamond { background: var(--gantt-row-color); border-color: var(--gantt-row-color); box-shadow: 0 0 0 1px #ffffff, 0 0 0 2px #17243850; }
+.gantt-draw-row .gantt-draw-intermediate .gantt-draw-diamond { background: white; }
+.gantt-compact-dashboard .gantt-toolbar { margin-bottom: 6px; gap: 6px; }
+.gantt-compact-dashboard .gantt-period-controls { align-items: center; gap: 5px; }
+.gantt-compact-dashboard .gantt-period-controls button { min-height: 30px; padding: 5px 9px; font-size: 12px; }
+.gantt-compact-dashboard .gantt-zoom { display: flex; align-items: center; gap: 6px; }
+.gantt-compact-caption { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 0 8px; color: var(--text-muted); font-size: 11px; }
+.gantt-compact-dashboard .gantt-row { min-height: 40px; }
+.gantt-compact-dashboard .gantt-label { padding: 7px 10px; }
+.gantt-compact-dashboard .gantt-label small { margin-top: 2px; font-size: 10px; }
+.gantt-compact-dashboard .gantt-axis-row, .gantt-compact-dashboard .gantt-axis { min-height: 30px; }
+.gantt-compact-dashboard .gantt-axis > span { bottom: 7px; }
+.gantt-compact-dashboard .gantt-job-summary .gantt-track { min-height: 40px; }
+.gantt-compact-dashboard .gantt-entry-row .gantt-label { padding-left: 20px; }
+.gantt-compact-dashboard .gantt-activity-row .gantt-label strong { font-size: 12px; font-weight: 500; }
+.gantt-row-swatch { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 2px; border: 1px solid #17243830; background: var(--gantt-row-color); }
+.gantt-activity-row .gantt-bar-activity { height: 10px; background: var(--gantt-row-color); border: 1px solid #17243830; }
+.gantt-activity-row .gantt-diamond { width: 9px; height: 9px; background: var(--gantt-row-color); box-shadow: 0 0 0 1px white, 0 0 0 2px #17243840; }
+.gantt-activity-row .gantt-diamond.gantt-intermediate { background: white; border-color: var(--gantt-row-color); }
+.gantt-inline-edit { margin-left: 8px; font-size: 10px; white-space: nowrap; }
+.dashboard-preview-accordion:has(.gantt-compact-dashboard)[open] > summary { margin-bottom: 10px; }
 @media (max-width: 1000px) { .gantt-item-inspector .gantt-entry-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 1100px) { .gantt-entry-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {

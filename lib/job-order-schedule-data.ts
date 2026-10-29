@@ -21,6 +21,7 @@ export const scheduleEntrySchema = z.object({
 });
 export const scheduleSectionSchema = z.object({
   id: idSchema, title: z.string().trim().min(1, "Il titolo della sezione è obbligatorio").max(200),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Scegli un colore valido").optional(),
   description: z.string().trim().max(4000).default(""), entries: z.array(scheduleEntrySchema).max(500),
 });
 export const scheduleChangeSchema = z.object({
@@ -63,4 +64,50 @@ export function addScheduleMonths(date: string, months: number) {
 export const initialScheduleWindow = (today: string): ScheduleRange => ({ start: addScheduleDays(today, -15), end: addScheduleMonths(today, 3) });
 export function scheduleOverlaps(sections: ScheduleSection[], view: ScheduleRange) {
   return sections.some(section => section.entries.some(entry => entry.startDate <= view.end && entry.endDate >= view.start));
+}
+
+export const scheduleRowColor = (section: ScheduleSection) => section.color ?? "#6687b4";
+export function scheduleRowInk(section: ScheduleSection) {
+  const color = scheduleRowColor(section);
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
+  return r * 0.299 + g * 0.587 + b * 0.114 > 155 ? "#172438" : "#ffffff";
+}
+export function scheduleEntryLanes(entries: ScheduleEntry[]) {
+  const ends: string[] = [], lanes = new Map<string, number>();
+  const activities = entries.filter(e => e.type === "ACTIVITY").sort((a, b) => a.startDate.localeCompare(b.startDate));
+  for (const entry of activities) {
+    let lane = ends.findIndex(end => end < entry.startDate);
+    if (lane < 0) lane = ends.length;
+    ends[lane] = entry.endDate; lanes.set(entry.id, lane);
+  }
+  for (const entry of entries.filter(e => e.type !== "ACTIVITY")) {
+    const activity = activities.find(a => a.startDate <= entry.startDate && a.endDate >= entry.startDate);
+    lanes.set(entry.id, activity ? lanes.get(activity.id)! : 0);
+  }
+  return { lanes, count: Math.max(1, ends.length) };
+}
+
+// Choose calendar ticks by their pixel spacing, rather than fixed zoom thresholds.
+export function scheduleAxisTicks(domainStart: string, view: ScheduleRange, px: number) {
+  const dayMs = 86400000, minimumSpacing = 90;
+  const dayStep = [1, 2, 7, 14].find(step => step * px >= minimumSpacing);
+  const ticks: { date: string; x: number; label: string }[] = [];
+  let date: string;
+  let monthStep = 0;
+  if (dayStep) {
+    const index = Math.floor((scheduleDay(view.start) - scheduleDay(domainStart)) / dayMs / dayStep) * dayStep;
+    date = addScheduleDays(domainStart, index);
+  } else {
+    monthStep = [1, 2, 3, 6, 12, 24, 60, 120].find(step => step * 28 * px >= minimumSpacing) ?? 120;
+    const source = new Date(scheduleDay(view.start));
+    const monthIndex = source.getUTCFullYear() * 12 + source.getUTCMonth();
+    const aligned = Math.floor(monthIndex / monthStep) * monthStep;
+    date = new Date(Date.UTC(Math.floor(aligned / 12), aligned % 12, 1)).toISOString().slice(0, 10);
+  }
+  while (date <= view.end) {
+    ticks.push({ date, x: (scheduleDay(date) - scheduleDay(domainStart)) / dayMs * px,
+      label: new Date(scheduleDay(date)).toLocaleDateString("it-IT", { timeZone: "UTC", ...(dayStep ? { day: "2-digit", month: "short", year: "2-digit" } : { month: "short", year: "numeric" }) }) });
+    date = dayStep ? addScheduleDays(date, dayStep) : addScheduleMonths(date, monthStep);
+  }
+  return ticks;
 }

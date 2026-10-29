@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { addScheduleDays, formatScheduleDate, scheduleChangeSchema, scheduleStatuses, scheduleTypes, type ScheduleEntry, type SchedulePlan, type ScheduleSection } from "@/lib/job-order-schedule-data";
+import { addScheduleDays, formatScheduleDate, scheduleChangeSchema, scheduleEntryLanes, scheduleRowColor, scheduleRowInk, scheduleStatuses, scheduleTypes, type ScheduleEntry, type SchedulePlan, type ScheduleSection } from "@/lib/job-order-schedule-data";
 import { ScheduleAxis, ScheduleGrid, ScheduleViewportToolbar, scheduleDaysBetween, useScheduleViewport } from "./use-schedule-viewport";
 
 async function requestPlan(url: string, body?: unknown): Promise<SchedulePlan> {
@@ -49,6 +49,8 @@ export function JobOrderScheduleEditor({ jobOrderId, onDirtyChange }: { jobOrder
     if (busy || event.button !== 0 || !event.isPrimary) return;
     const track = event.currentTarget.closest<HTMLElement>(".gantt-draw-track")!;
     const date = viewport.dateAt(event.clientX - track.getBoundingClientRect().left);
+    // With a milestone tool active, clicking an activity adds a marker on that same row.
+    if (entry?.type === "ACTIVITY" && tool !== "ACTIVITY") { entry = undefined; mode = "CREATE"; }
     const original = entry ?? newEntry(sectionId, date);
     const next = { sectionId, original, mode, origin: date, current: original };
     gesture.current = next; setPreview(next);
@@ -89,14 +91,13 @@ export function JobOrderScheduleEditor({ jobOrderId, onDirtyChange }: { jobOrder
         {sections.map((section, index) => {
           const entries = section.entries.map(entry => preview?.sectionId === section.id && preview.original.id === entry.id ? preview.current : entry);
           if (preview?.sectionId === section.id && preview.mode === "CREATE") entries.push(preview.current);
-          const activityEnds: string[] = [];
-          const lanes = new Map<string, number>();
-          entries.filter(e => e.type === "ACTIVITY").sort((a, b) => a.startDate.localeCompare(b.startDate)).forEach(entry => { let lane = activityEnds.findIndex(end => end < entry.startDate); if (lane < 0) lane = activityEnds.length; activityEnds[lane] = entry.endDate; lanes.set(entry.id, lane); });
-          return <div className="gantt-row gantt-draw-row" data-section-id={section.id} key={section.id}>
+          const { lanes, count } = scheduleEntryLanes(entries);
+          return <div className="gantt-row gantt-draw-row" data-section-id={section.id} key={section.id} style={{ "--gantt-row-color": scheduleRowColor(section), "--gantt-row-ink": scheduleRowInk(section) } as React.CSSProperties}>
             <div className="gantt-label"><input aria-label={`Nome riga ${index + 1}`} placeholder="Nome riga" required maxLength={200} value={section.title} onChange={event => change(sections.map(s => s.id === section.id ? { ...s, title: event.target.value } : s))} />
               <div className="gantt-row-actions"><button type="button" className="text-link" aria-label={`Sposta su riga ${index + 1}`} disabled={!index} onClick={() => change(reorder(sections, index, -1))}>↑</button><button type="button" className="text-link" aria-label={`Sposta giù riga ${index + 1}`} disabled={index === sections.length - 1} onClick={() => change(reorder(sections, index, 1))}>↓</button><button type="button" className="text-link" aria-label={`Elimina riga ${index + 1}`} onClick={() => { if (!section.entries.length || window.confirm("Eliminare la riga e tutti i suoi elementi?")) { change(sections.filter(s => s.id !== section.id)); setSelection(null); } }}>×</button><details><summary aria-label={`Descrizione riga ${index + 1}`}>Descrizione</summary><textarea aria-label={`Testo descrizione riga ${index + 1}`} rows={2} maxLength={4000} value={section.description} onChange={event => change(sections.map(s => s.id === section.id ? { ...s, description: event.target.value } : s))} /></details></div>
+              <label className="gantt-row-color"><input type="color" aria-label={`Colore riga ${index + 1}`} value={scheduleRowColor(section)} onChange={e => change(sections.map(s => s.id === section.id ? { ...s, color: e.target.value } : s))} /><span>Colore</span></label>
             </div>
-            <div className="gantt-track gantt-draw-track" aria-label={`Calendario ${section.title}`} style={{ minHeight: Math.max(86, activityEnds.length * 32 + 46) }} onPointerDown={e => startGesture(e, section.id, "CREATE")} onPointerMove={moveGesture} onPointerUp={endGesture} onPointerCancel={() => { gesture.current = null; setPreview(null); }}>
+            <div className="gantt-track gantt-draw-track" aria-label={`Calendario ${section.title}`} style={{ minHeight: Math.max(82, count * 32 + 36) }} onPointerDown={e => startGesture(e, section.id, "CREATE")} onPointerMove={moveGesture} onPointerUp={endGesture} onPointerCancel={() => { gesture.current = null; setPreview(null); }}>
               <ScheduleGrid viewport={viewport} />
               {entries.map(entry => {
                 const milestone = entry.type !== "ACTIVITY";
@@ -105,7 +106,7 @@ export function JobOrderScheduleEditor({ jobOrderId, onDirtyChange }: { jobOrder
                 const width = (scheduleDaysBetween(entry.startDate, entry.endDate) + 1) * viewport.px;
                 const visible = startX + width >= viewport.left - 30 && startX <= viewport.left + (viewport.scrollRef.current?.clientWidth ?? 1200);
                 if (!visible) return null;
-                return <button key={entry.id} type="button" data-entry-id={entry.id} className={`gantt-draw-item ${milestone ? `gantt-draw-milestone ${entry.type === "INTERMEDIATE_MILESTONE" ? "gantt-draw-intermediate" : ""}` : "gantt-draw-bar"} gantt-status-${entry.status.toLowerCase()} ${selectedHere ? "is-selected" : ""}`} aria-label={`${scheduleTypes[entry.type]}: ${entry.title}`} title={`${entry.title} · ${formatScheduleDate(entry.startDate)}${milestone ? "" : ` – ${formatScheduleDate(entry.endDate)}`}`} style={{ left: startX + (milestone ? viewport.px / 2 : 0), width: milestone ? 20 : Math.max(8, width), top: milestone ? 12 : 40 + (lanes.get(entry.id) ?? 0) * 32 }} onPointerDown={e => startGesture(e, section.id, "MOVE", entry)} onClick={() => setSelection({ sectionId: section.id, entryId: entry.id })}>
+                return <button key={entry.id} type="button" data-entry-id={entry.id} className={`gantt-draw-item ${milestone ? `gantt-draw-milestone ${entry.type === "INTERMEDIATE_MILESTONE" ? "gantt-draw-intermediate" : ""}` : "gantt-draw-bar"} gantt-status-${entry.status.toLowerCase()} ${selectedHere ? "is-selected" : ""}`} aria-label={`${scheduleTypes[entry.type]}: ${entry.title}`} title={`${entry.title} · ${formatScheduleDate(entry.startDate)}${milestone ? "" : ` – ${formatScheduleDate(entry.endDate)}`}`} style={{ left: startX + (milestone ? viewport.px / 2 : 0), width: milestone ? 20 : Math.max(8, width), top: (milestone ? 42.5 : 40) + (lanes.get(entry.id) ?? 0) * 32 }} onPointerDown={e => startGesture(e, section.id, "MOVE", entry)} onClick={() => { if (tool === "ACTIVITY" || entry.type !== "ACTIVITY") setSelection({ sectionId: section.id, entryId: entry.id }); }}>
                   {milestone ? <span className="gantt-draw-diamond" /> : <><span className="gantt-resize-handle gantt-resize-start" aria-hidden="true" onPointerDown={e => startGesture(e, section.id, "START", entry)} /><span className="gantt-draw-title" style={{ marginLeft: Math.max(10, viewport.left - startX + 10) }}>{entry.title}</span><span className="gantt-resize-handle gantt-resize-end" aria-hidden="true" onPointerDown={e => startGesture(e, section.id, "END", entry)} /></>}
                 </button>;
               })}

@@ -8,6 +8,9 @@ milestone si inserisce un traguardo sulla data. Barre e milestone si possono spo
 e i bordi delle barre modificano la durata. Gli elementi selezionati aprono i dettagli
 per titolo, descrizione, stato e date. È disponibile anche l'inserimento tramite date
 per chi usa la tastiera. Le attività sovrapposte occupano corsie diverse nella stessa riga.
+Ogni riga ha un colore personalizzabile, salvato nel JSON del piano (facoltativo per i
+piani precedenti). Barre e milestone usano lo stesso colore. Con lo strumento milestone
+si può cliccare direttamente sulla barra per aggiungere il traguardo alla sua riga.
 Il salvataggio è separato dai dati anagrafici e dal budget; le modifiche concorrenti vengono
 rilevate tramite versione, per evitare sovrascritture involontarie.
 
@@ -24,6 +27,11 @@ orizzontale aggiorna le righe incluse; la finestra iniziale è oggi meno 15 gior
 più 3 mesi di calendario. La scala si comprime o dilata con pulsanti e cursore, conservando
 il centro del periodo. Oggi ripristina la finestra iniziale, Tutto il piano adatta la scala
 all'intera pianificazione. I nomi delle righe restano fissi mentre si scorre il calendario.
+La dashboard espansa mostra una sola riga per sezione/attività, con tutte le barre e le
+milestone allineate nelle stesse corsie; non duplica sezioni, attività e traguardi in righe
+separate. I dettagli sono disponibili sui singoli elementi e nel collegamento Modifica.
+Le etichette dell'asse hanno almeno 90 pixel di distanza; la scala sceglie intervalli di
+giorni, mesi o anni e nasconde le etichette parziali ai bordi del periodo visibile.
 Non si generano date presunte né si modificano le date anagrafiche della commessa.
 
 I dati sono salvati nella tabella `JobOrderSchedule`, collegata alla commessa.

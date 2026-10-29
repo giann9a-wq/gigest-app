@@ -38,6 +38,10 @@ export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db
     console.log("UI: editor caricato.");
     await page.getByRole("button", { name: "+ Nuova riga", exact: true }).click();
     await page.getByLabel("Nome riga 1", { exact: true }).fill("Strutture");
+    await page.getByLabel("Colore riga 1", { exact: true }).evaluate((input: HTMLInputElement) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "#8b5cf6");
+      input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await page.getByLabel("Descrizione riga 1", { exact: true }).click();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "Il calendario deve scorrere nel proprio contenitore");
     await page.getByLabel("Testo descrizione riga 1", { exact: true }).fill("Opere strutturali");
@@ -78,7 +82,8 @@ export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db
     await editor.getByRole("button", { name: "◆ Milestone", exact: true }).click(); await draw(35, 35, 20);
     await inspector.getByLabel("Titolo", { exact: true }).fill("Consegna grafica");
     assert.equal(await inspector.getByLabel("Data milestone", { exact: true }).inputValue(), day(35));
-    await editor.getByRole("button", { name: "◇ Milestone intermedia", exact: true }).click(); await draw(14, 14, 20);
+    // Click directly on the activity bar: the milestone belongs on that same row.
+    await editor.getByRole("button", { name: "◇ Milestone intermedia", exact: true }).click(); await draw(14, 14, 52);
     await inspector.getByLabel("Titolo", { exact: true }).fill("Verifica grafica");
     // Pointer cancellation does not add or modify an element.
     const beforeCancel = await editor.locator(".gantt-draw-item").count();
@@ -93,9 +98,11 @@ export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db
     await editor.getByText("Pianificazione Gantt salvata.", { exact: true }).waitFor();
     const saved = await db.jobOrderSchedule.findUniqueOrThrow({ where: { jobOrderId } }); assert.equal(saved.version, 4);
     const rows = saved.sections as any[]; assert.equal(rows[0].title, "Finiture"); assert.equal(rows[1].entries.length, 3);
+    assert.equal(rows[1].color, "#8b5cf6");
     assert.equal(rows[1].entries[0].startDate, day(6)); assert.equal(rows[1].entries[0].endDate, day(27));
     assert.equal(rows[1].entries[1].type, "MILESTONE"); assert.equal(rows[1].entries[2].type, "INTERMEDIATE_MILESTONE");
     await page.reload(); await editor.locator(".gantt-draw-bar").first().waitFor();
+    assert.equal(await page.getByLabel("Colore riga 2", { exact: true }).inputValue(), "#8b5cf6");
     await page.screenshot({ path: "tmp/gantt-table-editor-desktop.png", fullPage: true });
     const initialWidth = await editor.locator(".gantt-draw-bar").first().evaluate((e: HTMLElement) => e.getBoundingClientRect().width);
     await editor.getByRole("button", { name: "Dilata asse temporale", exact: true }).click();
@@ -111,8 +118,13 @@ export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db
     const format = (s: string) => s.split("-").reverse().join("/");
     assert.equal(await gantt.locator(".gantt-range-label").textContent(), `${format(initialView.start)} – ${format(initialView.end)}`);
     const job = gantt.locator(".gantt-job").filter({ hasText: "Cantiere Gantt UI" }); await job.locator(":scope > summary").click();
-    assert.equal(await job.locator(".gantt-entry-row").count(), 3);
+    assert.equal(await job.locator(".gantt-entry-row").count(), 1);
+    assert.equal(await job.locator(".gantt-section-row").count(), 0);
     assert.equal(await job.locator(".gantt-diamond").count(), 2);
+    assert.equal(await job.locator(".gantt-entry-row .gantt-bar").evaluate((el: HTMLElement) => getComputedStyle(el).backgroundColor), "rgb(139, 92, 246)");
+    const activityBox = await job.locator(".gantt-entry-row .gantt-bar").boundingBox();
+    for (const marker of await job.locator(".gantt-diamond").all()) { const box = await marker.boundingBox(); assert.ok(Math.abs(box.y + box.height / 2 - activityBox.y - activityBox.height / 2) < 1); }
+    assert.ok((await job.locator(".gantt-entry-row").boundingBox()).height < 60);
     await page.screenshot({ path: "tmp/dashboard002-scrolling-desktop.png", fullPage: true });
     // Native horizontal scroll updates both the period and the set of visible jobs.
     const dashboardScroll = gantt.locator(".gantt-continuous-scroll");
@@ -120,6 +132,14 @@ export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db
     await gantt.locator(".gantt-job").filter({ hasText: "Commessa futura" }).waitFor();
     assert.equal(await gantt.locator(".gantt-job").filter({ hasText: "Cantiere Gantt UI" }).count(), 0);
     await gantt.getByRole("button", { name: "Comprimi asse temporale", exact: true }).click();
+    for (const value of [0, 20, 40, 60, 80, 100]) {
+      await gantt.getByLabel("Scala temporale", { exact: true }).evaluate((input: HTMLInputElement, value: number) => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, String(value));
+        input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true }));
+      }, value);
+      const labels = await gantt.locator(".gantt-axis > span").evaluateAll((els: HTMLElement[]) => els.map(el => ({ left: el.getBoundingClientRect().left, right: el.getBoundingClientRect().right })));
+      for (let i = 1; i < labels.length; i++) assert.ok(labels[i].left >= labels[i - 1].right + 5, `Date sovrapposte allo zoom ${value}`);
+    }
     await gantt.getByRole("button", { name: "Oggi", exact: true }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await gantt.getByRole("button", { name: "Oggi", exact: true }).click();

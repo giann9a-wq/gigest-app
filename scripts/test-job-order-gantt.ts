@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
-import { addScheduleDays, addScheduleMonths, initialScheduleWindow, scheduleOverlaps, scheduleChangeSchema, schedulePosition, scheduleRange, type ScheduleSection } from "../lib/job-order-schedule-data";
+import { addScheduleDays, addScheduleMonths, initialScheduleWindow, scheduleAxisTicks, scheduleEntryLanes, scheduleOverlaps, scheduleChangeSchema, schedulePosition, scheduleRange, scheduleRowInk, type ScheduleSection } from "../lib/job-order-schedule-data";
 
 export const samplePlan: ScheduleSection[] = [
-  { id: "structure", title: "Strutture", description: "Opere strutturali", entries: [
+  { id: "structure", title: "Strutture", description: "Opere strutturali", color: "#8b5cf6", entries: [
     { id: "foundation", type: "ACTIVITY", title: "Fondazioni", description: "Scavo e getto", startDate: "2026-11-01", endDate: "2026-11-15", status: "IN_PROGRESS" },
     { id: "check", type: "INTERMEDIATE_MILESTONE", title: "Verifica armature", description: "Controllo prima del getto", startDate: "2026-11-06", endDate: "2026-11-06", status: "PLANNED" },
     { id: "delivery", type: "MILESTONE", title: "Consegna", description: "Verbale di consegna", startDate: "2026-12-12", endDate: "2026-12-12", status: "PLANNED" },
@@ -34,6 +34,17 @@ async function main() {
   assert.equal(scheduleOverlaps([], initialScheduleWindow("2026-10-29")), false);
   assert.equal(scheduleOverlaps(samplePlan, { start: "2026-11-16", end: "2026-11-19" }), false);
   assert.equal(scheduleOverlaps(samplePlan, { start: "2026-12-12", end: "2026-12-12" }), true);
+  assert.equal(scheduleChangeSchema.safeParse({ ...valid, sections: [{ ...samplePlan[0], color: "red" }] }).success, false);
+  assert.equal(scheduleRowInk({ ...samplePlan[0], color: "#ffffff" }), "#172438");
+  assert.equal(scheduleRowInk({ ...samplePlan[0], color: "#000000" }), "#ffffff");
+  const laneLayout = scheduleEntryLanes(samplePlan[0].entries);
+  assert.equal(laneLayout.lanes.get("foundation"), laneLayout.lanes.get("check"));
+  assert.equal(laneLayout.count, 1);
+  for (let step = 0; step <= 100; step++) {
+    const px = 0.25 * Math.pow(256, step / 100);
+    const ticks = scheduleAxisTicks("2006-01-01", { start: "2024-08-08", end: "2029-08-27" }, px);
+    for (let i = 1; i < ticks.length; i++) assert.ok(ticks[i].x - ticks[i - 1].x >= 89.9, `Etichette sovrapposte alla scala ${px}`);
+  }
   assert.deepEqual(schedulePosition({ start: "2026-11-01", end: "2026-11-01" }, { start: "2026-11-01", end: "2026-11-01" }), { left: 0, width: 100 });
   assert.equal(schedulePosition({ start: "2026-10-01", end: "2026-10-02" }, { start: "2026-11-01", end: "2026-11-30" }), null);
   assert.deepEqual(schedulePosition({ start: "2026-10-01", end: "2026-12-31" }, { start: "2026-11-01", end: "2026-11-30" }), { left: 0, width: 100 });

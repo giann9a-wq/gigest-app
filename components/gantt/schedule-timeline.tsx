@@ -1,34 +1,35 @@
 "use client";
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { formatScheduleDate, scheduleOverlaps, scheduleRange, scheduleStatuses, scheduleTypes, type ScheduleEntry, type ScheduleJob, type ScheduleRange } from "@/lib/job-order-schedule-data";
+import { formatScheduleDate, scheduleEntryLanes, scheduleOverlaps, scheduleRange, scheduleRowColor, scheduleStatuses, scheduleTypes, type ScheduleJob } from "@/lib/job-order-schedule-data";
 import { ScheduleAxis, ScheduleGrid, ScheduleViewportToolbar, scheduleDaysBetween, useScheduleViewport } from "./use-schedule-viewport";
 
 export function ScheduleTimeline({ jobs, expandJobs = false, showEditLinks = true }: { jobs: ScheduleJob[]; expandJobs?: boolean; showEditLinks?: boolean }) {
   const sections = useMemo(() => jobs.flatMap(job => job.sections), [jobs]);
   const viewport = useScheduleViewport(sections);
-  // Filter actual activities, not the envelope: a gap between two activities is not planned work.
   const visibleJobs = jobs.filter(job => scheduleOverlaps(job.sections, viewport.view));
-  function track(range: ScheduleRange | null, kind: string, entry?: ScheduleEntry) {
-    const label = range ? `${formatScheduleDate(range.start)}${range.end !== range.start ? ` – ${formatScheduleDate(range.end)}` : ""}` : "";
-    return <div className="gantt-track" aria-label={label}><ScheduleGrid viewport={viewport} />
-      {range && (entry && entry.type !== "ACTIVITY" ? <span className={`gantt-diamond ${entry.type === "INTERMEDIATE_MILESTONE" ? "gantt-intermediate" : ""} gantt-status-${entry.status.toLowerCase()}`} style={{ left: viewport.dateX(range.start) + viewport.px / 2 }} title={`${scheduleTypes[entry.type]} · ${entry.title} · ${label}`} />
-        : <span className={`gantt-bar gantt-bar-${kind}${entry ? ` gantt-status-${entry.status.toLowerCase()}` : ""}`} style={{ left: viewport.dateX(range.start), width: (scheduleDaysBetween(range.start, range.end) + 1) * viewport.px }} title={label} />)}
-    </div>;
-  }
-  return <div className="gantt-view gantt-scrolling-view" aria-label="Diagramma Gantt delle commesse">
+  return <div className="gantt-view gantt-scrolling-view gantt-compact-dashboard" aria-label="Diagramma Gantt delle commesse">
     <ScheduleViewportToolbar viewport={viewport} />
-    <div className="gantt-legend"><span><i className="gantt-legend-activity" />Attività</span><span><i className="gantt-legend-milestone" />Milestone</span><span><i className="gantt-legend-intermediate" />Milestone intermedia</span><span><i className="gantt-legend-today" />Oggi</span></div>
-    <p className="gantt-visible-count" aria-live="polite">{visibleJobs.length} commesse nel periodo · Scorri lateralmente per esplorare altre date.</p>
+    <div className="gantt-compact-caption"><span aria-live="polite">{visibleJobs.length} commesse nel periodo</span><span>◆ Milestone · ◇ Intermedia · Scorri per altre date</span></div>
     <div ref={viewport.scrollRef} onScroll={viewport.onScroll} className="gantt-scroll gantt-continuous-scroll" role="region" tabIndex={0} aria-label="Linea del tempo scorribile"><div className="gantt-board" style={viewport.boardStyle}>
       <ScheduleAxis viewport={viewport} label="Commessa / attività" />
       {visibleJobs.map(job => { const range = scheduleRange(job.sections)!; return <details className="gantt-job" key={job.id} open={expandJobs || undefined}>
-        <summary className="gantt-row gantt-job-summary"><div className="gantt-label"><strong><span className="gantt-expand" aria-hidden="true">›</span>{job.name}</strong><small>{formatScheduleDate(range.start)} – {formatScheduleDate(range.end)}</small></div>{track(range, "job")}</summary>
-        <div className="gantt-job-content">
-          {showEditLinks && <div className="gantt-row gantt-edit-row"><div className="gantt-label"><Link className="text-link" href={`/commesse/${job.id}?tab=data#gantt-pianificazione` as Route}>Apri pianificazione →</Link></div><div /></div>}
-          {job.sections.filter(section => scheduleOverlaps([section], viewport.view)).map(section => <Fragment key={section.id}><div className="gantt-row gantt-section-row"><div className="gantt-label"><strong>{section.title}</strong>{section.description && <small>{section.description}</small>}</div>{track(scheduleRange([section]), "section")}</div>{section.entries.filter(entry => entry.startDate <= viewport.view.end && entry.endDate >= viewport.view.start).map(entry => <div className="gantt-row gantt-entry-row" key={entry.id}><div className="gantt-label"><span>{entry.title}</span><small>{scheduleTypes[entry.type]} · {scheduleStatuses[entry.status]} · {formatScheduleDate(entry.startDate)}{entry.endDate !== entry.startDate ? ` – ${formatScheduleDate(entry.endDate)}` : ""}</small>{entry.description && <small>{entry.description}</small>}</div>{track({ start: entry.startDate, end: entry.endDate }, "activity", entry)}</div>)}</Fragment>)}
-        </div>
+        <summary className="gantt-row gantt-job-summary"><div className="gantt-label"><strong><span className="gantt-expand" aria-hidden="true">›</span>{job.name}</strong><small>{formatScheduleDate(range.start)} – {formatScheduleDate(range.end)}{showEditLinks && <Link className="text-link gantt-inline-edit" href={`/commesse/${job.id}?tab=data#gantt-pianificazione` as Route} onClick={e => e.stopPropagation()}>Modifica ↗</Link>}</small></div><div className="gantt-track"><ScheduleGrid viewport={viewport} /><span className="gantt-bar gantt-bar-job" style={{ left: viewport.dateX(range.start), width: (scheduleDaysBetween(range.start, range.end) + 1) * viewport.px }} /></div></summary>
+        <div className="gantt-job-content">{job.sections.filter(section => scheduleOverlaps([section], viewport.view)).map(section => {
+          const { lanes, count } = scheduleEntryLanes(section.entries);
+          const rowRange = scheduleRange([section])!;
+          return <div className="gantt-row gantt-entry-row gantt-activity-row" key={section.id} style={{ "--gantt-row-color": scheduleRowColor(section) } as React.CSSProperties}>
+            <div className="gantt-label" title={section.description || section.title}><strong><i className="gantt-row-swatch" />{section.title}</strong><small>{formatScheduleDate(rowRange.start)} – {formatScheduleDate(rowRange.end)}</small></div>
+            <div className="gantt-track" style={{ minHeight: Math.max(40, count * 24 + 16) }}><ScheduleGrid viewport={viewport} />
+              {section.entries.filter(e => e.startDate <= viewport.view.end && e.endDate >= viewport.view.start).map(entry => {
+                const milestone = entry.type !== "ACTIVITY";
+                const label = `${scheduleTypes[entry.type]} · ${entry.title} · ${formatScheduleDate(entry.startDate)}${milestone ? "" : ` – ${formatScheduleDate(entry.endDate)}`} · ${scheduleStatuses[entry.status]}${entry.description ? ` · ${entry.description}` : ""}`;
+                return <span key={entry.id} tabIndex={0} aria-label={label} title={label} className={milestone ? `gantt-diamond ${entry.type === "INTERMEDIATE_MILESTONE" ? "gantt-intermediate" : ""}` : "gantt-bar gantt-bar-activity"} style={{ left: viewport.dateX(entry.startDate) + (milestone ? viewport.px / 2 : 0), ...(milestone ? {} : { width: (scheduleDaysBetween(entry.startDate, entry.endDate) + 1) * viewport.px }), top: 20 + (lanes.get(entry.id) ?? 0) * 24 }} />;
+              })}
+            </div>
+          </div>;
+        })}</div>
       </details>; })}
       {!visibleJobs.length && <div className="gantt-row gantt-empty-row"><div className="gantt-label">Nessuna commessa pianificata nel periodo.</div><div className="gantt-track"><ScheduleGrid viewport={viewport} /></div></div>}
     </div></div>
