@@ -52,3 +52,15 @@ export function schedulePosition(range: ScheduleRange, view: ScheduleRange) {
   return { left: left / days * 100, width: (right - left) / days * 100 };
 }
 export const formatScheduleDate = (date: string) => new Date(`${date}T00:00:00.000Z`).toLocaleDateString("it-IT", { timeZone: "UTC", day: "2-digit", month: "2-digit", year: "numeric" });
+
+export function addScheduleMonths(date: string, months: number) {
+  const source = new Date(scheduleDay(date));
+  const target = new Date(Date.UTC(source.getUTCFullYear(), source.getUTCMonth() + months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(source.getUTCDate(), lastDay));
+  return target.toISOString().slice(0, 10);
+}
+export const initialScheduleWindow = (today: string): ScheduleRange => ({ start: addScheduleDays(today, -15), end: addScheduleMonths(today, 3) });
+export function scheduleOverlaps(sections: ScheduleSection[], view: ScheduleRange) {
+  return sections.some(section => section.entries.some(entry => entry.startDate <= view.end && entry.endDate >= view.start));
+}

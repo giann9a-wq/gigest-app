@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
-import { addScheduleDays, scheduleChangeSchema, schedulePosition, scheduleRange, type ScheduleSection } from "../lib/job-order-schedule-data";
+import { addScheduleDays, addScheduleMonths, initialScheduleWindow, scheduleOverlaps, scheduleChangeSchema, schedulePosition, scheduleRange, type ScheduleSection } from "../lib/job-order-schedule-data";
 
 export const samplePlan: ScheduleSection[] = [
   { id: "structure", title: "Strutture", description: "Opere strutturali", entries: [
@@ -28,6 +28,12 @@ async function main() {
   assert.equal(scheduleChangeSchema.safeParse({ ...valid, sections: [samplePlan[0], samplePlan[0]] }).success, false);
   assert.equal(scheduleChangeSchema.safeParse(changeEntry({ startDate: "2028-02-29", endDate: "2028-02-29" })).success, true);
   assert.equal(addScheduleDays("2026-03-28", 2), "2026-03-30");
+  assert.equal(addScheduleMonths("2026-01-31", 1), "2026-02-28");
+  assert.equal(addScheduleMonths("2028-01-31", 1), "2028-02-29");
+  assert.deepEqual(initialScheduleWindow("2026-10-29"), { start: "2026-10-14", end: "2027-01-29" });
+  assert.equal(scheduleOverlaps([], initialScheduleWindow("2026-10-29")), false);
+  assert.equal(scheduleOverlaps(samplePlan, { start: "2026-11-16", end: "2026-11-19" }), false);
+  assert.equal(scheduleOverlaps(samplePlan, { start: "2026-12-12", end: "2026-12-12" }), true);
   assert.deepEqual(schedulePosition({ start: "2026-11-01", end: "2026-11-01" }, { start: "2026-11-01", end: "2026-11-01" }), { left: 0, width: 100 });
   assert.equal(schedulePosition({ start: "2026-10-01", end: "2026-10-02" }, { start: "2026-11-01", end: "2026-11-30" }), null);
   assert.deepEqual(schedulePosition({ start: "2026-10-01", end: "2026-12-31" }, { start: "2026-11-01", end: "2026-11-30" }), { left: 0, width: 100 });

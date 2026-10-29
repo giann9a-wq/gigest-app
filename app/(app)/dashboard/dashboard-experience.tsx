@@ -18,7 +18,6 @@ import { SalesApproveButton } from "@/components/dashboard/sales-approve-button"
 import { formatCurrency } from "@/lib/number-format";
 import { ScheduleTimeline } from "@/components/gantt/schedule-timeline";
 import { getDashboardSchedules } from "@/lib/job-order-schedules";
-import { scheduleRange } from "@/lib/job-order-schedule-data";
 import {
   DeliveryNoteValidationStatus,
   ScannedDeliveryNoteStatus,
@@ -864,7 +863,7 @@ export async function DashboardExperience({
         {planningPreview && <section className="dashboard-preview-planning" aria-label="Anteprima pianificazione">
           <div className="dashboard-preview-title"><h1>Dashboard · anteprima</h1><span>Versione di prova</span></div>
           <details className="dashboard-preview-accordion" id="dashboard-meteo" open={Boolean(weatherCity)}><summary><strong>Meteo</strong><span>{weather?.location.name ?? DEFAULT_WEATHER_LOCATION.name}{weather ? ` · ${weather.current.temperature}° · ${weather.current.condition}` : ""}</span></summary><WeatherHero weather={weather} searchedCity={weatherCity} actionPath="/dashboard002" /></details>
-          <details className="dashboard-preview-accordion" id="dashboard-gantt" open><summary><strong>Gantt</strong><span>{ganttJobs.length} commesse · {ganttJobs.filter(job => scheduleRange(job.sections)).length} pianificate</span></summary><ScheduleTimeline jobs={ganttJobs} /></details>
+          <details className="dashboard-preview-accordion" id="dashboard-gantt" open><summary><strong>Gantt</strong><span>Commesse pianificate nel periodo visibile</span></summary><ScheduleTimeline jobs={ganttJobs} /></details>
         </section>}
         <div className="dashboard2-column dashboard2-main-column">
           {!planningPreview && <div className="dashboard2-weather">
