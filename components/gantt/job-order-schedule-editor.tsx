@@ -1,0 +1,54 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { ScheduleTimeline } from "./schedule-timeline";
+import { formatScheduleDate, scheduleChangeSchema, scheduleStatuses, scheduleTypes, type ScheduleEntry, type SchedulePlan, type ScheduleSection } from "@/lib/job-order-schedule-data";
+
+async function requestPlan(url: string, body?: unknown): Promise<SchedulePlan> {
+  const response = await fetch(url, body ? { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : { cache: "no-store" });
+  const data = await response.json(); if (!response.ok) throw new Error(data.error || "Impossibile caricare la pianificazione"); return data;
+}
+function reorder<T>(items: T[], index: number, offset: number) { const next = [...items]; const target = index + offset; if (target < 0 || target >= next.length) return next; [next[index], next[target]] = [next[target], next[index]]; return next; }
+
+export function JobOrderScheduleEditor({ jobOrderId, jobName, startDate, onDirtyChange }: { jobOrderId: string; jobName: string; startDate: string; onDirtyChange: (dirty: boolean) => void }) {
+  const [plan, setPlan] = useState<SchedulePlan | null>(null); const [sections, setSections] = useState<ScheduleSection[]>([]);
+  const panel = useRef<HTMLDetailsElement>(null);
+  const [busy, setBusy] = useState(false); const [dirty, setDirty] = useState(false); const [error, setError] = useState(""); const [message, setMessage] = useState("");
+  const [newEntries, setNewEntries] = useState<Set<string>>(new Set());
+  const url = `/api/commesse/${jobOrderId}/gantt`;
+  useEffect(() => { if (window.location.hash === "#gantt-pianificazione" && panel.current) panel.current.open = true; }, []);
+  useEffect(() => { let active = true; requestPlan(url).then(data => { if (active) { setPlan(data); setSections(data.sections); } }).catch(e => { if (active) setError(e.message); }); return () => { active = false; }; }, [url]);
+  function change(next: ScheduleSection[]) { setSections(next); setDirty(true); onDirtyChange(true); setMessage(""); }
+  function sectionField(id: string, field: "title" | "description", value: string) { change(sections.map(s => s.id === id ? { ...s, [field]: value } : s)); }
+  function entryField(sectionId: string, entryId: string, patch: Partial<ScheduleEntry>) { change(sections.map(s => s.id === sectionId ? { ...s, entries: s.entries.map(e => e.id === entryId ? { ...e, ...patch } : e) } : s)); }
+  function addEntry(sectionId: string, type: ScheduleEntry["type"]) {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date());
+    const date = startDate || today;
+    const id = crypto.randomUUID(); setNewEntries(current => new Set([...current, id]));
+    change(sections.map(s => s.id === sectionId ? { ...s, entries: [...s.entries, { id, type, title: "", description: "", startDate: date, endDate: date, status: "PLANNED" }] } : s));
+  }
+  async function reload() { if (dirty && !window.confirm("Ricaricare il piano e abbandonare le modifiche non salvate?")) return; setBusy(true); setError(""); try { const next = await requestPlan(url); setPlan(next); setSections(next.sections); setDirty(false); setNewEntries(new Set()); onDirtyChange(false); setMessage(""); } catch (e) { setError(e instanceof Error ? e.message : "Ricaricamento non riuscito"); } finally { setBusy(false); } }
+  async function save(event: React.FormEvent) { event.preventDefault(); if (!plan) return; const checked = scheduleChangeSchema.safeParse({ version: plan.version, sections }); if (!checked.success) { setError(checked.error.issues[0]?.message ?? "Controlla date e titoli"); return; }
+    setBusy(true); setError(""); setMessage(""); try { const next = await requestPlan(url, checked.data); setPlan(next); setSections(next.sections); setDirty(false); setNewEntries(new Set()); onDirtyChange(false); setMessage("Pianificazione Gantt salvata."); } catch (e) { setError(e instanceof Error ? e.message : "Salvataggio non riuscito"); } finally { setBusy(false); }
+  }
+  const entries = sections.flatMap(section => section.entries);
+  return <details ref={panel} id="gantt-pianificazione" className="job-sheet-panel gantt-editor">
+    <summary><strong>Pianificazione Gantt{dirty ? " *" : ""}</strong><span>{sections.length} sezioni · {entries.filter(e => e.type === "ACTIVITY").length} attività · {entries.filter(e => e.type !== "ACTIVITY").length} milestone</span></summary>
+    <p>Organizza la commessa in sezioni, attività e traguardi. Le milestone principali e intermedie hanno una data singola; le attività una durata.</p>
+    {error && <div role="alert" className="job-dashboard-error">{error}</div>}{message && <div role="status" className="job-dashboard-success">{message}</div>}
+    {!plan ? <><p>Caricamento pianificazione…</p><button type="button" className="mobile-button-secondary" onClick={reload}>Riprova</button></> : <form onSubmit={save}><fieldset disabled={busy}>
+      <div className="gantt-editor-sections">{sections.map((section, sectionIndex) => <section className="gantt-editor-section" key={section.id}>
+        <div className="gantt-section-heading"><span>Sezione {sectionIndex + 1}</span><div className="gantt-row-actions"><button type="button" className="mobile-button-secondary" aria-label={`Sposta su sezione ${sectionIndex + 1}`} disabled={sectionIndex === 0} onClick={() => change(reorder(sections, sectionIndex, -1))}>↑</button><button type="button" className="mobile-button-secondary" aria-label={`Sposta giù sezione ${sectionIndex + 1}`} disabled={sectionIndex === sections.length - 1} onClick={() => change(reorder(sections, sectionIndex, 1))}>↓</button><button type="button" className="text-link" onClick={() => { if (window.confirm("Rimuovere questa sezione e tutte le sue attività dal piano? La modifica sarà applicata al salvataggio.")) change(sections.filter(s => s.id !== section.id)); }}>Rimuovi sezione</button></div></div>
+        <div className="job-sheet-form-grid"><label className="job-sheet-field"><span>Nome sezione</span><input required maxLength={200} value={section.title} onChange={e => sectionField(section.id, "title", e.target.value)} /></label><label className="job-sheet-field"><span>Descrizione sezione</span><textarea rows={2} maxLength={4000} value={section.description} onChange={e => sectionField(section.id, "description", e.target.value)} /></label></div>
+        <div className="gantt-editor-entries">{section.entries.map((entry, index) => <details className="gantt-editor-entry" key={entry.id} open={newEntries.has(entry.id) || undefined}><summary><strong>{entry.title || `Nuova ${scheduleTypes[entry.type].toLocaleLowerCase("it")}`}</strong><small>{scheduleTypes[entry.type]} · {entry.startDate ? formatScheduleDate(entry.startDate) : "Data da definire"}{entry.type === "ACTIVITY" && entry.endDate ? ` – ${formatScheduleDate(entry.endDate)}` : ""}</small></summary>
+          <div className="gantt-entry-fields"><label><span>Tipo</span><select value={entry.type} onChange={e => entryField(section.id, entry.id, { type: e.target.value as ScheduleEntry["type"], ...(e.target.value !== "ACTIVITY" ? { endDate: entry.startDate } : {}) })}>{Object.entries(scheduleTypes).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label><label><span>Titolo</span><input required maxLength={200} value={entry.title} onChange={e => entryField(section.id, entry.id, { title: e.target.value })} /></label><label><span>{entry.type === "ACTIVITY" ? "Inizio" : "Data milestone"}</span><input required type="date" value={entry.startDate} onChange={e => entryField(section.id, entry.id, { startDate: e.target.value, ...(entry.type !== "ACTIVITY" ? { endDate: e.target.value } : {}) })} /></label>{entry.type === "ACTIVITY" && <label><span>Fine</span><input required type="date" value={entry.endDate} min={entry.startDate} onChange={e => entryField(section.id, entry.id, { endDate: e.target.value })} /></label>}<label><span>Stato</span><select value={entry.status} onChange={e => entryField(section.id, entry.id, { status: e.target.value as ScheduleEntry["status"] })}>{Object.entries(scheduleStatuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label></div>
+          <label className="gantt-entry-description"><span>Descrizione attività / milestone</span><textarea rows={2} maxLength={4000} value={entry.description} onChange={e => entryField(section.id, entry.id, { description: e.target.value })} /></label><div className="gantt-row-actions"><button type="button" className="mobile-button-secondary" aria-label={`Sposta su ${entry.title || "attività"}`} disabled={index === 0} onClick={() => change(sections.map(s => s.id === section.id ? { ...s, entries: reorder(s.entries, index, -1) } : s))}>↑</button><button type="button" className="mobile-button-secondary" aria-label={`Sposta giù ${entry.title || "attività"}`} disabled={index === section.entries.length - 1} onClick={() => change(sections.map(s => s.id === section.id ? { ...s, entries: reorder(s.entries, index, 1) } : s))}>↓</button><button type="button" className="text-link" onClick={() => change(sections.map(s => s.id === section.id ? { ...s, entries: s.entries.filter(e => e.id !== entry.id) } : s))}>Rimuovi attività / milestone</button></div>
+        </details>)}</div>
+        <div className="gantt-add-actions"><button type="button" className="mobile-button-secondary" onClick={() => addEntry(section.id, "ACTIVITY")}>+ Attività</button><button type="button" className="mobile-button-secondary" onClick={() => addEntry(section.id, "MILESTONE")}>+ Milestone</button><button type="button" className="mobile-button-secondary" onClick={() => addEntry(section.id, "INTERMEDIATE_MILESTONE")}>+ Milestone intermedia</button></div>
+      </section>)}</div>
+      {!sections.length && <p>Nessuna sezione pianificata. Aggiungi la prima sezione per iniziare.</p>}
+      <div className="gantt-editor-actions"><button type="button" className="mobile-button-secondary" onClick={() => change([...sections, { id: crypto.randomUUID(), title: "Nuova sezione", description: "", entries: [] }])}>+ Sezione</button><button className="button" disabled={!dirty || busy}>{busy ? "Salvataggio…" : "Salva pianificazione"}</button><button type="button" className="mobile-button-secondary" onClick={reload}>Ricarica piano</button></div>
+    </fieldset></form>}
+    {!!sections.length && scheduleChangeSchema.safeParse({ version: plan?.version ?? 0, sections }).success && <details className="gantt-editor-preview"><summary>Anteprima del Gantt</summary><ScheduleTimeline jobs={[{ id: jobOrderId, name: jobName, status: "", sections }]} expandJobs showEditLinks={false} /></details>}
+    {plan?.updatedAt && <small className="gantt-saved-meta">Aggiornato il {new Date(plan.updatedAt).toLocaleString("it-IT")} · {plan.updatedBy}</small>}
+  </details>;
+}

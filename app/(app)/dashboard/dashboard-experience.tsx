@@ -16,6 +16,9 @@ import { getLoadingVerificationStatus, shouldShowLoadingVerificationAlert } from
 import { getNegativeMarginSiteAlerts } from "@/lib/job-order-alerts";
 import { SalesApproveButton } from "@/components/dashboard/sales-approve-button";
 import { formatCurrency } from "@/lib/number-format";
+import { ScheduleTimeline } from "@/components/gantt/schedule-timeline";
+import { getDashboardSchedules } from "@/lib/job-order-schedules";
+import { scheduleRange } from "@/lib/job-order-schedule-data";
 import {
   DeliveryNoteValidationStatus,
   ScannedDeliveryNoteStatus,
@@ -86,7 +89,8 @@ type DashboardPageProps = {
 
 type DashboardExperienceProps = DashboardPageProps & {
   variant?: "standard" | "wide";
-  weatherActionPath?: "/dashboard" | "/dashboard2" | "/dashboard_old";
+  weatherActionPath?: "/dashboard" | "/dashboard2" | "/dashboard_old" | "/dashboard002";
+  planningPreview?: boolean;
 };
 
 const DEFAULT_WEATHER_LOCATION: WeatherLocation = {
@@ -433,7 +437,7 @@ function WeatherHero({
 }: {
   weather: WeatherForecast | null;
   searchedCity: string;
-  actionPath?: "/dashboard" | "/dashboard2" | "/dashboard_old";
+  actionPath?: "/dashboard" | "/dashboard2" | "/dashboard_old" | "/dashboard002";
 }) {
   return (
     <section className="dashboard-weather-hero">
@@ -553,6 +557,7 @@ export async function DashboardExperience({
   searchParams,
   variant = "standard",
   weatherActionPath,
+  planningPreview = false,
 }: DashboardExperienceProps) {
   const resolvedSearchParams: Record<string, string | string[] | undefined> = searchParams ? await searchParams : {};
   const weatherCity = getSingleSearchParam(resolvedSearchParams.meteo);
@@ -596,6 +601,7 @@ export async function DashboardExperience({
     dashboardTasks,
     dashboardTaskUsers,
     negativeMarginSiteAlerts,
+    ganttJobs,
   ] = await Promise.all([
     getScheduleEvents({
       from: todayBounds.start,
@@ -652,6 +658,7 @@ export async function DashboardExperience({
       : Promise.resolve([]),
     isWideDashboard ? getDashboardTaskUserOptions() : Promise.resolve([]),
     getNegativeMarginSiteAlerts(),
+    planningPreview ? getDashboardSchedules() : Promise.resolve([]),
   ]);
 
   const todayEvents = scheduleEvents.filter((event) => {
@@ -853,15 +860,20 @@ export async function DashboardExperience({
 
   if (isWideDashboard) {
     return (
-      <div className="dashboard-page dashboard2-page">
+      <div className={`dashboard-page dashboard2-page${planningPreview ? " dashboard-planning-preview" : ""}`}>
+        {planningPreview && <section className="dashboard-preview-planning" aria-label="Anteprima pianificazione">
+          <div className="dashboard-preview-title"><h1>Dashboard · anteprima</h1><span>Versione di prova</span></div>
+          <details className="dashboard-preview-accordion" id="dashboard-meteo" open={Boolean(weatherCity)}><summary><strong>Meteo</strong><span>{weather?.location.name ?? DEFAULT_WEATHER_LOCATION.name}{weather ? ` · ${weather.current.temperature}° · ${weather.current.condition}` : ""}</span></summary><WeatherHero weather={weather} searchedCity={weatherCity} actionPath="/dashboard002" /></details>
+          <details className="dashboard-preview-accordion" id="dashboard-gantt" open><summary><strong>Gantt</strong><span>{ganttJobs.length} commesse · {ganttJobs.filter(job => scheduleRange(job.sections)).length} pianificate</span></summary><ScheduleTimeline jobs={ganttJobs} /></details>
+        </section>}
         <div className="dashboard2-column dashboard2-main-column">
-          <div className="dashboard2-weather">
+          {!planningPreview && <div className="dashboard2-weather">
             <WeatherHero
               weather={weather}
               searchedCity={weatherCity}
               actionPath={weatherActionPath ?? "/dashboard"}
             />
-          </div>
+          </div>}
           {alertSection}
           {appUser ? (
             <DashboardTasksCard
@@ -869,6 +881,7 @@ export async function DashboardExperience({
               users={dashboardTaskUsers}
               activeUserId={appUser.id}
               showArchived={showArchivedTasks}
+              pagePath={weatherActionPath ?? "/dashboard"}
             />
           ) : null}
         </div>

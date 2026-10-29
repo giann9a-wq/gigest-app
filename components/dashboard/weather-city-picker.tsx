@@ -7,7 +7,7 @@ const FAVORITES_KEY = "gigest.weather.recentCities";
 type WeatherCityPickerProps = {
   currentCity: string;
   searchedCity: string;
-  actionPath?: "/dashboard" | "/dashboard2" | "/dashboard_old";
+  actionPath?: "/dashboard" | "/dashboard2" | "/dashboard_old" | "/dashboard002";
 };
 
 function readFavorites() {

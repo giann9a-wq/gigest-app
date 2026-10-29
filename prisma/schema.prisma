@@ -581,6 +581,17 @@ model JobOrder {
   opportunities              Opportunity[]
   dossierRecords             JobOrderRecord[]
   dossierDocuments           JobOrderDocument[]
+  schedule                   JobOrderSchedule?
+}
+
+model JobOrderSchedule {
+  jobOrderId String   @id
+  sections   Json
+  version    Int      @default(1)
+  updatedBy  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  jobOrder   JobOrder @relation(fields: [jobOrderId], references: [id], onDelete: Restrict)
 }
 
 // Shared operational dossiers; revisions survive changes of purchaser and sale cancellation.

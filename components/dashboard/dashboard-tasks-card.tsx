@@ -13,6 +13,7 @@ type DashboardTasksCardProps = {
   users: DashboardTaskUserOption[];
   activeUserId: string;
   showArchived: boolean;
+  pagePath?: string;
 };
 
 const statusLabels: Record<DashboardTaskStatus, string> = {
@@ -82,6 +83,7 @@ export function DashboardTasksCard({
   users,
   activeUserId,
   showArchived,
+  pagePath = "/dashboard",
 }: DashboardTasksCardProps) {
   const activeTasks = tasks.filter((task) => task.status !== DashboardTaskStatus.ARCHIVED);
   const archivedTasks = tasks.filter((task) => task.status === DashboardTaskStatus.ARCHIVED);
@@ -121,11 +123,11 @@ export function DashboardTasksCard({
             </form>
           </details>
           {showArchived ? (
-            <a className="dashboard2-task-top-button" href="/dashboard">
+            <a className="dashboard2-task-top-button" href={pagePath}>
               Nascondi archiviate
             </a>
           ) : (
-            <a className="dashboard2-task-top-button" href="/dashboard?archiviate=1">
+            <a className="dashboard2-task-top-button" href={`${pagePath}?archiviate=1`}>
               Vedi Archiviate
             </a>
           )}

@@ -11957,6 +11957,97 @@ a {
 .job-sheet-shell fieldset legend { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
 .job-sheet-shell .sheet-revenue-source { gap: 16px; margin-top: 18px; }
 .job-sheet-shell .sheet-revenue-source p, .job-sheet-shell .sheet-source-note { font-size: 13px; line-height: 1.5; }
+.job-sheet-data-content { display: grid; gap: 18px; }
+.gantt-editor > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; cursor: pointer; }
+.gantt-editor > summary strong { font-size: 18px; font-weight: 600; }
+.gantt-editor > summary span, .gantt-editor > p, .gantt-saved-meta { color: var(--text-muted); font-size: 13px; }
+.gantt-editor[open] > summary { margin-bottom: 18px; }
+.gantt-editor-sections { display: grid; gap: 22px; margin: 18px 0; }
+.gantt-editor-section { padding: 16px; border: 1px solid var(--border-soft); border-radius: 10px; min-width: 0; }
+.gantt-section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; font-weight: 600; }
+.gantt-row-actions, .gantt-add-actions, .gantt-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.job-sheet-shell .gantt-row-actions .mobile-button-secondary { min-height: 30px; padding: 4px 10px; }
+.gantt-row-actions .text-link { font-size: 13px; font-weight: 500; }
+.gantt-editor-entries { display: grid; gap: 16px; margin: 16px 0; }
+.gantt-editor-entry { padding: 16px 0; border-top: 1px solid var(--border-soft); }
+.gantt-editor-entry > summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; cursor: pointer; font-size: 14px; }
+.gantt-editor-entry > summary small { color: var(--text-muted); font-size: 12px; }
+.gantt-editor-entry[open] > summary { margin-bottom: 14px; }
+.gantt-entry-fields { display: grid; grid-template-columns: minmax(125px, 1.1fr) minmax(170px, 2fr) repeat(3, minmax(125px, 1fr)); gap: 12px; }
+.gantt-entry-fields label, .gantt-entry-description { display: grid; gap: 6px; font-size: 13px; color: var(--text-muted); }
+.gantt-entry-description { margin: 12px 0; }
+.gantt-editor-actions { margin-top: 16px; }
+.gantt-editor-preview { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+.gantt-editor-preview > summary { cursor: pointer; font-weight: 600; margin-bottom: 16px; }
+.gantt-saved-meta { display: block; margin-top: 14px; }
+.dashboard-preview-planning { grid-column: 1 / -1; display: grid; gap: 14px; min-width: 0; }
+.dashboard-preview-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.dashboard-preview-title h1 { margin: 0; font-size: 25px; }
+.dashboard-preview-title > span { font-size: 12px; color: var(--brand-dark); background: var(--brand-soft); border-radius: 8px; padding: 5px 10px; }
+.dashboard-preview-accordion { min-width: 0; background: var(--surface-strong); border: 1px solid var(--border-soft); border-radius: 14px; padding: 16px 20px; }
+.dashboard-preview-accordion > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; cursor: pointer; list-style: none; }
+.dashboard-preview-accordion > summary::-webkit-details-marker { display: none; }
+.dashboard-preview-accordion > summary strong { font-size: 18px; }
+.dashboard-preview-accordion > summary span { font-size: 13px; color: var(--text-muted); flex: 1; }
+.dashboard-preview-accordion > summary::after { content: "+"; color: var(--brand-dark); font-size: 20px; margin-left: auto; }
+.dashboard-preview-accordion[open] > summary::after { content: "−"; }
+.dashboard-preview-accordion[open] > summary { margin-bottom: 18px; }
+.gantt-view { min-width: 0; font-family: "Segoe UI", Arial, sans-serif; }
+.gantt-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.gantt-period-controls { display: flex; align-items: flex-end; gap: 7px; flex-wrap: wrap; }
+.gantt-period-controls label { display: grid; gap: 5px; font-size: 12px; color: var(--text-muted); }
+.gantt-period-controls select { min-height: 36px; padding: 7px 10px; border: 1px solid var(--border-soft); border-radius: 8px; font: inherit; font-size: 13px; background: var(--surface-strong); color: var(--text-main); }
+.gantt-period-controls button, .job-sheet-shell .gantt-period-controls button { width: auto; min-height: 36px; padding: 7px 12px; font-size: 13px; }
+.gantt-range-label { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.gantt-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; margin: 10px 0 14px; font-size: 12px; color: var(--text-muted); }
+.gantt-legend > span { display: inline-flex; align-items: center; gap: 8px; }
+.gantt-legend-activity { width: 22px; height: 8px; border-radius: 3px; background: #6687b4; }
+.gantt-legend-milestone, .gantt-legend-intermediate { width: 10px; height: 10px; transform: rotate(45deg); background: var(--brand); }
+.gantt-legend-intermediate { border: 2px solid var(--brand); background: var(--surface-strong); }
+.gantt-legend-today { height: 13px; border-left: 2px solid #b91c1c; }
+.gantt-empty-note, .gantt-empty-job { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.gantt-empty-job { padding: 0 16px; }
+.gantt-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--border-soft); border-radius: 10px; overscroll-behavior-x: contain; }
+.gantt-board { --gantt-label-width: 270px; min-width: 880px; }
+.gantt-row { display: grid; grid-template-columns: var(--gantt-label-width) minmax(0, 1fr); border-bottom: 1px solid var(--border-soft); min-height: 48px; }
+.gantt-label { position: sticky; left: 0; z-index: 4; background: var(--surface-strong); padding: 12px 14px; min-width: 0; border-right: 1px solid var(--border-soft); overflow-wrap: anywhere; }
+.gantt-label strong, .gantt-label > span { display: block; font-size: 13px; font-weight: 500; }
+.gantt-label small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.45; color: var(--text-muted); }
+.gantt-axis-row { min-height: 38px; background: var(--surface-muted); }
+.gantt-axis-row .gantt-label { font-size: 12px; font-weight: 500; background: var(--surface-muted); }
+.gantt-axis { position: relative; min-height: 38px; }
+.gantt-axis > span { position: absolute; bottom: 10px; padding-left: 3px; font-size: 11px; white-space: nowrap; color: var(--text-muted); }
+.gantt-job > summary { list-style: none; cursor: pointer; }
+.gantt-job > summary::-webkit-details-marker { display: none; }
+.gantt-job-summary .gantt-label strong { font-weight: 600; }
+.gantt-expand { display: inline-block; margin-right: 7px; color: var(--brand-dark); }
+.gantt-job[open] > summary .gantt-expand { transform: rotate(90deg); }
+.gantt-section-row .gantt-label { padding-left: 24px; background: var(--surface-muted); }
+.gantt-entry-row .gantt-label { padding-left: 36px; }
+.gantt-track { position: relative; min-height: 44px; align-self: stretch; background: var(--surface-strong); overflow: hidden; }
+.gantt-grid-lines { position: absolute; inset: 0; pointer-events: none; }
+.gantt-grid-lines > span { position: absolute; top: 0; bottom: 0; border-left: 1px solid #ede7e2; }
+.gantt-today-line { position: absolute; top: 0; bottom: 0; border-left: 1px dashed #b91c1c; z-index: 2; pointer-events: none; }
+.gantt-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 14px; min-width: 2px; background: #6687b4; border-radius: 3px; z-index: 1; }
+.gantt-bar-job { height: 9px; background: #374151; border-radius: 2px; }
+.gantt-bar-section { height: 6px; background: #c29170; border-radius: 2px; }
+.gantt-diamond { position: absolute; top: 50%; transform: translate(-50%, -50%) rotate(45deg); width: 12px; height: 12px; background: var(--brand); z-index: 3; }
+.gantt-diamond.gantt-intermediate { background: var(--surface-strong); border: 2px solid var(--brand); }
+.gantt-status-in_progress { background: var(--brand); }
+.gantt-status-done { background: #15803d; }
+.gantt-diamond.gantt-intermediate.gantt-status-done { border-color: #15803d; }
+.gantt-no-bar { display: block; padding: 14px 12px; font-size: 12px; color: var(--text-muted); }
+.gantt-edit-link { margin: 0; padding: 9px 14px; font-size: 12px; }
+@media (max-width: 1100px) { .gantt-entry-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .gantt-board { --gantt-label-width: 185px; min-width: 780px; }
+  .gantt-label { padding: 10px; }
+  .gantt-section-row .gantt-label { padding-left: 17px; }
+  .gantt-entry-row .gantt-label { padding-left: 24px; }
+  .gantt-label strong, .gantt-label > span { font-size: 12px; }
+  .dashboard-preview-accordion { padding: 14px; }
+  .gantt-editor-section { padding: 12px; }
+}
 @media (max-width: 1100px) {
   .jobs2-card-main { grid-template-columns: minmax(180px, 1fr) minmax(330px, 1.6fr); gap: 12px 16px; }
   .jobs2-page .jobs2-actions { grid-column: 1 / -1; justify-content: flex-end; }

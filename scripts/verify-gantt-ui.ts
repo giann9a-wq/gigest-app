@@ -1,0 +1,85 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { createRequire } from "node:module";
+import type { PrismaClient } from "@prisma/client";
+
+export async function verifyGanttUI({ databaseUrl, actor, userId, jobOrderId, db }: { databaseUrl: string; actor: string; userId: string; jobOrderId: string; db: PrismaClient }) {
+  const secret = randomBytes(32).toString("hex");
+  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3108"], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: secret, AUTH_URL: "http://localhost:3108", AUTH_TRUST_HOST: "true" }, stdio: "pipe", windowsHide: true });
+  let logs = ""; server.stdout.on("data", b => { logs += String(b); }); server.stderr.on("data", b => { logs += String(b); });
+  const require = createRequire(import.meta.url);
+  const { chromium } = require("C:/Users/Lorenzo/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright");
+  let browser: any; let page: any;
+  try {
+    for (let i = 0; i < 100; i++) { if (logs.includes("Ready")) break; if (server.exitCode !== null) throw new Error(logs.slice(-1200)); await new Promise(r => setTimeout(r, 200)); }
+    browser = await chromium.launch({ headless: true, executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" });
+    const anonymous = await browser.newContext();
+    assert.equal((await anonymous.request.get(`http://localhost:3108/api/commesse/${jobOrderId}/gantt`)).status(), 401);
+    assert.equal((await anonymous.request.put(`http://localhost:3108/api/commesse/${jobOrderId}/gantt`, { data: { version: 0, sections: [] } })).status(), 401);
+    const hidden = await anonymous.request.get("http://localhost:3108/dashboard002", { maxRedirects: 0 }); assert.equal(hidden.status(), 307); assert.ok(hidden.headers().location.includes("login")); await anonymous.close();
+    const { encode } = await import("next-auth/jwt"); const token = await encode({ token: { email: actor, sub: userId, id: userId }, secret, salt: "authjs.session-token" });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    await context.addCookies([{ name: "authjs.session-token", value: token, domain: "localhost", path: "/", httpOnly: true, sameSite: "Lax" }]);
+    page = await context.newPage(); page.setDefaultTimeout(60000);
+    const errors: string[] = []; page.on("pageerror", (e: Error) => errors.push(e.message));
+    await page.goto(`http://localhost:3108/commesse/${jobOrderId}?tab=data#gantt-pianificazione`);
+    await page.locator("#gantt-pianificazione[open]").waitFor();
+    await page.getByRole("button", { name: "+ Sezione", exact: true }).click();
+    let section = page.locator(".gantt-editor-section").first();
+    await section.getByLabel("Nome sezione", { exact: true }).fill("Strutture");
+    await section.getByLabel("Descrizione sezione", { exact: true }).fill("Opere strutturali della costruzione");
+    await section.getByRole("button", { name: "+ Attività", exact: true }).click();
+    let entry = section.locator(".gantt-editor-entry").first();
+    await entry.getByLabel("Titolo", { exact: true }).fill("Fondazioni UI");
+    await entry.getByLabel("Inizio", { exact: true }).fill("2026-11-02");
+    await entry.getByLabel("Fine", { exact: true }).fill("2026-11-15");
+    await entry.getByLabel("Descrizione attività / milestone", { exact: true }).fill("Scavo, armature e getto");
+    await section.getByRole("button", { name: "+ Milestone intermedia", exact: true }).click();
+    entry = section.locator(".gantt-editor-entry").nth(1);
+    await entry.getByLabel("Titolo", { exact: true }).fill("Verifica armature UI");
+    await entry.getByLabel("Data milestone", { exact: true }).fill("2026-11-06");
+    assert.equal(await entry.locator('input[type="date"]').count(), 1);
+    await section.getByRole("button", { name: "+ Milestone", exact: true }).click();
+    entry = section.locator(".gantt-editor-entry").nth(2);
+    await entry.getByLabel("Titolo", { exact: true }).fill("Consegna UI"); await entry.getByLabel("Data milestone", { exact: true }).fill("2026-12-12");
+    await page.getByRole("button", { name: "+ Sezione", exact: true }).click(); section = page.locator(".gantt-editor-section").nth(1);
+    await section.getByLabel("Nome sezione", { exact: true }).fill("Finiture");
+    await section.getByRole("button", { name: "+ Attività", exact: true }).click(); entry = section.locator(".gantt-editor-entry").first();
+    await entry.getByLabel("Titolo", { exact: true }).fill("Pavimenti UI"); await entry.getByLabel("Inizio", { exact: true }).fill("2026-11-20"); await entry.getByLabel("Fine", { exact: true }).fill("2026-12-10");
+    await page.getByRole("button", { name: "Sposta su sezione 2", exact: true }).click();
+    assert.equal(await page.locator(".gantt-editor-section").first().getByLabel("Nome sezione", { exact: true }).inputValue(), "Finiture");
+    await page.getByRole("button", { name: "Salva pianificazione", exact: true }).click();
+    await page.getByText("Pianificazione Gantt salvata.", { exact: true }).waitFor();
+    const saved = await db.jobOrderSchedule.findUniqueOrThrow({ where: { jobOrderId } }); assert.equal(saved.version, 4);
+    assert.equal((saved.sections as any[])[0].title, "Finiture");
+    await page.getByText("Anteprima del Gantt", { exact: true }).click();
+    await page.locator(".gantt-editor-preview .gantt-board").waitFor();
+    assert.equal(await page.locator(".gantt-editor-preview .gantt-diamond").count(), 2);
+    await page.screenshot({ path: "tmp/gantt-editor-desktop.png", fullPage: true });
+    await page.goto("http://localhost:3108/dashboard002");
+    await page.locator("#dashboard-gantt[open]").waitFor();
+    assert.equal(await page.locator(".gantt-job").count(), 2);
+    const job = page.locator(".gantt-job").filter({ hasText: "Cantiere Gantt UI" });
+    await job.locator(":scope > summary").click();
+    assert.equal(await job.locator(".gantt-entry-row").count(), 4);
+    assert.equal(await job.locator(".gantt-diamond").count(), 2);
+    await page.getByLabel("Intervallo Gantt", { exact: true }).selectOption("QUARTER");
+    await page.getByRole("button", { name: "Periodo successivo", exact: true }).click();
+    await page.getByLabel("Intervallo Gantt", { exact: true }).selectOption("FIT");
+    await page.locator("#dashboard-meteo > summary").click();
+    assert.equal(await page.locator("#dashboard-meteo .dashboard-weather-hero").isVisible(), true);
+    assert.equal(await page.locator("#dashboard-meteo .dashboard-weather-city-form").getAttribute("action"), "/dashboard002");
+    await page.locator("#dashboard-meteo > summary").click();
+    await page.screenshot({ path: "tmp/dashboard002-gantt-desktop.png", fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 }); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await page.screenshot({ path: "tmp/dashboard002-gantt-mobile.png", fullPage: true });
+    assert.equal(await page.locator('.app-nav a[href="/dashboard002"]').count(), 0);
+    await page.goto("http://localhost:3108/dashboard");
+    await page.locator(".dashboard2-weather .dashboard-weather-hero").waitFor();
+    assert.equal(await page.locator("#dashboard-gantt").count(), 0); assert.equal(await page.locator("#dashboard-meteo").count(), 0);
+    assert.deepEqual(errors, []);
+    console.log("PASS UI: editor sezioni/attività/milestone, salvataggio e riordino; dashboard002 con asse comune e accordion; Meteo resta nell'anteprima; dashboard principale invariata; desktop/mobile e accessi protetti.");
+  } catch (e) { if (page) { console.error("Pagina di verifica:", page.url()); await page.screenshot({ path: "tmp/gantt-verifica-error.png", fullPage: true }); } throw e; }
+  finally { await browser?.close(); server.kill(); }
+}

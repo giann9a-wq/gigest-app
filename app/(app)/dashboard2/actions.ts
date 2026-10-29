@@ -23,6 +23,7 @@ export async function createDashboardTaskAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard2");
   revalidatePath("/dashboard_old");
+  revalidatePath("/dashboard002");
 }
 
 export async function updateDashboardTaskStatusAction(formData: FormData) {
@@ -50,6 +51,7 @@ export async function updateDashboardTaskStatusAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard2");
   revalidatePath("/dashboard_old");
+  revalidatePath("/dashboard002");
 }
 
 export async function deleteDashboardTaskAction(formData: FormData) {
@@ -67,4 +69,5 @@ export async function deleteDashboardTaskAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard2");
   revalidatePath("/dashboard_old");
+  revalidatePath("/dashboard002");
 }
