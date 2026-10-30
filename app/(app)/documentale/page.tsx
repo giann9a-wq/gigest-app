@@ -713,13 +713,13 @@ export default function DocumentalePage() {
               <table className="documentale-table">
                 <thead>
                   <tr>
-                    <th>Data</th>
-                    <th>Fornitore</th>
-                    <th>Commessa</th>
-                    <th>Descrizione</th>
-                    <th>Stato</th>
-                    <th>PDF</th>
-                    <th>Azioni</th>
+                    <th scope="col">Data</th>
+                    <th scope="col">Fornitore</th>
+                    <th scope="col">Commessa</th>
+                    <th scope="col">Descrizione</th>
+                    <th scope="col">Stato</th>
+                    <th scope="col">PDF</th>
+                    <th scope="col">Azioni</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -900,20 +900,28 @@ export default function DocumentalePage() {
             <table className="documentale-table documentale-scans-table">
               <thead>
                 <tr>
-                  <th>Data scansione</th>
-                  <th>Stato</th>
-                  <th>Azioni</th>
+                  <th scope="col">Data scansione</th>
+                  <th scope="col">Data bolla</th>
+                  <th scope="col">Fornitore</th>
+                  <th scope="col">Commessa</th>
+                  <th scope="col">Descrizione</th>
+                  <th scope="col">Stato</th>
+                  <th scope="col">Azioni</th>
                 </tr>
               </thead>
               <tbody>
                 {scansLoading ? (
-                  <tr><td colSpan={3}>Caricamento scansioni...</td></tr>
+                  <tr><td colSpan={7}>Caricamento scansioni...</td></tr>
                 ) : scanRows.length === 0 ? (
-                  <tr><td colSpan={3}>Nessuna nuova scansione da inserire.</td></tr>
+                  <tr><td colSpan={7}>Nessuna nuova scansione da inserire.</td></tr>
                 ) : (
                   scanRows.map((scan) => (
                     <tr key={scan.id}>
                       <td>{formatDateTime(scan.receivedAt)}</td>
+                      <td>{scan.suggestions.usageDate ? <span className="scan-suggested-value">{formatDate(scan.suggestions.usageDate.value)}</span> : "—"}</td>
+                      <td>{scan.suggestions.supplier ? <span className="scan-suggested-value">{scan.suggestions.supplier.value}</span> : "—"}</td>
+                      <td>{scan.suggestions.jobOrderId ? <span className="scan-suggested-value">{jobOrders.find(job => job.id === scan.suggestions.jobOrderId!.value)?.name ?? "—"}</span> : "—"}</td>
+                      <td>{scan.suggestions.description ? <span className="scan-suggested-value">{scan.suggestions.description.value}</span> : "—"}</td>
                       <td><span className="delivery-note-status delivery-note-status-pending">{scan.statusLabel}</span></td>
                       <td>
                         <div className="documentale-row-actions documentale-scans-actions">
