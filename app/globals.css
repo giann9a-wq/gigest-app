@@ -3817,8 +3817,9 @@ a {
 
 .documentale-scans-table th:nth-child(2),
 .documentale-scans-table td:nth-child(2) {
-  width: 110px;
+  width: 130px;
 }
+.documentale-scans-table td:nth-child(2) .scan-suggested-value { white-space: nowrap; }
 
 .documentale-scans-table th:nth-child(3),
 .documentale-scans-table td:nth-child(3) {
